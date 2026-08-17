@@ -76,6 +76,7 @@ export default function App() {
     'ฮ': 'ห', 'ห': 'ฮ'
   };
 
+  // ตรวจสอบพารามิเตอร์มุมมอง
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('view') === 'display') {
@@ -83,7 +84,7 @@ export default function App() {
     }
   }, []);
 
-  // ระบบสื่อสารข้ามมอนิเตอร์ (Dual Monitor Sync ผ่าน BroadcastChannel)
+  // ระบบส่งข้อมูล 2 จอภาพแบบ Real-time (BroadcastChannel)
   useEffect(() => {
     const channel = new BroadcastChannel('thai_tone_sync_channel');
     
@@ -349,43 +350,32 @@ export default function App() {
     1: { text: 'เสียงต่ำ', color: '#007bff' }
   };
 
-  // โหมดหน้าต่างแสดงผลเต็มพื้นที่บนมอนิเตอร์ที่ 2
+  // 1. หน้าจอที่สอง (Auto Fit 100% เต็มพื้นที่จอภาพ + ปุ่มมุมล่างขวา)
   if (isDisplayWindow) {
     return (
-      <div style={{ minHeight: '100vh', width: '100vw', backgroundColor: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', boxSizing: 'border-box', fontFamily: "'Sarabun', sans-serif" }}>
-        <div style={{ width: '100%', height: '100%', maxWidth: '98vw', backgroundColor: '#ffffff', borderRadius: '24px', padding: '40px 50px', boxShadow: '0 10px 40px rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+      <div style={{ height: '100vh', width: '100vw', backgroundColor: '#f8fafc', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', padding: '16px 24px', fontFamily: "'Sarabun', sans-serif", overflow: 'hidden', position: 'relative' }}>
+        
+        <div style={{ flex: 1, backgroundColor: '#ffffff', borderRadius: '20px', padding: '24px 36px', boxShadow: '0 8px 30px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxSizing: 'border-box', border: '1px solid #e2e8f0' }}>
           
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h2 style={{ margin: 0, color: '#ea580c', fontSize: '38px', fontWeight: 'bold' }}>
+          <div>
+            <h2 style={{ textAlign: 'center', margin: '0 0 10px 0', color: '#ea580c', fontSize: '32px', fontWeight: 'bold' }}>
               ไตรยางศ์ หรือ อักษร 3 หมู่
             </h2>
-            <button 
-              onClick={() => {
-                if (!document.fullscreenElement) {
-                  document.documentElement.requestFullscreen();
-                } else {
-                  document.exitFullscreen();
-                }
-              }}
-              style={{ padding: '9px 18px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#f1f5f9', cursor: 'pointer', fontWeight: 'bold', fontSize: '15px', color: '#475569' }}
-            >
-              ⛶ สลับเต็มจอ (Fullscreen)
-            </button>
-          </div>
 
-          {analysisInfo.desc && (
-            <div style={{ backgroundColor: '#f0f9ff', border: '2px solid #bae6fd', padding: '14px 24px', borderRadius: '14px', marginBottom: '35px', textAlign: 'center', fontSize: '20px', color: '#0369a1', fontWeight: 'bold' }}>
-              📌 <span style={{ color: '#0284c7' }}>"{inputText}"</span> เป็น {analysisInfo.type} ({analysisInfo.vowelLen}) — {analysisInfo.desc}
+            {analysisInfo.desc && (
+              <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '8px 16px', borderRadius: '10px', margin: '0 auto 12px auto', maxWidth: '850px', textAlign: 'center', fontSize: '16px', color: '#0369a1', fontWeight: 'bold' }}>
+                📌 <span style={{ color: '#0284c7' }}>"{inputText}"</span> เป็น {analysisInfo.type} ({analysisInfo.vowelLen}) — {analysisInfo.desc}
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr 140px', marginBottom: '8px', color: '#64748b', fontWeight: 'bold', fontSize: '18px' }}>
+              <div style={{ textAlign: 'right', paddingRight: '24px' }}>รูปวรรณยุกต์</div>
+              <div></div>
+              <div></div>
             </div>
-          )}
-
-          <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr 150px', marginBottom: '20px', color: '#64748b', fontWeight: 'bold', fontSize: '20px' }}>
-            <div style={{ textAlign: 'right', paddingRight: '30px' }}>รูปวรรณยุกต์</div>
-            <div></div>
-            <div></div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '46px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', flex: 1, padding: '10px 0' }}>
             {linesData.map((item, idx) => {
               let rowHeaderColor = '#94a3b8';
               if (item.show) {
@@ -394,12 +384,12 @@ export default function App() {
               const fixedRight = fixedRightLabels[item.id];
 
               return (
-                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '260px 1fr 150px', alignItems: 'center' }}>
-                  <div style={{ textAlign: 'right', paddingRight: '30px', fontSize: '24px', color: rowHeaderColor, fontWeight: 'bold' }}>
-                    {item.tone} <span style={{ fontSize: '22px', marginLeft: '6px' }}>[ {item.mark} ]</span>
+                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '240px 1fr 140px', alignItems: 'center' }}>
+                  <div style={{ textAlign: 'right', paddingRight: '24px', fontSize: '21px', color: rowHeaderColor, fontWeight: 'bold' }}>
+                    {item.tone} <span style={{ fontSize: '19px', marginLeft: '6px' }}>[ {item.mark} ]</span>
                   </div>
 
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '40px' }}>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '36px' }}>
                     <div style={{ width: '100%', height: '3px', backgroundColor: '#94a3b8' }}></div>
 
                     {!item.isMulti && item.show && item.word && (
@@ -410,16 +400,16 @@ export default function App() {
                           transform: 'translateX(-50%)',
                           backgroundColor: item.color,
                           color: circleTextColor,
-                          minWidth: '64px',
-                          height: '64px',
-                          padding: '0 14px',
-                          borderRadius: '32px',
+                          minWidth: '56px',
+                          height: '56px',
+                          padding: '0 12px',
+                          borderRadius: '28px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           fontWeight: 'bold',
-                          fontSize: '26px',
-                          boxShadow: '0 4px 14px rgba(0,0,0,0.3)'
+                          fontSize: '22px',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.25)'
                         }}
                       >
                         {item.word}
@@ -427,24 +417,24 @@ export default function App() {
                     )}
 
                     {item.isMulti && item.show && (
-                      <div style={{ position: 'absolute', left: item.leftPos, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ position: 'absolute', left: item.leftPos, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '10px' }}>
                         {item.multi.map((circle, i) => (
                           <React.Fragment key={i}>
-                            {i > 0 && <span style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '26px' }}>/</span>}
+                            {i > 0 && <span style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '22px' }}>/</span>}
                             <div 
                               style={{
                                 backgroundColor: circle.color,
                                 color: circleTextColor,
-                                minWidth: '64px',
-                                height: '64px',
-                                padding: '0 14px',
-                                borderRadius: '32px',
+                                minWidth: '56px',
+                                height: '56px',
+                                padding: '0 12px',
+                                borderRadius: '28px',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 fontWeight: 'bold',
-                                fontSize: '26px',
-                                boxShadow: '0 4px 14px rgba(0,0,0,0.3)'
+                                fontSize: '22px',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.25)'
                               }}
                             >
                               {circle.text}
@@ -455,24 +445,56 @@ export default function App() {
                     )}
                   </div>
 
-                  <div style={{ textAlign: 'center', color: fixedRight ? fixedRight.color : '#94a3b8', fontWeight: 'bold', fontSize: '22px' }}>
+                  <div style={{ textAlign: 'center', color: fixedRight ? fixedRight.color : '#94a3b8', fontWeight: 'bold', fontSize: '19px' }}>
                     {fixedRight ? fixedRight.text : ''}
                   </div>
                 </div>
               );
             })}
           </div>
+
         </div>
+
+        <button 
+          onClick={() => {
+            if (!document.fullscreenElement) {
+              document.documentElement.requestFullscreen();
+            } else {
+              document.exitFullscreen();
+            }
+          }}
+          style={{
+            position: 'absolute',
+            bottom: '24px',
+            right: '34px',
+            padding: '7px 14px',
+            borderRadius: '8px',
+            border: '1px solid #cbd5e1',
+            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+            cursor: 'pointer',
+            fontWeight: 'bold',
+            fontSize: '13px',
+            color: '#475569',
+            backdropFilter: 'blur(4px)',
+            transition: 'all 0.15s ease'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.9)'}
+        >
+          ⛶ สลับเต็มจอ
+        </button>
+
       </div>
     );
   }
 
-  // หน้าจอควบคุมหลัก
+  // 2. หน้าจอควบคุมหลัก
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', padding: '24px 15px', fontFamily: "'Sarabun', sans-serif" }}>
       <div style={{ maxWidth: viewLayout === 'split' ? '1280px' : '920px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
         
-        {/* แถบเครื่องมือด้านบนสุด */}
+        {/* แถบเครื่องมือมุมมองและปุ่มเปิดมอนิเตอร์ที่ 2 */}
         <div style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.06)', flexWrap: 'wrap', gap: '12px', border: '1px solid #e2e8f0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontWeight: 'bold', fontSize: '15px', color: '#1e293b' }}>🖥️ มุมมอง:</span>
@@ -520,7 +542,6 @@ export default function App() {
           </button>
         </div>
 
-        {/* โครงสร้างเนื้อหา */}
         <div style={{ display: 'grid', gridTemplateColumns: viewLayout === 'split' ? '400px 1fr' : '1fr', gap: '20px', alignItems: 'start' }}>
           
           {viewLayout !== 'present' && (
