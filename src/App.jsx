@@ -1,38 +1,27 @@
 import React, { useState, useEffect } from 'react';
 
 export default function App() {
-  // บันทึกและดึง Gemini API Key จากเบราว์เซอร์อัตโนมัติ (LocalStorage)
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
   const [tempApiKey, setTempApiKey] = useState(apiKey);
   const [showApiInput, setShowApiInput] = useState(false);
   const [apiSaveStatus, setApiSaveStatus] = useState('');
 
-  // ตรวจสอบว่าเปิดในโหมด Popup จอที่ 2 หรือไม่ (?view=display)
   const [isDisplayWindow, setIsDisplayWindow] = useState(false);
-
-  // โหมดผันและมุมมองหน้าจอ
   const [mode, setMode] = useState('full5'); // 'full5' | 'highOnly' | 'lowOnly'
   const [viewLayout, setViewLayout] = useState('split'); // 'standard' | 'split' | 'present'
   const [inputText, setInputText] = useState('เมา');
   const [loading, setLoading] = useState(false);
 
-  // การตั้งค่าสี
   const [colorMid, setColorMid] = useState('#22c55e');    // กลาง (เขียว)
   const [colorHigh, setColorHigh] = useState('#ef4444');   // สูง (แดง)
   const [colorLow, setColorLow] = useState('#007bff');    // ต่ำ (น้ำเงิน)
   const [circleTextColor, setCircleTextColor] = useState('#ffffff'); // สีตัวอักษรในวงกลม
-
-  // กำหนดขนาดตัวอักษรหน้าเส้นบรรทัด (ปรับได้จากแผงควบคุม)
   const [labelFontSize, setLabelFontSize] = useState(22);
-
-  // สถานะเมื่อเมาส์วางบนเส้นบรรทัด/วงกลม (Hover state)
   const [hoveredLineId, setHoveredLineId] = useState(null);
 
-  // ข้อมูลวิเคราะห์หลักภาษาและเส้น 5 เส้น
   const [analysisInfo, setAnalysisInfo] = useState({ type: '', vowelLen: '', desc: '', displayWord: '' });
   const [linesData, setLinesData] = useState([]);
 
-  // หมวดหมู่อักษร 3 หมู่
   const midConsonants = ['ก', 'จ', 'ด', 'ต', 'บ', 'ป', 'อ', 'ฎ', 'ฏ'];
   const highConsonants = ['ข', 'ฃ', 'ฉ', 'ฐ', 'ถ', 'ผ', 'ฝ', 'ศ', 'ษ', 'ส', 'ห'];
   const lowSingleConsonants = ['ง', 'ญ', 'น', 'ย', 'ณ', 'ร', 'ว', 'ม', 'ฬ', 'ล'];
@@ -92,7 +81,6 @@ export default function App() {
     }
   }, []);
 
-  // ระบบสื่อสารข้ามมอนิเตอร์ (BroadcastChannel)
   useEffect(() => {
     const channel = new BroadcastChannel('thai_tone_sync_channel');
     
@@ -162,11 +150,10 @@ export default function App() {
     let effectiveInitial = initial;
     let effectiveWord = word;
 
-    // หาคู่พยัญชนะ สูง-ต่ำ
-    if (!midConsonants.includes(initial)) {
-      let highConsonant = '';
-      let lowConsonant = '';
+    let highConsonant = '';
+    let lowConsonant = '';
 
+    if (!midConsonants.includes(initial)) {
       if (highConsonants.includes(initial)) {
         highConsonant = initial;
         lowConsonant = Object.keys(pairMap).find(k => pairMap[k] === initial) || initial;
@@ -207,12 +194,19 @@ export default function App() {
 
     if (midConsonants.includes(effectiveInitial)) {
       desc = isDead ? 'อักษรกลาง คำตาย (ผันได้เฉพาะ เอก, โท, ตรี, จัตวา)' : 'อักษรกลาง คำเป็น (ผันได้ครบ 5 เสียง)';
-    } else if (highConsonants.includes(effectiveInitial) || currentMode === 'highOnly') {
-      desc = isDead ? 'อักษรสูง คำตาย (ผันได้เฉพาะ เสียงเอก และ เสียงโท)' : 'อักษรสูง คำเป็น (ผันได้เฉพาะ เอก, โท, จัตวา)';
-    } else {
+    } else if (currentMode === 'highOnly') {
+      desc = isDead ? `อักษรสูง (${highConsonant}) คำตาย (ผันได้เฉพาะ เสียงเอก และ เสียงโท)` : `อักษรสูง (${highConsonant}) คำเป็น (ผันได้เฉพาะ เอก, โท, จัตวา)`;
+    } else if (currentMode === 'lowOnly') {
       desc = isDead 
-        ? (isShort ? 'อักษรต่ำ คำตายสระสั้น (พื้นเสียงตรี, ผันเสียงโทและจัตวา)' : 'อักษรต่ำ คำตายสระยาว (พื้นเสียงโท, ผันเสียงตรี)')
-        : 'อักษรต่ำ คำเป็น (ผันได้ สามัญ, โท, ตรี)';
+        ? (isShort ? `อักษรต่ำ (${lowConsonant}) คำตายสระสั้น (พื้นเสียงตรี, ผันเสียงโทและจัตวา)` : `อักษรต่ำ (${lowConsonant}) คำตายสระยาว (พื้นเสียงโท, ผันเสียงตรี)`)
+        : `อักษรต่ำ (${lowConsonant}) คำเป็น (ผันได้ สามัญ, โท, ตรี)`;
+    } else {
+      /* Mode 'full5' with combined High + Low classes */
+      if (isDead) {
+        desc = `ผันคู่ อักษรสูง (${highConsonant}) [เอก, โท] + อักษรต่ำ (${lowConsonant}) [โท, ตรี] คำตาย`;
+      } else {
+        desc = `ผันคู่ อักษรสูง/ห นำ (${highConsonant}) [เอก, โท, จัตวา] + อักษรต่ำ (${lowConsonant}) [สามัญ, โท, ตรี] รวมผันได้ครบทั้ง 5 เสียง`;
+      }
     }
 
     return { type: typeText, vowelLen: lenText, desc, isDead, isShort, initial: effectiveInitial, frontVowel, rearVowel, displayWord: effectiveWord };
@@ -408,7 +402,7 @@ export default function App() {
               </div>
             )}
 
-            {/* คำว่า "รูปวรรณยุกต์" ปรับย้ายลงมาให้ใกล้กับวงเล็บวรรณยุกต์เส้นแรกมากยิ่งขึ้น */}
+            {/* คำว่า "รูปวรรณยุกต์" ย้ายลงมาให้ใกล้กับวงเล็บวรรณยุกต์เส้นแรกมากยิ่งขึ้น */}
             <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr 140px', marginTop: '12px', marginBottom: '-18px', color: '#64748b', fontWeight: 'bold', fontSize: '15px' }}>
               <div style={{ textAlign: 'right', paddingRight: '25px', color: '#475569', letterSpacing: '0.5px' }}>รูปวรรณยุกต์</div>
               <div></div>
@@ -434,7 +428,7 @@ export default function App() {
                   onMouseLeave={() => setHoveredLineId(null)}
                 >
                   
-                  {/* ชื่อเสียงวรรณยุกต์ด้านหน้า (กำหนดขนาดตาม labelFontSize + ขยายใหญ่เมื่อ Hover) */}
+                  {/* ชื่อเสียงวรรณยุกต์ด้านหน้า */}
                   <div style={{ 
                     textAlign: 'right', 
                     paddingRight: '25px', 
@@ -452,7 +446,7 @@ export default function App() {
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '36px' }}>
                     <div style={{ width: '100%', height: '3px', backgroundColor: isHovered ? '#64748b' : '#94a3b8', transition: 'background-color 0.18s ease' }}></div>
 
-                    {/* วงกลมเดี่ยว (ขยายใหญ่พร้อมข้อความเมื่อ Hover) */}
+                    {/* วงกลมเดี่ยว */}
                     {!item.isMulti && item.show && item.word && (
                       <div 
                         style={{
@@ -480,7 +474,7 @@ export default function App() {
                       </div>
                     )}
 
-                    {/* วงกลมคู่สำหรับเสียงโท (ขยายใหญ่พร้อมข้อความเมื่อ Hover) */}
+                    {/* วงกลมคู่สำหรับเสียงโท */}
                     {item.isMulti && item.show && (
                       <div style={{ position: 'absolute', left: item.leftPos, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '10px' }}>
                         {item.multi.map((circle, i) => (
@@ -613,6 +607,7 @@ export default function App() {
           </button>
         </div>
 
+        {}
         <div style={{ display: 'grid', gridTemplateColumns: viewLayout === 'split' ? '400px 1fr' : '1fr', gap: '20px', alignItems: 'start' }}>
           
           {viewLayout !== 'present' && (
@@ -727,7 +722,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* เลือกพยัญชนะด่วน */}
+              {}
               <div style={{ marginBottom: '16px' }}>
                 <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', marginBottom: '6px' }}>⌨️ เลือกพยัญชนะด่วน:</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
@@ -752,7 +747,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* เลือกสระด่วน */}
+              {}
               <div>
                 <div style={{ fontSize: '12px', color: '#166534', fontWeight: 'bold', marginBottom: '6px' }}>🟢 สระเสียงยาว (คำเป็น):</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '12px' }}>
@@ -784,7 +779,6 @@ export default function App() {
             </div>
           )}
 
-          {/* กระดานบรรทัด 5 เส้น (จอล่าง) */}
           {}
           <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: viewLayout === 'present' ? '40px 50px' : '35px 25px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
             
@@ -820,7 +814,7 @@ export default function App() {
                     onMouseEnter={() => setHoveredLineId(item.id)}
                     onMouseLeave={() => setHoveredLineId(null)}
                   >
-                    {/* ชื่อเสียงวรรณยุกต์ด้านหน้า (ขยายใหญ่เมื่อ Hover) */}
+                    {/* ชื่อเสียงวรรณยุกต์ด้านหน้า */}
                     <div style={{ 
                       textAlign: 'right', 
                       paddingRight: '20px', 
