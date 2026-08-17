@@ -76,7 +76,6 @@ export default function App() {
     'ฮ': 'ห', 'ห': 'ฮ'
   };
 
-  // ตรวจสอบพารามิเตอร์ URL ว่าเป็นหน้าจอที่ 2 หรือไม่
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('view') === 'display') {
@@ -89,7 +88,6 @@ export default function App() {
     const channel = new BroadcastChannel('thai_tone_sync_channel');
     
     if (isDisplayWindow) {
-      // หน้าจอที่ 2 รอรับข้อมูลอัปเดตจากจอควบคุม
       channel.onmessage = (event) => {
         const { lines, info, text, cText, cMid, cHigh, cLow } = event.data;
         if (lines) setLinesData(lines);
@@ -101,7 +99,6 @@ export default function App() {
         if (cLow) setColorLow(cLow);
       };
     } else {
-      // หน้าจอควบคุมส่งข้อมูลไปให้หน้าจอที่ 2 เสมอ
       channel.postMessage({
         lines: linesData,
         info: analysisInfo,
@@ -116,7 +113,6 @@ export default function App() {
     return () => channel.close();
   }, [linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, isDisplayWindow]);
 
-  // ฟังก์ชันแยกพยัญชนะและสระ
   const parseThaiWord = (word) => {
     if (!word) return { initial: '', frontVowel: '', rearVowel: '', toneMark: '' };
     let frontVowel = '';
@@ -147,7 +143,6 @@ export default function App() {
     return `${frontVowel}${consonant}${tone}${rearVowel}`;
   };
 
-  // วิเคราะห์คำเป็น/คำตาย
   const analyzeSyllable = (word) => {
     const { initial, frontVowel, rearVowel } = parseThaiWord(word);
     const shortVowelChars = ['ะ', 'ิ', 'ึ', 'ุ', 'ั'];
@@ -184,7 +179,6 @@ export default function App() {
     return { type: typeText, vowelLen: lenText, desc, isDead, isShort, initial, frontVowel, rearVowel };
   };
 
-  // คำนวณผันวรรณยุกต์ออฟไลน์
   const calculateTones = (word, currentMode, midC, highC, lowC) => {
     if (!word) return [];
     const info = analyzeSyllable(word);
@@ -226,8 +220,8 @@ export default function App() {
     } else if (currentMode === 'lowOnly') {
       return [
         { id: 5, tone: 'เสียงจัตวา', mark: '◌๋', word: '', color: lowC, isMulti: false, multi: [], show: false, leftPos: '80%' },
-        { id: 4, tone: 'เสียงตรี', mark: '◌๊', word: buildWord(frontVowel, lowConsonant, isShort ? '' : '้', rearVowel), color: lowC, isMulti: false, multi: [], show: true, leftPos: '65%' },
-        { id: 3, tone: 'เสียงโท', mark: '◌้', word: buildWord(frontVowel, lowConsonant, isShort ? '่' : '', rearVowel), color: lowC, isMulti: false, multi: [], show: true, leftPos: '52%' },
+        { id: 4, tone: 'เสียงตรี', mark: '◌๊', word: buildWord(frontVowel, lowConsonant, isDead && isShort ? '' : '้', rearVowel), color: lowC, isMulti: false, multi: [], show: true, leftPos: '65%' },
+        { id: 3, tone: 'เสียงโท', mark: '◌้', word: buildWord(frontVowel, lowConsonant, isDead && !isShort ? '' : '่', rearVowel), color: lowC, isMulti: false, multi: [], show: true, leftPos: '52%' },
         { id: 2, tone: 'เสียงเอก', mark: '◌่', word: '', color: lowC, isMulti: false, multi: [], show: false, leftPos: '40%' },
         { id: 1, tone: 'เสียงสามัญ', mark: '—', word: isDead ? '' : buildWord(frontVowel, lowConsonant, '', rearVowel), color: lowC, isMulti: false, multi: [], show: !isDead, leftPos: '28%' }
       ];
@@ -241,7 +235,7 @@ export default function App() {
           mark: '◌้', 
           isMulti: true, 
           multi: [
-            { text: buildWord(frontVowel, lowConsonant, '่', rearVowel), color: lowC },
+            { text: buildWord(frontVowel, lowConsonant, isDead && !isShort ? '' : '่', rearVowel), color: lowC },
             { text: buildWord(frontVowel, highConsonant, '้', rearVowel), color: highC }
           ],
           show: true,
@@ -257,10 +251,9 @@ export default function App() {
     setLinesData(calculateTones(inputText, mode, colorMid, colorHigh, colorLow));
   }, [inputText, mode, colorMid, colorHigh, colorLow]);
 
-  // ฟังก์ชันเปิดป๊อปอัพมอนิเตอร์ที่ 2
   const handleOpenDualMonitor = () => {
     const currentUrl = window.location.href.split('?')[0];
-    window.open(`${currentUrl}?view=display`, 'ThaiToneDisplayWindow', 'width=1200,height=800,menubar=no,toolbar=no,location=no,status=no');
+    window.open(`${currentUrl}?view=display`, 'ThaiToneDisplayWindow', 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no');
   };
 
   const handleSaveApiKey = () => {
@@ -356,28 +349,43 @@ export default function App() {
     1: { text: 'เสียงต่ำ', color: '#007bff' }
   };
 
-  // กรณีหน้าต่างที่ 2 (Display Monitor Mode) ให้แสดงเฉพาะกระดาน 5 เส้นเต็มจอ
+  // โหมดหน้าต่างแสดงผลเต็มพื้นที่บนมอนิเตอร์ที่ 2
   if (isDisplayWindow) {
     return (
-      <div style={{ minHeight: '100vh', backgroundColor: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '30px', fontFamily: "'Sarabun', sans-serif" }}>
-        <div style={{ width: '100%', maxWidth: '1100px', backgroundColor: '#ffffff', borderRadius: '24px', padding: '50px 40px', boxShadow: '0 10px 40px rgba(0,0,0,0.3)' }}>
-          <h2 style={{ textAlign: 'center', color: '#ea580c', fontSize: '36px', fontWeight: 'bold', margin: '0 0 25px 0' }}>
-            ไตรยางศ์ หรือ อักษร 3 หมู่
-          </h2>
+      <div style={{ minHeight: '100vh', width: '100vw', backgroundColor: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', boxSizing: 'border-box', fontFamily: "'Sarabun', sans-serif" }}>
+        <div style={{ width: '100%', height: '100%', maxWidth: '98vw', backgroundColor: '#ffffff', borderRadius: '24px', padding: '40px 50px', boxShadow: '0 10px 40px rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <h2 style={{ margin: 0, color: '#ea580c', fontSize: '38px', fontWeight: 'bold' }}>
+              ไตรยางศ์ หรือ อักษร 3 หมู่
+            </h2>
+            <button 
+              onClick={() => {
+                if (!document.fullscreenElement) {
+                  document.documentElement.requestFullscreen();
+                } else {
+                  document.exitFullscreen();
+                }
+              }}
+              style={{ padding: '9px 18px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#f1f5f9', cursor: 'pointer', fontWeight: 'bold', fontSize: '15px', color: '#475569' }}
+            >
+              ⛶ สลับเต็มจอ (Fullscreen)
+            </button>
+          </div>
 
           {analysisInfo.desc && (
-            <div style={{ backgroundColor: '#f0f9ff', border: '2px solid #bae6fd', padding: '12px 20px', borderRadius: '12px', marginBottom: '35px', textAlign: 'center', fontSize: '18px', color: '#0369a1', fontWeight: 'bold' }}>
+            <div style={{ backgroundColor: '#f0f9ff', border: '2px solid #bae6fd', padding: '14px 24px', borderRadius: '14px', marginBottom: '35px', textAlign: 'center', fontSize: '20px', color: '#0369a1', fontWeight: 'bold' }}>
               📌 <span style={{ color: '#0284c7' }}>"{inputText}"</span> เป็น {analysisInfo.type} ({analysisInfo.vowelLen}) — {analysisInfo.desc}
             </div>
           )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: '250px 1fr 140px', marginBottom: '20px', color: '#64748b', fontWeight: 'bold', fontSize: '18px' }}>
-            <div style={{ textAlign: 'right', paddingRight: '25px' }}>รูปวรรณยุกต์</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr 150px', marginBottom: '20px', color: '#64748b', fontWeight: 'bold', fontSize: '20px' }}>
+            <div style={{ textAlign: 'right', paddingRight: '30px' }}>รูปวรรณยุกต์</div>
             <div></div>
             <div></div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '44px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '46px' }}>
             {linesData.map((item, idx) => {
               let rowHeaderColor = '#94a3b8';
               if (item.show) {
@@ -386,12 +394,12 @@ export default function App() {
               const fixedRight = fixedRightLabels[item.id];
 
               return (
-                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '250px 1fr 140px', alignItems: 'center' }}>
-                  <div style={{ textAlign: 'right', paddingRight: '25px', fontSize: '22px', color: rowHeaderColor, fontWeight: 'bold' }}>
-                    {item.tone} <span style={{ fontSize: '20px', marginLeft: '6px' }}>[ {item.mark} ]</span>
+                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '260px 1fr 150px', alignItems: 'center' }}>
+                  <div style={{ textAlign: 'right', paddingRight: '30px', fontSize: '24px', color: rowHeaderColor, fontWeight: 'bold' }}>
+                    {item.tone} <span style={{ fontSize: '22px', marginLeft: '6px' }}>[ {item.mark} ]</span>
                   </div>
 
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '36px' }}>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '40px' }}>
                     <div style={{ width: '100%', height: '3px', backgroundColor: '#94a3b8' }}></div>
 
                     {!item.isMulti && item.show && item.word && (
@@ -402,16 +410,16 @@ export default function App() {
                           transform: 'translateX(-50%)',
                           backgroundColor: item.color,
                           color: circleTextColor,
-                          minWidth: '58px',
-                          height: '58px',
-                          padding: '0 12px',
-                          borderRadius: '29px',
+                          minWidth: '64px',
+                          height: '64px',
+                          padding: '0 14px',
+                          borderRadius: '32px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           fontWeight: 'bold',
-                          fontSize: '24px',
-                          boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+                          fontSize: '26px',
+                          boxShadow: '0 4px 14px rgba(0,0,0,0.3)'
                         }}
                       >
                         {item.word}
@@ -419,24 +427,24 @@ export default function App() {
                     )}
 
                     {item.isMulti && item.show && (
-                      <div style={{ position: 'absolute', left: item.leftPos, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ position: 'absolute', left: item.leftPos, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '12px' }}>
                         {item.multi.map((circle, i) => (
                           <React.Fragment key={i}>
-                            {i > 0 && <span style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '24px' }}>/</span>}
+                            {i > 0 && <span style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '26px' }}>/</span>}
                             <div 
                               style={{
                                 backgroundColor: circle.color,
                                 color: circleTextColor,
-                                minWidth: '58px',
-                                height: '58px',
-                                padding: '0 12px',
-                                borderRadius: '29px',
+                                minWidth: '64px',
+                                height: '64px',
+                                padding: '0 14px',
+                                borderRadius: '32px',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 fontWeight: 'bold',
-                                fontSize: '24px',
-                                boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+                                fontSize: '26px',
+                                boxShadow: '0 4px 14px rgba(0,0,0,0.3)'
                               }}
                             >
                               {circle.text}
@@ -447,7 +455,7 @@ export default function App() {
                     )}
                   </div>
 
-                  <div style={{ textAlign: 'center', color: fixedRight ? fixedRight.color : '#94a3b8', fontWeight: 'bold', fontSize: '20px' }}>
+                  <div style={{ textAlign: 'center', color: fixedRight ? fixedRight.color : '#94a3b8', fontWeight: 'bold', fontSize: '22px' }}>
                     {fixedRight ? fixedRight.text : ''}
                   </div>
                 </div>
@@ -464,9 +472,8 @@ export default function App() {
     <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', padding: '24px 15px', fontFamily: "'Sarabun', sans-serif" }}>
       <div style={{ maxWidth: viewLayout === 'split' ? '1280px' : '920px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
         
-        {/* แถบเครื่องมือด้านบนสุด (มีปุ่มเปิดจอมอนิเตอร์ที่ 2 ชัดเจน) */}
+        {/* แถบเครื่องมือด้านบนสุด */}
         <div style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.06)', flexWrap: 'wrap', gap: '12px', border: '1px solid #e2e8f0' }}>
-          
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontWeight: 'bold', fontSize: '15px', color: '#1e293b' }}>🖥️ มุมมอง:</span>
             <button 
@@ -489,7 +496,6 @@ export default function App() {
             </button>
           </div>
 
-          {/* ปุ่มสีเขียวสำหรับส่งขึ้นมอนิเตอร์ที่ 2 */}
           <button 
             onClick={handleOpenDualMonitor}
             style={{ 
@@ -517,7 +523,6 @@ export default function App() {
         {/* โครงสร้างเนื้อหา */}
         <div style={{ display: 'grid', gridTemplateColumns: viewLayout === 'split' ? '400px 1fr' : '1fr', gap: '20px', alignItems: 'start' }}>
           
-          {/* แผงควบคุม */}
           {viewLayout !== 'present' && (
             <div style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '24px', boxShadow: '0 4px 14px rgba(0,0,0,0.06)', border: '1px solid #e5e7eb' }}>
               
