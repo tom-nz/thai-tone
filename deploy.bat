@@ -1,33 +1,32 @@
 @echo off
-REM STREAMING_CHUNK:Setting up batch script environment...
-chcp 65001 > nul
-echo ===================================================
-echo   🚀 Starting Auto-Deploy to GitHub & Cloudflare
-echo ===================================================
+chcp 65001 >nul
+echo ======================================================
+echo   Auto Deploying to GitHub and Cloudflare Pages
+echo ======================================================
 echo.
 
-REM STREAMING_CHUNK:Prompting for commit message...
 set /p commitMsg="Enter commit message (Press Enter for default): "
 if "%commitMsg%"=="" set commitMsg=complete dynamic thai tone app with real AI integration
 
 echo.
-echo [1/3] Adding changes to Git...
-REM STREAMING_CHUNK:Staging files with git add...
+echo [1/4] Adding changes to Git...
 git add .
 
 echo.
-echo [2/3] Committing with message: "%commitMsg%"
-REM STREAMING_CHUNK:Committing changes...
+echo [2/4] Committing with message: "%commitMsg%"
 git commit -m "%commitMsg%"
 
 echo.
-echo [3/3] Pushing to GitHub...
-REM STREAMING_CHUNK:Pushing repository...
-git push
+echo [3/4] Pulling latest changes to prevent conflict...
+git pull origin main --rebase
 
 echo.
-echo ===================================================
-echo   ✅ Successfully deployed! Cloudflare is building.
-echo ===================================================
+echo [4/4] Pushing to GitHub...
+git push origin main
+
+echo.
+echo ======================================================
+echo   Successfully deployed! Cloudflare is building.
+echo ======================================================
 echo.
 pause
