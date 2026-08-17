@@ -315,7 +315,7 @@ export default function App() {
               <div style={{ marginBottom: '14px' }}>
                 <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', marginBottom: '6px' }}>⌨️ เลือกพยัญชนะด่วน:</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                  {quickConsonants.map((c) => (<button key={c} onClick={() => handleQuickConsonantClick(c)} style={{ padding: '4px 7px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#ffffff', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', color: midConsonants.includes(c) ? colorMid : highConsonants.includes(c) ? colorHigh : colorLow }}>{c}</button>))}
+                  {quickConsonants.map((c) => (<button key={c} onClick={() => handleQuickConsonantClick(c)} style={{ padding: '4px 7px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#ffffff', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', color: midConsonants.includes(c) ? colorMid : highConsonants.includes(c) ? colorLow : colorLow }}>{c}</button>))}
                 </div>
               </div>
 
