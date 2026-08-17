@@ -22,6 +22,12 @@ export default function App() {
   const [colorLow, setColorLow] = useState('#007bff');    // ต่ำ (น้ำเงิน)
   const [circleTextColor, setCircleTextColor] = useState('#ffffff'); // สีตัวอักษรในวงกลม
 
+  // กำหนดขนาดตัวอักษรหน้าเส้นบรรทัด (สามารถปรับได้จากแผงควบคุม)
+  const [labelFontSize, setLabelFontSize] = useState(22);
+
+  // สถานะเมื่อเมาส์วางบนเส้นบรรทัด/วงกลม (Hover state)
+  const [hoveredLineId, setHoveredLineId] = useState(null);
+
   // ข้อมูลวิเคราะห์หลักภาษาและเส้น 5 เส้น
   const [analysisInfo, setAnalysisInfo] = useState({ type: '', vowelLen: '', desc: '' });
   const [linesData, setLinesData] = useState([]);
@@ -92,7 +98,7 @@ export default function App() {
     
     if (isDisplayWindow) {
       channel.onmessage = (event) => {
-        const { lines, info, text, cText, cMid, cHigh, cLow } = event.data;
+        const { lines, info, text, cText, cMid, cHigh, cLow, labelFS } = event.data;
         if (lines) setLinesData(lines);
         if (info) setAnalysisInfo(info);
         if (text) setInputText(text);
@@ -100,6 +106,7 @@ export default function App() {
         if (cMid) setColorMid(cMid);
         if (cHigh) setColorHigh(cHigh);
         if (cLow) setColorLow(cLow);
+        if (labelFS) setLabelFontSize(labelFS);
       };
     } else {
       channel.postMessage({
@@ -109,12 +116,13 @@ export default function App() {
         cText: circleTextColor,
         cMid: colorMid,
         cHigh: colorHigh,
-        cLow: colorLow
+        cLow: colorLow,
+        labelFS: labelFontSize
       });
     }
 
     return () => channel.close();
-  }, [linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, isDisplayWindow]);
+  }, [linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, labelFontSize, isDisplayWindow]);
 
   const parseThaiWord = (word) => {
     if (!word) return { initial: '', frontVowel: '', rearVowel: '', toneMark: '' };
@@ -352,61 +360,78 @@ export default function App() {
     1: { text: 'เสียงต่ำ', color: '#007bff' }
   };
 
-  // 1. หน้าจอที่สอง (จอ Acer ด้านบน): ขนาด 2 ใน 3 ของจอภาพ + พื้นหลังสีเทา + วงกลม/ตัวหนังสือใหญ่สมส่วน + ไร้ Scrollbar
+  // 1. หน้าจอที่สอง (จอ Acer ด้านบน): ขนาด 2 ใน 3 ของจอภาพ + พื้นหลังสีเทา + วงกลม/ตัวหนังสือใหญ่สมส่วน + ไร้ Scrollbar + Hover Sync
   if (isDisplayWindow) {
     return (
       <div style={{ height: '100vh', width: '100vw', backgroundColor: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', padding: '0', margin: '0', fontFamily: "'Sarabun', sans-serif", overflow: 'hidden', position: 'fixed', top: 0, left: 0 }}>
         
-        {/* บอร์ดสีขาว ขนาด 2 ใน 3 ส่วน (68vw x 88vh) โค้งมน */}
-        <div style={{ width: '68vw', height: '88vh', backgroundColor: '#ffffff', borderRadius: '28px', padding: '30px 48px', boxShadow: '0 15px 40px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxSizing: 'border-box', border: '1px solid #cbd5e1' }}>
+        {/* บอร์ดสีขาว ขนาด 2 ใน 3 ส่วน โค้งมน */}
+        <div style={{ width: '68vw', height: '88vh', backgroundColor: '#ffffff', borderRadius: '28px', padding: '24px 48px', boxShadow: '0 15px 40px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxSizing: 'border-box', border: '1px solid #cbd5e1' }}>
           
-          {/* หัวเรื่องและกล่องผลวิเคราะห์เหมือนจอล่าง */}
+          {/* หัวเรื่องและกล่องผลวิเคราะห์ */}
           <div>
-            <h2 style={{ textAlign: 'center', margin: '0 0 12px 0', color: '#ea580c', fontSize: '34px', fontWeight: 'bold' }}>
+            <h2 style={{ textAlign: 'center', margin: '0 0 8px 0', color: '#ea580c', fontSize: '34px', fontWeight: 'bold' }}>
               ไตรยางศ์ หรือ อักษร 3 หมู่
             </h2>
 
             {analysisInfo.desc && (
-              <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '10px 20px', borderRadius: '12px', margin: '0 auto 15px auto', maxWidth: '850px', textAlign: 'center', fontSize: '16px', color: '#0369a1', fontWeight: 'bold' }}>
+              <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '8px 20px', borderRadius: '12px', margin: '0 auto 4px auto', maxWidth: '850px', textAlign: 'center', fontSize: '16px', color: '#0369a1', fontWeight: 'bold' }}>
                 📌 ผลวิเคราะห์หลักภาษา: <span style={{ color: '#0284c7' }}>"{inputText}"</span> เป็น <span style={{ backgroundColor: '#e0f2fe', padding: '2px 8px', borderRadius: '4px' }}>{analysisInfo.type} ({analysisInfo.vowelLen})</span> — {analysisInfo.desc}
               </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr 140px', marginBottom: '10px', color: '#64748b', fontWeight: 'bold', fontSize: '18px' }}>
-              <div style={{ textAlign: 'right', paddingRight: '25px' }}>รูปวรรณยุกต์</div>
+            {/* คำว่า "รูปวรรณยุกต์" เลื่อนลงมาให้ใกล้กับวงเล็บวรรณยุกต์บรรทัดแรก */}
+            <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr 140px', marginTop: '2px', marginBottom: '-2px', color: '#64748b', fontWeight: 'bold', fontSize: '16px' }}>
+              <div style={{ textAlign: 'right', paddingRight: '25px', color: '#475569', letterSpacing: '0.5px' }}>รูปวรรณยุกต์</div>
               <div></div>
               <div></div>
             </div>
           </div>
 
-          {/* บรรทัด 5 เส้น พร้อมวงกลมขนาดใหญ่ 60px */}
-          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', flex: 1, padding: '12px 0' }}>
+          {/* บรรทัด 5 เส้น พร้อมวงกลมและตัวหนังสือปรับขนาดได้ */}
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', flex: 1, padding: '6px 0' }}>
             {linesData.map((item, idx) => {
               let rowHeaderColor = '#94a3b8';
               if (item.show) {
                 rowHeaderColor = item.isMulti ? item.multi[0]?.color : item.color;
               }
               const fixedRight = fixedRightLabels[item.id];
+              const isHovered = hoveredLineId === item.id;
 
               return (
-                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '240px 1fr 140px', alignItems: 'center' }}>
+                <div 
+                  key={idx} 
+                  style={{ display: 'grid', gridTemplateColumns: '240px 1fr 140px', alignItems: 'center' }}
+                  onMouseEnter={() => setHoveredLineId(item.id)}
+                  onMouseLeave={() => setHoveredLineId(null)}
+                >
                   
-                  {/* ชื่อเสียงวรรณยุกต์ด้านหน้า */}
-                  <div style={{ textAlign: 'right', paddingRight: '25px', fontSize: '22px', color: rowHeaderColor, fontWeight: 'bold' }}>
-                    {item.tone} <span style={{ fontSize: '20px', marginLeft: '6px' }}>[ {item.mark} ]</span>
+                  {/* ชื่อเสียงวรรณยุกต์ด้านหน้า (กำหนดขนาดตาม labelFontSize + ขยายใหญ่เมื่อ Hover) */}
+                  <div style={{ 
+                    textAlign: 'right', 
+                    paddingRight: '25px', 
+                    fontSize: `${isHovered ? labelFontSize * 1.16 : labelFontSize}px`, 
+                    color: isHovered ? (rowHeaderColor !== '#94a3b8' ? rowHeaderColor : '#334155') : rowHeaderColor, 
+                    fontWeight: 'bold',
+                    transform: isHovered ? 'scale(1.08)' : 'scale(1)',
+                    transformOrigin: 'right center',
+                    transition: 'all 0.18s ease'
+                  }}>
+                    {item.tone} <span style={{ fontSize: `${(isHovered ? labelFontSize * 1.16 : labelFontSize) - 2}px`, marginLeft: '6px' }}>[ {item.mark} ]</span>
                   </div>
 
                   {/* เส้นบรรทัดและวงกลมคำศัพท์ */}
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '40px' }}>
-                    <div style={{ width: '100%', height: '3px', backgroundColor: '#94a3b8' }}></div>
+                    <div style={{ width: '100%', height: '3px', backgroundColor: isHovered ? '#64748b' : '#94a3b8', transition: 'background-color 0.18s ease' }}></div>
 
-                    {/* วงกลมเดี่ยว (ขนาดใหญ่ 60px + ฟอนต์ 24px พร้อม Hover Zoom) */}
+                    {/* วงกลมเดี่ยว (ขยายใหญ่พร้อมข้อความเมื่อ Hover) */}
                     {!item.isMulti && item.show && item.word && (
                       <div 
                         style={{
                           position: 'absolute',
                           left: item.leftPos,
-                          transform: 'translateX(-50%)',
+                          transform: isHovered ? 'translateX(-50%) scale(1.22)' : 'translateX(-50%) scale(1)',
+                          filter: isHovered ? 'brightness(1.15)' : 'brightness(1)',
                           backgroundColor: item.color,
                           color: circleTextColor,
                           minWidth: '60px',
@@ -418,18 +443,16 @@ export default function App() {
                           justifyContent: 'center',
                           fontWeight: 'bold',
                           fontSize: '24px',
-                          boxShadow: '0 5px 14px rgba(0,0,0,0.22)',
+                          boxShadow: isHovered ? '0 8px 20px rgba(0,0,0,0.3)' : '0 5px 14px rgba(0,0,0,0.22)',
                           cursor: 'pointer',
-                          transition: 'transform 0.15s ease, filter 0.15s ease'
+                          transition: 'transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease'
                         }}
-                        onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateX(-50%) scale(1.18)'; e.currentTarget.style.filter = 'brightness(1.12)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateX(-50%) scale(1)'; e.currentTarget.style.filter = 'brightness(1)'; }}
                       >
                         {item.word}
                       </div>
                     )}
 
-                    {/* วงกลมคู่สำหรับเสียงโท */}
+                    {/* วงกลมคู่สำหรับเสียงโท (ขยายใหญ่พร้อมข้อความเมื่อ Hover) */}
                     {item.isMulti && item.show && (
                       <div style={{ position: 'absolute', left: item.leftPos, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '10px' }}>
                         {item.multi.map((circle, i) => (
@@ -448,12 +471,12 @@ export default function App() {
                                 justifyContent: 'center',
                                 fontWeight: 'bold',
                                 fontSize: '24px',
-                                boxShadow: '0 5px 14px rgba(0,0,0,0.22)',
+                                transform: isHovered ? 'scale(1.22)' : 'scale(1)',
+                                filter: isHovered ? 'brightness(1.15)' : 'brightness(1)',
+                                boxShadow: isHovered ? '0 8px 20px rgba(0,0,0,0.3)' : '0 5px 14px rgba(0,0,0,0.22)',
                                 cursor: 'pointer',
-                                transition: 'transform 0.15s ease, filter 0.15s ease'
+                                transition: 'transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease'
                               }}
-                              onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.18)'; e.currentTarget.style.filter = 'brightness(1.12)'; }}
-                              onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.filter = 'brightness(1)'; }}
                             >
                               {circle.text}
                             </div>
@@ -623,6 +646,22 @@ export default function App() {
                 </div>
               </div>
 
+              {/* กำหนดขนาดตัวอักษรชื่อเสียงวรรณยุกต์หน้าเส้น */}
+              <div style={{ marginBottom: '18px', backgroundColor: '#f8fafc', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#334155' }}>📐 ขนาดชื่อเสียงวรรณยุกต์หน้าเส้น:</span>
+                  <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#0284c7', backgroundColor: '#e0f2fe', padding: '2px 8px', borderRadius: '6px' }}>{labelFontSize} px</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="16" 
+                  max="32" 
+                  value={labelFontSize} 
+                  onChange={(e) => setLabelFontSize(Number(e.target.value))}
+                  style={{ width: '100%', cursor: 'pointer', accentColor: '#0284c7' }}
+                />
+              </div>
+
               {/* เลือกโหมดผัน */}
               <div style={{ backgroundColor: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '16px' }}>
                 <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#1f2937', marginBottom: '8px' }}>✨ ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ</div>
@@ -726,13 +765,14 @@ export default function App() {
             </h2>
 
             {analysisInfo.desc && (
-              <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '10px 16px', borderRadius: '10px', marginBottom: '25px', textAlign: 'center', fontSize: '14px', color: '#0369a1', fontWeight: 'bold' }}>
+              <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '10px 16px', borderRadius: '10px', marginBottom: '20px', textAlign: 'center', fontSize: '14px', color: '#0369a1', fontWeight: 'bold' }}>
                 📌 ผลวิเคราะห์หลักภาษา: <span style={{ color: '#0284c7' }}>"{inputText}"</span> เป็น <span style={{ backgroundColor: '#e0f2fe', padding: '2px 8px', borderRadius: '4px' }}>{analysisInfo.type} ({analysisInfo.vowelLen})</span> — {analysisInfo.desc}
               </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 110px', marginBottom: '15px', color: '#64748b', fontWeight: 'bold', fontSize: '15px' }}>
-              <div style={{ textAlign: 'right', paddingRight: '20px' }}>รูปวรรณยุกต์</div>
+            {/* คำว่า "รูปวรรณยุกต์" เลื่อนลงมาให้ใกล้กับวงเล็บวรรณยุกต์บรรทัดแรก */}
+            <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 110px', marginTop: '2px', marginBottom: '-2px', color: '#64748b', fontWeight: 'bold', fontSize: '15px' }}>
+              <div style={{ textAlign: 'right', paddingRight: '20px', color: '#475569', letterSpacing: '0.5px' }}>รูปวรรณยุกต์</div>
               <div></div>
               <div></div>
             </div>
@@ -744,22 +784,39 @@ export default function App() {
                   rowHeaderColor = item.isMulti ? item.multi[0]?.color : item.color;
                 }
                 const fixedRight = fixedRightLabels[item.id];
+                const isHovered = hoveredLineId === item.id;
 
                 return (
-                  <div key={idx} style={{ display: 'grid', gridTemplateColumns: '220px 1fr 110px', alignItems: 'center' }}>
-                    <div style={{ textAlign: 'right', paddingRight: '20px', fontSize: '17px', color: rowHeaderColor, fontWeight: 'bold', transition: 'color 0.2s ease' }}>
-                      {item.tone} <span style={{ fontSize: '17px', marginLeft: '4px', letterSpacing: '1px' }}>[ {item.mark} ]</span>
+                  <div 
+                    key={idx} 
+                    style={{ display: 'grid', gridTemplateColumns: '220px 1fr 110px', alignItems: 'center' }}
+                    onMouseEnter={() => setHoveredLineId(item.id)}
+                    onMouseLeave={() => setHoveredLineId(null)}
+                  >
+                    {/* ชื่อเสียงวรรณยุกต์ด้านหน้า (ขยายใหญ่เมื่อ Hover) */}
+                    <div style={{ 
+                      textAlign: 'right', 
+                      paddingRight: '20px', 
+                      fontSize: `${isHovered ? 19 : 17}px`, 
+                      color: isHovered ? (rowHeaderColor !== '#94a3b8' ? rowHeaderColor : '#334155') : rowHeaderColor, 
+                      fontWeight: 'bold',
+                      transform: isHovered ? 'scale(1.08)' : 'scale(1)',
+                      transformOrigin: 'right center',
+                      transition: 'all 0.18s ease'
+                    }}>
+                      {item.tone} <span style={{ fontSize: `${isHovered ? 19 : 17}px`, marginLeft: '4px', letterSpacing: '1px' }}>[ {item.mark} ]</span>
                     </div>
 
                     <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '30px' }}>
-                      <div style={{ width: '100%', height: '2px', backgroundColor: '#94a3b8' }}></div>
+                      <div style={{ width: '100%', height: '2px', backgroundColor: isHovered ? '#64748b' : '#94a3b8', transition: 'background-color 0.18s ease' }}></div>
 
                       {!item.isMulti && item.show && item.word && (
                         <div 
                           style={{
                             position: 'absolute',
                             left: item.leftPos,
-                            transform: 'translateX(-50%)',
+                            transform: isHovered ? 'translateX(-50%) scale(1.18)' : 'translateX(-50%) scale(1)',
+                            filter: isHovered ? 'brightness(1.15)' : 'brightness(1)',
                             backgroundColor: item.color,
                             color: circleTextColor,
                             minWidth: '46px',
@@ -771,12 +828,10 @@ export default function App() {
                             justifyContent: 'center',
                             fontWeight: 'bold',
                             fontSize: '18px',
-                            boxShadow: '0 3px 8px rgba(0,0,0,0.25)',
+                            boxShadow: isHovered ? '0 6px 16px rgba(0,0,0,0.3)' : '0 3px 8px rgba(0,0,0,0.25)',
                             cursor: 'pointer',
-                            transition: 'transform 0.15s ease, filter 0.15s ease'
+                            transition: 'transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease'
                           }}
-                          onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateX(-50%) scale(1.15)'; e.currentTarget.style.filter = 'brightness(1.15)'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateX(-50%) scale(1)'; e.currentTarget.style.filter = 'brightness(1)'; }}
                         >
                           {item.word}
                         </div>
@@ -800,12 +855,12 @@ export default function App() {
                                   justifyContent: 'center',
                                   fontWeight: 'bold',
                                   fontSize: '18px',
-                                  boxShadow: '0 3px 8px rgba(0,0,0,0.25)',
+                                  transform: isHovered ? 'scale(1.18)' : 'scale(1)',
+                                  filter: isHovered ? 'brightness(1.15)' : 'brightness(1)',
+                                  boxShadow: isHovered ? '0 6px 16px rgba(0,0,0,0.3)' : '0 3px 8px rgba(0,0,0,0.25)',
                                   cursor: 'pointer',
-                                  transition: 'transform 0.15s ease, filter 0.15s ease'
+                                  transition: 'transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease'
                                 }}
-                                onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.15)'; e.currentTarget.style.filter = 'brightness(1.15)'; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.filter = 'brightness(1)'; }}
                               >
                                 {circle.text}
                               </div>
