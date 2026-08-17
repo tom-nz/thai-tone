@@ -1,37 +1,36 @@
 import React, { useState, useEffect } from 'react';
 
 export default function App() {
-  // บันทึกและดึง Gemini API Key จากเบราว์เซอร์อัตโนมัติ (LocalStorage)
+  // ระบบคีย์ Gemini API (บันทึกอัตโนมัติลง LocalStorage)
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
   const [tempApiKey, setTempApiKey] = useState(apiKey);
   const [showApiInput, setShowApiInput] = useState(false);
   const [apiSaveStatus, setApiSaveStatus] = useState('');
 
-  // โหมดผันและมุมมองหน้าจอ
+  // โหมดผันและโหมดมุมมองหน้าจอ
   const [mode, setMode] = useState('full5'); // 'full5' | 'highOnly' | 'lowOnly'
   const [viewLayout, setViewLayout] = useState('split'); // 'standard' | 'split' | 'present'
   const [inputText, setInputText] = useState('เมา');
   const [loading, setLoading] = useState(false);
 
   // การตั้งค่าสี
-  const [colorMid, setColorMid] = useState('#22c55e');    // อักษรกลาง (เขียว)
-  const [colorHigh, setColorHigh] = useState('#ef4444');   // อักษรสูง (แดง)
-  const [colorLow, setColorLow] = useState('#007bff');    // อักษรต่ำ (น้ำเงิน)
+  const [colorMid, setColorMid] = useState('#22c55e');    // กลาง (เขียว)
+  const [colorHigh, setColorHigh] = useState('#ef4444');   // สูง (แดง)
+  const [colorLow, setColorLow] = useState('#007bff');    // ต่ำ (น้ำเงิน)
   const [circleTextColor, setCircleTextColor] = useState('#ffffff'); // สีตัวอักษรในวงกลม
 
   // ข้อมูลวิเคราะห์หลักภาษาและเส้น 5 เส้น
   const [analysisInfo, setAnalysisInfo] = useState({ type: '', vowelLen: '', desc: '' });
   const [linesData, setLinesData] = useState([]);
 
-  // หมวดหมู่อักษร 3 หมู่
   const midConsonants = ['ก', 'จ', 'ด', 'ต', 'บ', 'ป', 'อ', 'ฎ', 'ฏ'];
   const highConsonants = ['ข', 'ฃ', 'ฉ', 'ฐ', 'ถ', 'ผ', 'ฝ', 'ศ', 'ษ', 'ส', 'ห'];
   const lowSingleConsonants = ['ง', 'ญ', 'น', 'ย', 'ณ', 'ร', 'ว', 'ม', 'ฬ', 'ล'];
 
   // แป้นพยัญชนะด่วน
   const quickConsonants = [
-    'ก', 'ข', 'ค', 'ง', 'จ', 'ฉ', 'ช', 'ซ', 'ด', 'ต', 
-    'ถ', 'ท', 'น', 'บ', 'ป', 'ผ', 'ฝ', 'พ', 'ฟ', 'ม', 
+    'ก', 'ข', 'ค', 'ง', 'จ', 'ฉ', 'ช', 'ซ', 'ด', 'ต',
+    'ถ', 'ท', 'น', 'บ', 'ป', 'ผ', 'ฝ', 'พ', 'ฟ', 'ม',
     'ย', 'ร', 'ล', 'ว', 'ส', 'ห', 'อ', 'ฮ'
   ];
 
@@ -75,7 +74,6 @@ export default function App() {
     'ฮ': 'ห', 'ห': 'ฮ'
   };
 
-  // ตัวแยกองค์ประกอบคำภาษาไทย
   const parseThaiWord = (word) => {
     if (!word) return { initial: 'ม', frontVowel: '', rearVowel: '', toneMark: '' };
     
@@ -107,7 +105,6 @@ export default function App() {
     return `${frontVowel}${consonant}${tone}${rearVowel}`;
   };
 
-  // ตรวจสอบว่าเป็น คำเป็น หรือ คำตาย (สระเสียงสั้น/ยาว)
   const analyzeSyllable = (word) => {
     const { initial, frontVowel, rearVowel } = parseThaiWord(word);
     
@@ -147,7 +144,6 @@ export default function App() {
     return { type: typeText, vowelLen: lenText, desc, isDead, isShort, initial, frontVowel, rearVowel };
   };
 
-  // ตรรกะการคำนวณไตรยางศ์
   const calculateTones = (word, currentMode, midC, highC, lowC) => {
     if (!word) return [];
     const info = analyzeSyllable(word);
@@ -230,21 +226,18 @@ export default function App() {
     setTimeout(() => setApiSaveStatus(''), 3000);
   };
 
-  // เลือกพยัญชนะด่วน
   const handleQuickConsonantClick = (c) => {
     const { frontVowel, rearVowel } = parseThaiWord(inputText);
     const newWord = buildWord(frontVowel || '', c, '', rearVowel || 'อ');
     setInputText(newWord);
   };
 
-  // เลือกสระด่วน
   const handleQuickVowelClick = (vowel) => {
     const { initial } = parseThaiWord(inputText);
     const newWord = buildWord(vowel.front, initial || 'ก', '', vowel.rear);
     setInputText(newWord);
   };
 
-  // เรียก AI ผันเสียง
   const handleGenerate = async () => {
     const word = inputText.trim();
     if (!word) return;
@@ -312,7 +305,6 @@ export default function App() {
     }
   };
 
-  // ข้อความกำกับท้ายเส้นคงที่ตลอดเวลา
   const fixedRightLabels = {
     5: { text: 'เสียงสูง', color: '#ef4444' },
     3: { text: 'เสียงกลาง', color: '#22c55e' },
@@ -507,7 +499,6 @@ export default function App() {
             </div>
           )}
 
-          {/* กระดานบรรทัด 5 เส้น (Line Board) */}
           <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: viewLayout === 'present' ? '40px 50px' : '35px 25px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
             
             <h2 style={{ textAlign: 'center', color: '#ea580c', fontSize: '28px', fontWeight: 'bold', margin: '0 0 20px 0' }}>
