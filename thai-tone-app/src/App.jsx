@@ -34,6 +34,36 @@ export default function App() {
     'ย', 'ร', 'ล', 'ว', 'ส', 'ห', 'อ', 'ฮ'
   ];
 
+  // สระไทยสำหรับเลือกด่วน (แบ่งตามสระเสียงยาว คำเป็น และ สระเสียงสั้น คำตาย)
+  const quickVowelsLong = [
+    { label: '-า', apply: (c) => `${c}า` },
+    { label: 'เ-า', apply: (c) => `เ${c}า` },
+    { label: '-ี', apply: (c) => `${c}ี` },
+    { label: '-ู', apply: (c) => `${c}ู` },
+    { label: 'เ-', apply: (c) => `เ${c}` },
+    { label: 'แ-', apply: (c) => `แ${c}` },
+    { label: 'โ-', apply: (c) => `โ${c}` },
+    { label: 'ใ-', apply: (c) => `ใ${c}` },
+    { label: 'ไ-', apply: (c) => `ไ${c}` },
+    { label: '-ำ', apply: (c) => `${c}ำ` },
+    { label: 'เ-ีย', apply: (c) => `เ${c}ีย` },
+    { label: 'เ-ือ', apply: (c) => `เ${c}ือ` },
+    { label: '-ัว', apply: (c) => `${c}ัว` },
+    { label: 'เ-อ', apply: (c) => `เ${c}อ` },
+    { label: '-อ', apply: (c) => `${c}อ` }
+  ];
+
+  const quickVowelsShort = [
+    { label: '-ะ', apply: (c) => `${c}ะ` },
+    { label: '-ิ', apply: (c) => `${c}ิ` },
+    { label: '-ึ', apply: (c) => `${c}ึ` },
+    { label: '-ุ', apply: (c) => `${c}ุ` },
+    { label: 'เ-ะ', apply: (c) => `เ${c}ะ` },
+    { label: 'แ-ะ', apply: (c) => `แ${c}ะ` },
+    { label: 'โ-ะ', apply: (c) => `โ${c}ะ` },
+    { label: 'เ-าะ', apply: (c) => `เ${c}าะ` }
+  ];
+
   const pairMap = {
     'ค': 'ข', 'ฅ': 'ฃ', 'ฆ': 'ข', 'ข': 'ค', 'ฃ': 'ค',
     'ช': 'ฉ', 'ฌ': 'ฉ', 'ฉ': 'ช',
@@ -44,9 +74,8 @@ export default function App() {
     'ฮ': 'ห', 'ห': 'ฮ'
   };
 
-  // ตัวแยกองค์ประกอบคำภาษาไทย
   const parseThaiWord = (word) => {
-    if (!word) return { initial: '', frontVowel: '', rearVowel: '', toneMark: '', finalConsonant: '' };
+    if (!word) return { initial: 'ก', frontVowel: '', rearVowel: '', toneMark: '' };
     
     let frontVowel = '';
     let workStr = word;
@@ -69,7 +98,7 @@ export default function App() {
       }
     }
 
-    return { initial, frontVowel, rearVowel, toneMark };
+    return { initial: initial || 'ก', frontVowel, rearVowel, toneMark };
   };
 
   const buildWord = (frontVowel, consonant, tone, rearVowel) => {
@@ -116,7 +145,6 @@ export default function App() {
     return { type: typeText, vowelLen: lenText, desc, isDead, isShort, initial, frontVowel, rearVowel };
   };
 
-  // ตรรกะการคำนวณไตรยางศ์ออฟไลน์
   const calculateTones = (word, currentMode, midC, highC, lowC) => {
     if (!word) return [];
     const info = analyzeSyllable(word);
@@ -202,6 +230,13 @@ export default function App() {
   const handleQuickConsonantClick = (c) => {
     const { frontVowel, rearVowel } = parseThaiWord(inputText);
     const newWord = buildWord(frontVowel || '', c, '', rearVowel || 'อ');
+    setInputText(newWord);
+  };
+
+  const handleQuickVowelClick = (vowelObj) => {
+    const { initial } = parseThaiWord(inputText);
+    const currInitial = initial || 'ก';
+    const newWord = vowelObj.apply(currInitial);
     setInputText(newWord);
   };
 
@@ -311,13 +346,13 @@ export default function App() {
         </div>
 
         {/* โครงสร้างแบ่ง layout ตามโหมด */}
-        <div style={{ display: 'grid', gridTemplateColumns: viewLayout === 'split' ? '380px 1fr' : '1fr', gap: '20px', alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: viewLayout === 'split' ? '410px 1fr' : '1fr', gap: '20px', alignItems: 'start' }}>
           
           {/* แผงควบคุม (Control Panel) */}
           {viewLayout !== 'present' && (
-            <div style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '24px', boxShadow: '0 4px 14px rgba(0,0,0,0.06)', border: '1px solid #e5e7eb' }}>
+            <div style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '24px', boxShadow: '0 4px 14px rgba(0,0,0,0.06)', border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '18px' }}>
               
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#1f2937' }}>⚙️ แผงควบคุม</h3>
                 <button 
                   onClick={() => setShowApiInput(!showApiInput)}
@@ -328,7 +363,7 @@ export default function App() {
               </div>
 
               {showApiInput && (
-                <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '10px', border: '1px dashed #94a3b8' }}>
+                <div style={{ padding: '12px', backgroundColor: '#f8fafc', borderRadius: '10px', border: '1px dashed #94a3b8' }}>
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <input 
                       type="password" 
@@ -350,7 +385,7 @@ export default function App() {
               )}
 
               {/* ตั้งค่าสีประจำหมู่ และสีตัวอักษร */}
-              <div style={{ marginBottom: '18px' }}>
+              <div>
                 <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#4b5563', marginBottom: '8px' }}>🎨 ตั้งค่าสีประจำหมู่ และสีตัวอักษร</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
                   <label style={{ height: '36px', backgroundColor: colorMid, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
@@ -372,8 +407,8 @@ export default function App() {
                 </div>
               </div>
 
-              {/* เลือกโหมดผัน */}
-              <div style={{ backgroundColor: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '16px' }}>
+              {/* เลือกโหมดผัน และ ช่องพิมพ์คำ */}
+              <div style={{ backgroundColor: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
                 <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#1f2937', marginBottom: '8px' }}>✨ ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ</div>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px', fontSize: '13px', color: '#334155' }}>
@@ -397,7 +432,7 @@ export default function App() {
                     value={inputText} 
                     onChange={(e) => setInputText(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
-                    placeholder="กรอกคำ เช่น เมา, กา, ขอ, คะ" 
+                    placeholder="พิมพ์คำเอง เช่น เมา, กา, ขอ, คะ" 
                     style={{ flex: 1, padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '15px' }}
                   />
                   <button 
@@ -412,14 +447,14 @@ export default function App() {
 
               {/* ปุ่มพยัญชนะเลือกด่วน */}
               <div>
-                <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', marginBottom: '8px' }}>⌨️ เลือกพยัญชนะด่วน:</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', marginBottom: '6px' }}>🔤 เลือกพยัญชนะด่วน:</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                   {quickConsonants.map((c) => (
                     <button 
                       key={c}
                       onClick={() => handleQuickConsonantClick(c)}
                       style={{ 
-                        padding: '4px 8px', 
+                        padding: '4px 7px', 
                         borderRadius: '6px', 
                         border: '1px solid #cbd5e1', 
                         backgroundColor: '#ffffff', 
@@ -430,6 +465,56 @@ export default function App() {
                       }}
                     >
                       {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* ปุ่มสระเลือกด่วน (สระเสียงยาว คำเป็น) */}
+              <div>
+                <div style={{ fontSize: '12px', color: '#166534', fontWeight: 'bold', marginBottom: '6px' }}>🟢 เลือกสระด่วน - สระเสียงยาว (คำเป็น):</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                  {quickVowelsLong.map((v, i) => (
+                    <button 
+                      key={i}
+                      onClick={() => handleQuickVowelClick(v)}
+                      style={{ 
+                        padding: '4px 8px', 
+                        borderRadius: '6px', 
+                        border: '1px solid #bbf7d0', 
+                        backgroundColor: '#f0fdf4', 
+                        fontSize: '13px', 
+                        fontWeight: 'bold', 
+                        cursor: 'pointer',
+                        color: '#15803d'
+                      }}
+                    >
+                      {v.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* ปุ่มสระเลือกด่วน (สระเสียงสั้น คำตาย) */}
+              <div>
+                <div style={{ fontSize: '12px', color: '#b91c1c', fontWeight: 'bold', marginBottom: '6px' }}>🔴 เลือกสระด่วน - สระเสียงสั้น (คำตาย):</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                  {quickVowelsShort.map((v, i) => (
+                    <button 
+                      key={i}
+                      onClick={() => handleQuickVowelClick(v)}
+                      style={{ 
+                        padding: '4px 8px', 
+                        borderRadius: '6px', 
+                        border: '1px solid #fecaca', 
+                        backgroundColor: '#fef2f2', 
+                        fontSize: '13px', 
+                        fontWeight: 'bold', 
+                        cursor: 'pointer',
+                        color: '#b91c1c'
+                      }}
+                    >
+                      {v.label}
                     </button>
                   ))}
                 </div>
