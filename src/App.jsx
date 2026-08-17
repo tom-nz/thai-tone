@@ -76,7 +76,6 @@ export default function App() {
     'ฮ': 'ห', 'ห': 'ฮ'
   };
 
-  // ตรวจสอบพารามิเตอร์มุมมอง
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('view') === 'display') {
@@ -84,7 +83,7 @@ export default function App() {
     }
   }, []);
 
-  // ระบบส่งข้อมูล 2 จอภาพแบบ Real-time (BroadcastChannel)
+  // ระบบสื่อสารข้ามมอนิเตอร์ (BroadcastChannel)
   useEffect(() => {
     const channel = new BroadcastChannel('thai_tone_sync_channel');
     
@@ -350,31 +349,34 @@ export default function App() {
     1: { text: 'เสียงต่ำ', color: '#007bff' }
   };
 
-  // 1. หน้าจอที่สอง (Auto Fit 100% เต็มพื้นที่จอภาพ + ปุ่มมุมล่างขวา)
+  // 1. หน้าจอที่สอง: ขนาด 2 ใน 3 ของจอภาพ + พื้นหลังสีเทา + ขอบมน + ไร้ Scrollbar + Hover Zoom
   if (isDisplayWindow) {
     return (
-      <div style={{ height: '100vh', width: '100vw', backgroundColor: '#f8fafc', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', padding: '16px 24px', fontFamily: "'Sarabun', sans-serif", overflow: 'hidden', position: 'relative' }}>
+      <div style={{ height: '100vh', width: '100vw', backgroundColor: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', padding: '20px', fontFamily: "'Sarabun', sans-serif", overflow: 'hidden', position: 'relative' }}>
         
-        <div style={{ flex: 1, backgroundColor: '#ffffff', borderRadius: '20px', padding: '24px 36px', boxShadow: '0 8px 30px rgba(0,0,0,0.06)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxSizing: 'border-box', border: '1px solid #e2e8f0' }}>
+        {/* กรอบกระดานสีขาว ขนาด 2 ใน 3 ของจอภาพ (กว้าง ~68vw, สูง ~86vh) */}
+        <div style={{ width: '68vw', height: '86vh', backgroundColor: '#ffffff', borderRadius: '28px', padding: '28px 45px', boxShadow: '0 12px 35px rgba(0,0,0,0.08)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxSizing: 'border-box', border: '1px solid #cbd5e1' }}>
           
+          {/* ส่วนหัวกระดาน */}
           <div>
             <h2 style={{ textAlign: 'center', margin: '0 0 10px 0', color: '#ea580c', fontSize: '32px', fontWeight: 'bold' }}>
               ไตรยางศ์ หรือ อักษร 3 หมู่
             </h2>
 
             {analysisInfo.desc && (
-              <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '8px 16px', borderRadius: '10px', margin: '0 auto 12px auto', maxWidth: '850px', textAlign: 'center', fontSize: '16px', color: '#0369a1', fontWeight: 'bold' }}>
+              <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '8px 18px', borderRadius: '12px', margin: '0 auto 12px auto', maxWidth: '750px', textAlign: 'center', fontSize: '15px', color: '#0369a1', fontWeight: 'bold' }}>
                 📌 <span style={{ color: '#0284c7' }}>"{inputText}"</span> เป็น {analysisInfo.type} ({analysisInfo.vowelLen}) — {analysisInfo.desc}
               </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr 140px', marginBottom: '8px', color: '#64748b', fontWeight: 'bold', fontSize: '18px' }}>
-              <div style={{ textAlign: 'right', paddingRight: '24px' }}>รูปวรรณยุกต์</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 130px', marginBottom: '8px', color: '#64748b', fontWeight: 'bold', fontSize: '17px' }}>
+              <div style={{ textAlign: 'right', paddingRight: '22px' }}>รูปวรรณยุกต์</div>
               <div></div>
               <div></div>
             </div>
           </div>
 
+          {/* บรรทัด 5 เส้น จัดระยะห่างอัตโนมัติ */}
           <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', flex: 1, padding: '10px 0' }}>
             {linesData.map((item, idx) => {
               let rowHeaderColor = '#94a3b8';
@@ -384,14 +386,18 @@ export default function App() {
               const fixedRight = fixedRightLabels[item.id];
 
               return (
-                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '240px 1fr 140px', alignItems: 'center' }}>
-                  <div style={{ textAlign: 'right', paddingRight: '24px', fontSize: '21px', color: rowHeaderColor, fontWeight: 'bold' }}>
-                    {item.tone} <span style={{ fontSize: '19px', marginLeft: '6px' }}>[ {item.mark} ]</span>
+                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '220px 1fr 130px', alignItems: 'center' }}>
+                  
+                  {/* ชื่อเสียงและรูปวรรณยุกต์ด้านหน้า */}
+                  <div style={{ textAlign: 'right', paddingRight: '22px', fontSize: '20px', color: rowHeaderColor, fontWeight: 'bold' }}>
+                    {item.tone} <span style={{ fontSize: '18px', marginLeft: '5px' }}>[ {item.mark} ]</span>
                   </div>
 
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '36px' }}>
+                  {/* เส้นบรรทัดและวงกลมตัวอักษร */}
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '34px' }}>
                     <div style={{ width: '100%', height: '3px', backgroundColor: '#94a3b8' }}></div>
 
+                    {/* วงกลมเดี่ยว (พร้อม Hover Zoom) */}
                     {!item.isMulti && item.show && item.word && (
                       <div 
                         style={{
@@ -400,42 +406,51 @@ export default function App() {
                           transform: 'translateX(-50%)',
                           backgroundColor: item.color,
                           color: circleTextColor,
-                          minWidth: '56px',
-                          height: '56px',
-                          padding: '0 12px',
-                          borderRadius: '28px',
+                          minWidth: '52px',
+                          height: '52px',
+                          padding: '0 10px',
+                          borderRadius: '26px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           fontWeight: 'bold',
-                          fontSize: '22px',
-                          boxShadow: '0 4px 12px rgba(0,0,0,0.25)'
+                          fontSize: '20px',
+                          boxShadow: '0 4px 10px rgba(0,0,0,0.22)',
+                          cursor: 'pointer',
+                          transition: 'transform 0.15s ease, filter 0.15s ease'
                         }}
+                        onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateX(-50%) scale(1.18)'; e.currentTarget.style.filter = 'brightness(1.12)'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateX(-50%) scale(1)'; e.currentTarget.style.filter = 'brightness(1)'; }}
                       >
                         {item.word}
                       </div>
                     )}
 
+                    {/* วงกลมคู่ (พร้อม Hover Zoom) */}
                     {item.isMulti && item.show && (
-                      <div style={{ position: 'absolute', left: item.leftPos, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ position: 'absolute', left: item.leftPos, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         {item.multi.map((circle, i) => (
                           <React.Fragment key={i}>
-                            {i > 0 && <span style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '22px' }}>/</span>}
+                            {i > 0 && <span style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '20px' }}>/</span>}
                             <div 
                               style={{
                                 backgroundColor: circle.color,
                                 color: circleTextColor,
-                                minWidth: '56px',
-                                height: '56px',
-                                padding: '0 12px',
-                                borderRadius: '28px',
+                                minWidth: '52px',
+                                height: '52px',
+                                padding: '0 10px',
+                                borderRadius: '26px',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 fontWeight: 'bold',
-                                fontSize: '22px',
-                                boxShadow: '0 4px 12px rgba(0,0,0,0.25)'
+                                fontSize: '20px',
+                                boxShadow: '0 4px 10px rgba(0,0,0,0.22)',
+                                cursor: 'pointer',
+                                transition: 'transform 0.15s ease, filter 0.15s ease'
                               }}
+                              onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.18)'; e.currentTarget.style.filter = 'brightness(1.12)'; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.filter = 'brightness(1)'; }}
                             >
                               {circle.text}
                             </div>
@@ -445,9 +460,11 @@ export default function App() {
                     )}
                   </div>
 
-                  <div style={{ textAlign: 'center', color: fixedRight ? fixedRight.color : '#94a3b8', fontWeight: 'bold', fontSize: '19px' }}>
+                  {/* ระดับเสียงคงที่ด้านหลัง */}
+                  <div style={{ textAlign: 'center', color: fixedRight ? fixedRight.color : '#94a3b8', fontWeight: 'bold', fontSize: '18px' }}>
                     {fixedRight ? fixedRight.text : ''}
                   </div>
+
                 </div>
               );
             })}
@@ -455,6 +472,7 @@ export default function App() {
 
         </div>
 
+        {/* ปุ่มสลับเต็มจออยู่ที่มุมล่างขวาของจอภาพ */}
         <button 
           onClick={() => {
             if (!document.fullscreenElement) {
@@ -465,12 +483,12 @@ export default function App() {
           }}
           style={{
             position: 'absolute',
-            bottom: '24px',
-            right: '34px',
+            bottom: '18px',
+            right: '24px',
             padding: '7px 14px',
             borderRadius: '8px',
             border: '1px solid #cbd5e1',
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
             boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
             cursor: 'pointer',
             fontWeight: 'bold',
@@ -480,7 +498,7 @@ export default function App() {
             transition: 'all 0.15s ease'
           }}
           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.9)'}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.95)'}
         >
           ⛶ สลับเต็มจอ
         </button>
@@ -697,7 +715,7 @@ export default function App() {
             </div>
           )}
 
-          {/* กระดานบรรทัด 5 เส้น */}
+          {/* กระดานบรรทัด 5 เส้น (จอล่าง) */}
           <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: viewLayout === 'present' ? '40px 50px' : '35px 25px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
             
             <h2 style={{ textAlign: 'center', color: '#ea580c', fontSize: '28px', fontWeight: 'bold', margin: '0 0 20px 0' }}>
