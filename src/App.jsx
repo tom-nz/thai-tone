@@ -703,47 +703,7 @@ export default function App() {
               
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#1f2937' }}>⚙️ แผงควบคุม</h3>
-                
-                <button 
-                  onClick={() => setShowApiInput(!showApiInput)}
-                  style={{ 
-                    backgroundColor: customApiKey ? '#e0f2fe' : '#fef3c7', 
-                    color: customApiKey ? '#0369a1' : '#b45309', 
-                    border: customApiKey ? '1px solid #7dd3fc' : '1px solid #fde68a', 
-                    padding: '6px 10px', 
-                    borderRadius: '6px', 
-                    fontSize: '12px', 
-                    cursor: 'pointer', 
-                    fontWeight: 'bold' 
-                  }}
-                >
-                  🔑 {customApiKey ? 'เปลี่ยน Key' : 'เชื่อมต่อ AI'}
-                </button>
               </div>
-
-              {/* กล่องป้อน Custom Gemini API Key */}
-              {showApiInput && (
-                <div style={{ padding: '10px', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px dashed #94a3b8' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569', marginBottom: '6px' }}>🔑 เชื่อมต่อ Gemini API Key ส่วนตัว:</div>
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    <input 
-                      type="password" 
-                      placeholder="วาง Gemini API Key..." 
-                      value={tempApiKey} 
-                      onChange={(e) => setTempApiKey(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSaveApiKey()}
-                      style={{ flex: 1, padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }}
-                    />
-                    <button 
-                      onClick={handleSaveApiKey}
-                      style={{ backgroundColor: '#10b981', color: '#ffffff', border: 'none', padding: '0 12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}
-                    >
-                      บันทึก
-                    </button>
-                  </div>
-                  {apiSaveStatus && <div style={{ color: '#059669', fontSize: '11px', marginTop: '4px', fontWeight: 'bold' }}>✓ {apiSaveStatus}</div>}
-                </div>
-              )}
 
               {/* 1. ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ */}
               <div style={{ backgroundColor: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
@@ -764,7 +724,8 @@ export default function App() {
                   </label>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {/* กล่องรับข้อความและปุ่มผันคำอยู่ในบรรทัดเดียวกัน */}
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                   <input 
                     type="text" 
                     value={inputText} 
@@ -775,7 +736,7 @@ export default function App() {
                     onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
                     placeholder="พิมพ์ 1 คำ เช่น กอ, เมา, กวาง" 
                     style={{ 
-                      width: '100%', 
+                      flex: 1, 
                       padding: '8px 12px', 
                       borderRadius: '8px', 
                       border: inputError ? '2px solid #ef4444' : '1px solid #cbd5e1', 
@@ -790,7 +751,17 @@ export default function App() {
                   <button 
                     onClick={handleGenerate}
                     disabled={loading}
-                    style={{ width: '100%', backgroundColor: '#0284c7', color: '#ffffff', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}
+                    style={{ 
+                      backgroundColor: '#0284c7', 
+                      color: '#ffffff', 
+                      border: 'none', 
+                      padding: '8px 16px', 
+                      borderRadius: '8px', 
+                      fontWeight: 'bold', 
+                      cursor: 'pointer', 
+                      fontSize: '14px',
+                      whiteSpace: 'nowrap'
+                    }}
                   >
                     {loading ? '...' : 'ผันคำ'}
                   </button>
@@ -944,6 +915,49 @@ export default function App() {
                   onChange={(e) => setLabelFontSize(Number(e.target.value))}
                   style={{ width: '100%', cursor: 'pointer' }}
                 />
+              </div>
+
+              {/* 7. เชื่อมต่อ Gemini API Key (ย้ายมาอยู่ล่างสุดของแผงควบคุม) */}
+              <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
+                <button 
+                  onClick={() => setShowApiInput(!showApiInput)}
+                  style={{ 
+                    width: '100%',
+                    backgroundColor: customApiKey ? '#e0f2fe' : '#fef3c7', 
+                    color: customApiKey ? '#0369a1' : '#b45309', 
+                    border: customApiKey ? '1px solid #7dd3fc' : '1px solid #fde68a', 
+                    padding: '8px 12px', 
+                    borderRadius: '8px', 
+                    fontSize: '13px', 
+                    cursor: 'pointer', 
+                    fontWeight: 'bold' 
+                  }}
+                >
+                  🔑 {customApiKey ? 'เปลี่ยน Gemini API Key' : 'เชื่อมต่อ AI (API Key)'}
+                </button>
+
+                {showApiInput && (
+                  <div style={{ marginTop: '8px', padding: '10px', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px dashed #94a3b8' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569', marginBottom: '6px' }}>🔑 เชื่อมต่อ Gemini API Key ส่วนตัว:</div>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <input 
+                        type="password" 
+                        placeholder="วาง Gemini API Key..." 
+                        value={tempApiKey} 
+                        onChange={(e) => setTempApiKey(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSaveApiKey()}
+                        style={{ flex: 1, padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }}
+                      />
+                      <button 
+                        onClick={handleSaveApiKey}
+                        style={{ backgroundColor: '#10b981', color: '#ffffff', border: 'none', padding: '0 12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}
+                      >
+                        บันทึก
+                      </button>
+                    </div>
+                    {apiSaveStatus && <div style={{ color: '#059669', fontSize: '11px', marginTop: '4px', fontWeight: 'bold' }}>✓ {apiSaveStatus}</div>}
+                  </div>
+                )}
               </div>
 
             </div>
