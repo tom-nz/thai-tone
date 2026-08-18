@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 // API Key จากสภาพแวดล้อมรันไทม์
 const apiKey = "";
@@ -19,6 +19,15 @@ export default function App() {
   const [inputText, setInputText] = useState('กอ');
   const [inputError, setInputError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // การตั้งค่าเสียงและการเล่นคำศัพท์
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [speakingWord, setSpeakingWord] = useState('');
+  const [isPlayingSequence, setIsPlayingSequence] = useState(false);
+  const [ttsVoice, setTtsVoice] = useState('Kore'); // 'Kore' | 'Aoede' | 'Callirrhoe' | 'Puck' | 'Fenrir' | 'Orus' | 'Algieba'
+  
+  const audioContextRef = useRef(null);
+  const currentAudioSourceRef = useRef(null);
 
   // การตั้งค่าสีและขนาดฟอนต์
   const [colorMid, setColorMid] = useState('#22c55e');    // กลาง (เขียว)
@@ -110,7 +119,7 @@ export default function App() {
     
     if (isDisplayWindow) {
       channel.onmessage = (event) => {
-        const { lines, info, text, cText, cMid, cHigh, cLow, fontSize, bType, bColor, bImg, activeRowId } = event.data;
+        const { lines, info, text, cText, cMid, cHigh, cLow, fontSize, bType, bColor, bImg, activeRowId, sWord } = event.data;
         if (lines) setLinesData(lines);
         if (info) setAnalysisInfo(info);
         if (text) setInputText(text);
@@ -123,6 +132,7 @@ export default function App() {
         if (bColor) setBgColor(bColor);
         if (bImg !== undefined) setBgImage(bImg);
         if (activeRowId !== undefined) setHoveredRowId(activeRowId);
+        if (sWord !== undefined) setSpeakingWord(sWord);
       };
     } else {
       channel.postMessage({
@@ -137,12 +147,183 @@ export default function App() {
         bType: bgType,
         bColor: bgColor,
         bImg: bgImage,
-        activeRowId: hoveredRowId
+        activeRowId: hoveredRowId,
+        sWord: speakingWord
       });
     }
 
     return () => channel.close();
-  }, [linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, labelFontSize, bgType, bgColor, bgImage, hoveredRowId, isDisplayWindow]);
+  }, [linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, labelFontSize, bgType, bgColor, bgImage, hoveredRowId, speakingWord, isDisplayWindow]);
+
+  // หยุดเล่นเสียงทั้งหมดทันที (เพื่อป้องกันเสียงแทรก/ซ้อน)
+  const stopAllAudio = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    if (currentAudioSourceRef.current) {
+      try {
+        currentAudioSourceRef.current.stop();
+        currentAudioSourceRef.current.disconnect();
+      } catch (e) {}
+      currentAudioSourceRef.current = null;
+    }
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      try {
+        audioContextRef.current.close();
+      } catch (e) {}
+      audioContextRef.current = null;
+    }
+  };
+
+  // เล่น PCM16 Audio จาก Gemini TTS
+  const playPcm16Audio = async (base64Data, sampleRate = 24000) => {
+    stopAllAudio();
+    const binaryString = atob(base64Data);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const int16Array = new Int16Array(bytes.buffer);
+    
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate });
+    audioContextRef.current = audioCtx;
+
+    const buffer = audioCtx.createBuffer(1, int16Array.length, sampleRate);
+    const channelData = buffer.getChannelData(0);
+    for (let i = 0; i < int16Array.length; i++) {
+      channelData[i] = int16Array[i] / 32768.0;
+    }
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioCtx.destination);
+    currentAudioSourceRef.current = source;
+
+    return new Promise((resolve) => {
+      source.onended = () => {
+        if (currentAudioSourceRef.current === source) {
+          currentAudioSourceRef.current = null;
+        }
+        resolve();
+      };
+      source.start(0);
+    });
+  };
+
+  // เรียก Gemini 2.5 Flash TTS API
+  const fetchGeminiTts = async (textToSpeak) => {
+    const activeKey = customApiKey.trim() || apiKey;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${activeKey}`;
+    
+    // คำสั่งกำกับ Gemini TTS ให้ออกเสียงเฉพาะคำโดยตรง ห้ามอ่านสะกดตัวอักษรเด็ดขาด
+    const promptText = `Say strictly only the Thai word "${textToSpeak}" as a single direct word pronunciation. Do not spell out individual letters or characters.`;
+    
+    const payload = {
+      contents: [{ parts: [{ text: promptText }] }],
+      generationConfig: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: ttsVoice }
+          }
+        }
+      },
+      model: "gemini-2.5-flash-preview-tts"
+    };
+
+    let delays = [500, 1000, 2000];
+    for (let i = 0; i < 3; i++) {
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const inlineData = data.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+        if (inlineData && inlineData.data) {
+          let sRate = 24000;
+          if (inlineData.mimeType && inlineData.mimeType.includes('rate=')) {
+            const match = inlineData.mimeType.match(/rate=(\d+)/);
+            if (match) sRate = parseInt(match[1], 10);
+          }
+          return { audioData: inlineData.data, sampleRate: sRate };
+        }
+      } catch (err) {
+        if (i === 2) throw err;
+        await new Promise(r => setTimeout(r, delays[i]));
+      }
+    }
+    throw new Error('Gemini TTS Failed');
+  };
+
+  // ระบบสำรองกรณีออฟไลน์ (Browser SpeechSynthesis Fallback)
+  const speakBrowserSpeech = (text) => {
+    return new Promise((resolve) => {
+      if (!('speechSynthesis' in window)) {
+        resolve();
+        return;
+      }
+      stopAllAudio();
+      
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = 'th-TH';
+      utterance.rate = 0.9;
+
+      const voices = window.speechSynthesis.getVoices();
+      const thaiVoice = voices.find(v => v.lang === 'th-TH' || v.lang.startsWith('th')) || voices.find(v => v.name.toLowerCase().includes('thai'));
+      if (thaiVoice) {
+        utterance.voice = thaiVoice;
+      }
+
+      utterance.onend = () => resolve();
+      utterance.onerror = () => resolve();
+      window.speechSynthesis.speak(utterance);
+    });
+  };
+
+  // ระบบออกเสียงคำศัพท์
+  const speakWord = async (text) => {
+    if (!soundEnabled || !text || isDisplayWindow) return;
+
+    stopAllAudio();
+    setSpeakingWord(text);
+
+    try {
+      const ttsResult = await fetchGeminiTts(text);
+      await playPcm16Audio(ttsResult.audioData, ttsResult.sampleRate);
+    } catch (e) {
+      await speakBrowserSpeech(text);
+    } finally {
+      setSpeakingWord('');
+    }
+  };
+
+  // เล่นเสียงผันคำเรียงบรรทัดแบบรวดเร็ว กระชับ
+  const handlePlayToneSequence = async () => {
+    if (isDisplayWindow) return;
+    if (!soundEnabled) setSoundEnabled(true);
+
+    stopAllAudio();
+    setIsPlayingSequence(true);
+
+    // เรียงบรรทัดจาก สามัญ (id=1) ขึ้นไปหา จัตวา (id=5)
+    const sortedLines = [...linesData].sort((a, b) => a.id - b.id).filter(item => item.show);
+
+    for (let item of sortedLines) {
+      const wordToSpeak = item.isMulti ? item.multi[0]?.text : item.word;
+      if (wordToSpeak) {
+        setHoveredRowId(item.id);
+        await speakWord(wordToSpeak);
+        await new Promise(r => setTimeout(r, 40)); // พักสั้นๆ กระชับไม่ยืดนาด
+      }
+    }
+
+    setHoveredRowId(null);
+    setSpeakingWord('');
+    setIsPlayingSequence(false);
+  };
 
   // ฟังก์ชันแยกพยัญชนะ (รองรับคำควบกล้ำ) และสระ
   const parseThaiWord = (word) => {
@@ -445,7 +626,7 @@ export default function App() {
     return { backgroundColor: bgColor };
   };
 
-  // 1. หน้าจอที่สอง (Display Monitor): แสดงผลกระดาน 5 เส้นเต็มจอ
+  // 1. หน้าจอที่สอง (Display Monitor) - ปิดเสียงถาวร ป้องกันเสียงตีกัน
   if (isDisplayWindow) {
     return (
       <div 
@@ -556,6 +737,7 @@ export default function App() {
                           fontWeight: 'bold',
                           fontSize: 'clamp(16px, 1.8vw, 26px)',
                           boxShadow: isHovered ? '0 8px 20px rgba(0,0,0,0.35)' : '0 5px 14px rgba(0,0,0,0.22)',
+                          cursor: 'pointer',
                           transition: 'all 0.15s ease',
                           filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                         }}
@@ -583,6 +765,7 @@ export default function App() {
                                 fontWeight: 'bold',
                                 fontSize: 'clamp(16px, 1.8vw, 26px)',
                                 boxShadow: isHovered ? '0 8px 20px rgba(0,0,0,0.35)' : '0 5px 14px rgba(0,0,0,0.22)',
+                                cursor: 'pointer',
                                 transition: 'all 0.15s ease',
                                 transform: isHovered ? 'scale(1.22)' : 'scale(1)',
                                 filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
@@ -646,7 +829,7 @@ export default function App() {
     <div style={{ minHeight: '100vh', padding: '24px 15px', fontFamily: "'Sarabun', sans-serif", transition: 'all 0.3s ease', ...getContainerBgStyle() }}>
       <div style={{ maxWidth: viewLayout === 'split' ? '1280px' : '920px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
         
-        {/* แถบมุมมองและเปิดจอที่ 2 */}
+        {/* แถบสลับมุมมองและเปิดจอที่ 2 */}
         <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '14px', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.06)', flexWrap: 'wrap', gap: '12px', border: '1px solid #e2e8f0', backdropFilter: 'blur(6px)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontWeight: 'bold', fontSize: '15px', color: '#1e293b' }}>🖥️ มุมมอง:</span>
@@ -700,24 +883,61 @@ export default function App() {
             <div style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '20px', boxShadow: '0 4px 14px rgba(0,0,0,0.06)', border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               
               {/* ส่วนหัวแผงควบคุม */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#1f2937' }}>⚙️ แผงควบคุม</h3>
+              <div>
+                <h3 style={{ margin: '0 0 10px 0', fontSize: '18px', fontWeight: 'bold', color: '#1f2937' }}>⚙️ แผงควบคุม</h3>
                 
-                <button 
-                  onClick={() => setShowApiInput(!showApiInput)}
-                  style={{ 
-                    backgroundColor: customApiKey ? '#e0f2fe' : '#fef3c7', 
-                    color: customApiKey ? '#0369a1' : '#b45309', 
-                    border: customApiKey ? '1px solid #7dd3fc' : '1px solid #fde68a', 
-                    padding: '5px 10px', 
-                    borderRadius: '6px', 
-                    fontSize: '12px', 
-                    cursor: 'pointer', 
-                    fontWeight: 'bold' 
-                  }}
-                >
-                  🔑 {customApiKey ? 'เปลี่ยน API Key' : 'เชื่อมต่อ AI'}
-                </button>
+                {/* บรรทัดต่อจากแผงควบคุม: ปุ่มตัวเลือกเสียง + ปุ่มเปิด/ปิดเสียง + ปุ่มเชื่อมต่อ AI */}
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <select 
+                    value={ttsVoice} 
+                    onChange={(e) => setTtsVoice(e.target.value)}
+                    style={{ flex: 1, padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: 'bold', backgroundColor: '#f8fafc', color: '#1e293b' }}
+                  >
+                    <option value="Kore">👩 หญิง - Kore (นุ่มนวล)</option>
+                    <option value="Aoede">👩 หญิง - Aoede (สดใส)</option>
+                    <option value="Callirrhoe">👩 หญิง - Callirrhoe (สไตล์ครู)</option>
+                    <option value="Puck">👨 ชาย - Puck (ทุ้ม มีพลัง)</option>
+                    <option value="Fenrir">👨 ชาย - Fenrir (นุ่มนวล)</option>
+                    <option value="Orus">👨 ชาย - Orus (สดใส)</option>
+                    <option value="Algieba">👨 ชาย - Algieba (สุภาพ)</option>
+                  </select>
+
+                  <button 
+                    onClick={() => {
+                      const next = !soundEnabled;
+                      setSoundEnabled(next);
+                      if (!next) stopAllAudio();
+                    }}
+                    style={{
+                      backgroundColor: soundEnabled ? '#dcfce7' : '#f1f5f9',
+                      color: soundEnabled ? '#15803d' : '#64748b',
+                      border: soundEnabled ? '1px solid #86efac' : '1px solid #cbd5e1',
+                      padding: '6px 10px',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {soundEnabled ? '🔊 เสียงเปิด' : '🔇 เสียงปิด'}
+                  </button>
+
+                  <button 
+                    onClick={() => setShowApiInput(!showApiInput)}
+                    style={{ 
+                      backgroundColor: customApiKey ? '#e0f2fe' : '#fef3c7', 
+                      color: customApiKey ? '#0369a1' : '#b45309', 
+                      border: customApiKey ? '1px solid #7dd3fc' : '1px solid #fde68a', 
+                      padding: '6px 10px', 
+                      borderRadius: '6px', 
+                      fontSize: '12px', 
+                      cursor: 'pointer', 
+                      fontWeight: 'bold' 
+                    }}
+                  >
+                    🔑 {customApiKey ? 'เปลี่ยน Key' : 'เชื่อมต่อ AI'}
+                  </button>
+                </div>
               </div>
 
               {/* กล่องป้อน Custom Gemini API Key */}
@@ -763,7 +983,7 @@ export default function App() {
                   </label>
                 </div>
 
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <input 
                     type="text" 
                     value={inputText} 
@@ -774,7 +994,7 @@ export default function App() {
                     onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
                     placeholder="พิมพ์ 1 คำ เช่น กอ, เมา, กวาง" 
                     style={{ 
-                      flex: 1, 
+                      width: '100%', 
                       padding: '8px 12px', 
                       borderRadius: '8px', 
                       border: inputError ? '2px solid #ef4444' : '1px solid #cbd5e1', 
@@ -786,13 +1006,37 @@ export default function App() {
                     }}
                   />
                   
-                  <button 
-                    onClick={handleGenerate}
-                    disabled={loading}
-                    style={{ backgroundColor: '#0284c7', color: '#ffffff', border: 'none', padding: '8px 18px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}
-                  >
-                    {loading ? '...' : 'ผันคำ'}
-                  </button>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button 
+                      onClick={handleGenerate}
+                      disabled={loading}
+                      style={{ flex: 1, backgroundColor: '#0284c7', color: '#ffffff', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}
+                    >
+                      {loading ? '...' : 'ผันคำ'}
+                    </button>
+
+                    <button 
+                      onClick={handlePlayToneSequence}
+                      disabled={isPlayingSequence}
+                      style={{ 
+                        flex: 1.2, 
+                        backgroundColor: isPlayingSequence ? '#ea580c' : '#16a34a', 
+                        color: '#ffffff', 
+                        border: 'none', 
+                        padding: '8px 12px', 
+                        borderRadius: '8px', 
+                        fontWeight: 'bold', 
+                        cursor: 'pointer', 
+                        fontSize: '13px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      {isPlayingSequence ? '🔊 กำลังผันเสียง...' : '🔊 เล่นผันเสียง'}
+                    </button>
+                  </div>
                 </div>
                 {inputError && <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px', fontWeight: 'bold' }}>{inputError}</div>}
               </div>
@@ -984,9 +1228,14 @@ export default function App() {
                 return (
                   <div 
                     key={idx} 
-                    style={{ display: 'grid', gridTemplateColumns: '220px 1fr 110px', alignItems: 'center' }}
+                    style={{ display: 'grid', gridTemplateColumns: '220px 1fr 110px', alignItems: 'center', cursor: 'pointer' }}
                     onMouseEnter={() => setHoveredRowId(item.id)}
                     onMouseLeave={() => setHoveredRowId(null)}
+                    onClick={() => {
+                      // คลิกที่แถบเพื่อสั่งเปล่งเสียง
+                      const wordToSpeak = item.isMulti ? item.multi[0]?.text : item.word;
+                      if (wordToSpeak) speakWord(wordToSpeak);
+                    }}
                   >
                     <div 
                       style={{ 
@@ -1007,6 +1256,10 @@ export default function App() {
 
                       {!item.isMulti && item.show && item.word && (
                         <div 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            speakWord(item.word);
+                          }}
                           style={{
                             position: 'absolute',
                             left: item.leftPos,
@@ -1023,6 +1276,7 @@ export default function App() {
                             fontWeight: 'bold',
                             fontSize: '18px',
                             boxShadow: isHovered ? '0 6px 16px rgba(0,0,0,0.3)' : '0 3px 8px rgba(0,0,0,0.25)',
+                            cursor: 'pointer',
                             transition: 'all 0.15s ease',
                             filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                           }}
@@ -1037,6 +1291,10 @@ export default function App() {
                             <React.Fragment key={i}>
                               {i > 0 && <span style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '20px' }}>/</span>}
                               <div 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  speakWord(circle.text);
+                                }}
                                 style={{
                                   backgroundColor: circle.color,
                                   color: circleTextColor,
@@ -1050,6 +1308,7 @@ export default function App() {
                                   fontWeight: 'bold',
                                   fontSize: '18px',
                                   boxShadow: isHovered ? '0 6px 16px rgba(0,0,0,0.3)' : '0 3px 8px rgba(0,0,0,0.25)',
+                                  cursor: 'pointer',
                                   transition: 'all 0.15s ease',
                                   transform: isHovered ? 'scale(1.22)' : 'scale(1)',
                                   filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
