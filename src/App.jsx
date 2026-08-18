@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-// ใช้ API Key จากสภาพแวดล้อมรันไทม์
+// API Key จากสภาพแวดล้อมรันไทม์
 const apiKey = "";
 
 export default function App() {
-  // บันทึกและดึง Custom API Key (ถ้ามี) จาก LocalStorage
+  // ระบบจัดการ Gemini API Key
   const [customApiKey, setCustomApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
   const [tempApiKey, setTempApiKey] = useState(customApiKey);
   const [showApiInput, setShowApiInput] = useState(false);
@@ -13,7 +13,7 @@ export default function App() {
   // ตรวจสอบโหมด Display จอที่ 2 (?view=display)
   const [isDisplayWindow, setIsDisplayWindow] = useState(false);
 
-  // โหมดผันและมุมมองหน้าจอ (ตั้งค่าเริ่มต้นคำว่า "กอ")
+  // โหมดผันและมุมมองหน้าจอ
   const [mode, setMode] = useState('full5'); // 'full5' | 'highOnly' | 'lowOnly'
   const [viewLayout, setViewLayout] = useState('split'); // 'standard' | 'split' | 'present'
   const [inputText, setInputText] = useState('กอ');
@@ -26,7 +26,6 @@ export default function App() {
   const [isPlayingSequence, setIsPlayingSequence] = useState(false);
   const [ttsVoice, setTtsVoice] = useState('Kore'); // 'Kore' | 'Aoede' | 'Callirrhoe' | 'Puck' | 'Fenrir' | 'Orus' | 'Algieba'
   
-  const lastSpokenRef = useRef('');
   const audioContextRef = useRef(null);
   const currentAudioSourceRef = useRef(null);
 
@@ -52,7 +51,7 @@ export default function App() {
   const highConsonants = ['ข', 'ฃ', 'ฉ', 'ฐ', 'ถ', 'ผ', 'ฝ', 'ศ', 'ษ', 'ส', 'ห'];
   const lowSingleConsonants = ['ง', 'ญ', 'น', 'ย', 'ณ', 'ร', 'ว', 'ม', 'ฬ', 'ล'];
 
-  // รายการคำควบกล้ำไทย (แท้ และ ไม่แท้/ห นำ)
+  // รายการคำควบกล้ำไทย
   const thaiClusters = [
     'กร', 'กล', 'กว', 'ขร', 'ขล', 'ขว', 'คร', 'คล', 'คว', 'ตร', 'ตล', 
     'ปร', 'ปล', 'พร', 'พล', 'ฟร', 'ฟล', 'หง', 'หญ', 'หน', 'หม', 'หย', 
@@ -156,7 +155,7 @@ export default function App() {
     return () => channel.close();
   }, [linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, labelFontSize, bgType, bgColor, bgImage, hoveredRowId, speakingWord, isDisplayWindow]);
 
-  // หยุดเล่นเสียงทั้งหมดทันที (ตัดเสียงซ้ำ/ซ้อน)
+  // หยุดเล่นเสียงทั้งหมดทันที (เพื่อป้องกันเสียงแทรก/ซ้อน)
   const stopAllAudio = () => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
@@ -176,7 +175,7 @@ export default function App() {
     }
   };
 
-  // เล่นไฟล์ PCM16 Audio จาก Gemini TTS
+  // เล่น PCM16 Audio จาก Gemini TTS
   const playPcm16Audio = async (base64Data, sampleRate = 24000) => {
     stopAllAudio();
     const binaryString = atob(base64Data);
@@ -216,8 +215,8 @@ export default function App() {
     const activeKey = customApiKey.trim() || apiKey;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${activeKey}`;
     
-    // กำหนดคำสั่งกำกับเสียงเฉพาะ เพื่อป้องกันไม่ให้ AI อ่านสะกดตัวอักษร
-    const promptText = `Say clearly as a single Thai spoken word with exact tone pitch inflection: ${textToSpeak}`;
+    // คำสั่งกำกับ Gemini TTS ให้ออกเสียงเฉพาะคำโดยตรง ห้ามอ่านสะกดตัวอักษรเด็ดขาด
+    const promptText = `Say strictly only the Thai word "${textToSpeak}" as a single direct word pronunciation. Do not spell out individual letters or characters.`;
     
     const payload = {
       contents: [{ parts: [{ text: promptText }] }],
@@ -232,8 +231,8 @@ export default function App() {
       model: "gemini-2.5-flash-preview-tts"
     };
 
-    let delays = [1000, 2000, 4000, 8000, 16000];
-    for (let i = 0; i <= 5; i++) {
+    let delays = [500, 1000, 2000];
+    for (let i = 0; i < 3; i++) {
       try {
         const res = await fetch(url, {
           method: 'POST',
@@ -252,7 +251,7 @@ export default function App() {
           return { audioData: inlineData.data, sampleRate: sRate };
         }
       } catch (err) {
-        if (i === 5) throw err;
+        if (i === 2) throw err;
         await new Promise(r => setTimeout(r, delays[i]));
       }
     }
@@ -260,7 +259,7 @@ export default function App() {
   };
 
   // ระบบสำรองกรณีออฟไลน์ (Browser SpeechSynthesis Fallback)
-  const speakBrowserSpeech = (text, toneId) => {
+  const speakBrowserSpeech = (text) => {
     return new Promise((resolve) => {
       if (!('speechSynthesis' in window)) {
         resolve();
@@ -268,18 +267,9 @@ export default function App() {
       }
       stopAllAudio();
       
-      // เติมคำว่า "คำว่า " เพื่อป้องกันไม่ให้เอนจินของเบราว์เซอร์อ่านสะกดตัวอักษร
-      const speechText = text.length <= 4 ? `คำว่า ${text}` : text;
-      const utterance = new SpeechSynthesisUtterance(speechText);
+      const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'th-TH';
-
-      // ปรับระดับ Pitch ตามเสียงวรรณยุกต์สำหรับเบราว์เซอร์
-      if (toneId === 1) { utterance.pitch = 1.0; utterance.rate = 0.85; }
-      else if (toneId === 2) { utterance.pitch = 0.75; utterance.rate = 0.8; }
-      else if (toneId === 3) { utterance.pitch = 0.9; utterance.rate = 0.8; }
-      else if (toneId === 4) { utterance.pitch = 1.2; utterance.rate = 0.85; }
-      else if (toneId === 5) { utterance.pitch = 1.3; utterance.rate = 0.85; }
-      else { utterance.pitch = 1.0; utterance.rate = 0.85; }
+      utterance.rate = 0.9;
 
       const voices = window.speechSynthesis.getVoices();
       const thaiVoice = voices.find(v => v.lang === 'th-TH' || v.lang.startsWith('th')) || voices.find(v => v.name.toLowerCase().includes('thai'));
@@ -293,30 +283,24 @@ export default function App() {
     });
   };
 
-  // ระบบ AI เปล่งเสียงคนเดียว คำเดียว ไม่ซ้อน
-  const speakWord = async (text, toneId) => {
-    // จอที่ 2 (Display Monitor) ล็อกปิดเสียงถาวร เพื่อให้เสียงออกที่โน้ตบุ๊กหลักจอเดียว
+  // ระบบออกเสียงคำศัพท์
+  const speakWord = async (text) => {
     if (!soundEnabled || !text || isDisplayWindow) return;
 
     stopAllAudio();
     setSpeakingWord(text);
-    lastSpokenRef.current = text;
 
     try {
-      // 1. เรียกใช้ Gemini 2.5 Flash High-Quality TTS เป็นหลัก
       const ttsResult = await fetchGeminiTts(text);
       await playPcm16Audio(ttsResult.audioData, ttsResult.sampleRate);
     } catch (e) {
-      // 2. หากเรียก Gemini TTS ไม่ผ่าน ให้ใช้ระบบสำรอง
-      await speakBrowserSpeech(text, toneId);
+      await speakBrowserSpeech(text);
     } finally {
-      if (lastSpokenRef.current === text) {
-        setSpeakingWord('');
-      }
+      setSpeakingWord('');
     }
   };
 
-  // เล่นเสียงผันคำเรียงบรรทัด (ออกเสียงเพียง 1 คำต่อ 1 บรรทัดวรรณยุกต์)
+  // เล่นเสียงผันคำเรียงบรรทัดแบบรวดเร็ว กระชับ
   const handlePlayToneSequence = async () => {
     if (isDisplayWindow) return;
     if (!soundEnabled) setSoundEnabled(true);
@@ -328,12 +312,11 @@ export default function App() {
     const sortedLines = [...linesData].sort((a, b) => a.id - b.id).filter(item => item.show);
 
     for (let item of sortedLines) {
-      // ดึงเฉพาะคำแรกของบรรทัดมาออกเสียงเพียงคำเดียว
       const wordToSpeak = item.isMulti ? item.multi[0]?.text : item.word;
       if (wordToSpeak) {
         setHoveredRowId(item.id);
-        await speakWord(wordToSpeak, item.id);
-        await new Promise(r => setTimeout(r, 220));
+        await speakWord(wordToSpeak);
+        await new Promise(r => setTimeout(r, 40)); // พักสั้นๆ กระชับไม่ยืดนาด
       }
     }
 
@@ -643,7 +626,7 @@ export default function App() {
     return { backgroundColor: bgColor };
   };
 
-  // 1. หน้าจอที่สอง (Display Monitor): แสดงผลกระดาน Auto-Scale (ไร้เสียงอ่านเพื่อป้องกันเสียงแทรก)
+  // 1. หน้าจอที่สอง (Display Monitor) - ปิดเสียงถาวร ป้องกันเสียงตีกัน
   if (isDisplayWindow) {
     return (
       <div 
@@ -846,7 +829,7 @@ export default function App() {
     <div style={{ minHeight: '100vh', padding: '24px 15px', fontFamily: "'Sarabun', sans-serif", transition: 'all 0.3s ease', ...getContainerBgStyle() }}>
       <div style={{ maxWidth: viewLayout === 'split' ? '1280px' : '920px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
         
-        {/* แถบมุมมองและเปิดจอที่ 2 */}
+        {/* แถบสลับมุมมองและเปิดจอที่ 2 */}
         <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '14px', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.06)', flexWrap: 'wrap', gap: '12px', border: '1px solid #e2e8f0', backdropFilter: 'blur(6px)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontWeight: 'bold', fontSize: '15px', color: '#1e293b' }}>🖥️ มุมมอง:</span>
@@ -899,15 +882,16 @@ export default function App() {
           {viewLayout !== 'present' && (
             <div style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '20px', boxShadow: '0 4px 14px rgba(0,0,0,0.06)', border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#1f2937' }}>⚙️ แผงควบคุม</h3>
+              {/* ส่วนหัวแผงควบคุม */}
+              <div>
+                <h3 style={{ margin: '0 0 10px 0', fontSize: '18px', fontWeight: 'bold', color: '#1f2937' }}>⚙️ แผงควบคุม</h3>
                 
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                  {/* ตัวเลือกโมเดลเสียง AI ชาย/หญิง คมชัดแยกตามโค้ด */}
+                {/* บรรทัดต่อจากแผงควบคุม: ปุ่มตัวเลือกเสียง + ปุ่มเปิด/ปิดเสียง + ปุ่มเชื่อมต่อ AI */}
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                   <select 
                     value={ttsVoice} 
                     onChange={(e) => setTtsVoice(e.target.value)}
-                    style={{ padding: '5px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '11px', fontWeight: 'bold', backgroundColor: '#f8fafc', color: '#1e293b' }}
+                    style={{ flex: 1, padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', fontWeight: 'bold', backgroundColor: '#f8fafc', color: '#1e293b' }}
                   >
                     <option value="Kore">👩 หญิง - Kore (นุ่มนวล)</option>
                     <option value="Aoede">👩 หญิง - Aoede (สดใส)</option>
@@ -928,7 +912,7 @@ export default function App() {
                       backgroundColor: soundEnabled ? '#dcfce7' : '#f1f5f9',
                       color: soundEnabled ? '#15803d' : '#64748b',
                       border: soundEnabled ? '1px solid #86efac' : '1px solid #cbd5e1',
-                      padding: '5px 10px',
+                      padding: '6px 10px',
                       borderRadius: '6px',
                       fontSize: '12px',
                       fontWeight: 'bold',
@@ -937,8 +921,48 @@ export default function App() {
                   >
                     {soundEnabled ? '🔊 เสียงเปิด' : '🔇 เสียงปิด'}
                   </button>
+
+                  <button 
+                    onClick={() => setShowApiInput(!showApiInput)}
+                    style={{ 
+                      backgroundColor: customApiKey ? '#e0f2fe' : '#fef3c7', 
+                      color: customApiKey ? '#0369a1' : '#b45309', 
+                      border: customApiKey ? '1px solid #7dd3fc' : '1px solid #fde68a', 
+                      padding: '6px 10px', 
+                      borderRadius: '6px', 
+                      fontSize: '12px', 
+                      cursor: 'pointer', 
+                      fontWeight: 'bold' 
+                    }}
+                  >
+                    🔑 {customApiKey ? 'เปลี่ยน Key' : 'เชื่อมต่อ AI'}
+                  </button>
                 </div>
               </div>
+
+              {/* กล่องป้อน Custom Gemini API Key */}
+              {showApiInput && (
+                <div style={{ padding: '10px', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px dashed #94a3b8' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569', marginBottom: '6px' }}>🔑 เชื่อมต่อ Gemini API Key ส่วนตัว:</div>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <input 
+                      type="password" 
+                      placeholder="วาง Gemini API Key..." 
+                      value={tempApiKey} 
+                      onChange={(e) => setTempApiKey(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSaveApiKey()}
+                      style={{ flex: 1, padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }}
+                    />
+                    <button 
+                      onClick={handleSaveApiKey}
+                      style={{ backgroundColor: '#10b981', color: '#ffffff', border: 'none', padding: '0 12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}
+                    >
+                      บันทึก
+                    </button>
+                  </div>
+                  {apiSaveStatus && <div style={{ color: '#059669', fontSize: '11px', marginTop: '4px', fontWeight: 'bold' }}>✓ {apiSaveStatus}</div>}
+                </div>
+              )}
 
               {/* 1. ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ */}
               <div style={{ backgroundColor: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
@@ -1165,38 +1189,6 @@ export default function App() {
                 />
               </div>
 
-              {/* 7. เชื่อมต่อ Custom Gemini API Key (ตัวเลือกเสริม) */}
-              <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '8px' }}>
-                <button 
-                  onClick={() => setShowApiInput(!showApiInput)}
-                  style={{ background: '#f8fafc', border: '1px solid #cbd5e1', padding: '6px 10px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: '#475569', fontWeight: 'bold', width: '100%' }}
-                >
-                  🔑 {customApiKey ? 'เปลี่ยน Custom Gemini API Key' : 'เพิ่ม API Key ส่วนตัว (ถ้าต้องการ)'}
-                </button>
-
-                {showApiInput && (
-                  <div style={{ marginTop: '8px', padding: '10px', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px dashed #94a3b8' }}>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <input 
-                        type="password" 
-                        placeholder="วาง Gemini API Key ส่วนตัว..." 
-                        value={tempApiKey} 
-                        onChange={(e) => setTempApiKey(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleSaveApiKey()}
-                        style={{ flex: 1, padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }}
-                      />
-                      <button 
-                        onClick={handleSaveApiKey}
-                        style={{ backgroundColor: '#10b981', color: '#ffffff', border: 'none', padding: '0 12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}
-                      >
-                        บันทึก
-                      </button>
-                    </div>
-                    {apiSaveStatus && <div style={{ color: '#059669', fontSize: '11px', marginTop: '4px', fontWeight: 'bold' }}>✓ {apiSaveStatus}</div>}
-                  </div>
-                )}
-              </div>
-
             </div>
           )}
 
@@ -1236,19 +1228,13 @@ export default function App() {
                 return (
                   <div 
                     key={idx} 
-                    style={{ display: 'grid', gridTemplateColumns: '220px 1fr 110px', alignItems: 'center' }}
-                    onMouseEnter={() => {
-                      setHoveredRowId(item.id);
-                      // ดึงเฉพาะคำแรกของบรรทัดมาออกเสียงเพียงคำเดียว เมื่อเมาส์ชี้
+                    style={{ display: 'grid', gridTemplateColumns: '220px 1fr 110px', alignItems: 'center', cursor: 'pointer' }}
+                    onMouseEnter={() => setHoveredRowId(item.id)}
+                    onMouseLeave={() => setHoveredRowId(null)}
+                    onClick={() => {
+                      // คลิกที่แถบเพื่อสั่งเปล่งเสียง
                       const wordToSpeak = item.isMulti ? item.multi[0]?.text : item.word;
-                      if (wordToSpeak && lastSpokenRef.current !== wordToSpeak) {
-                        speakWord(wordToSpeak, item.id);
-                      }
-                    }}
-                    onMouseLeave={() => {
-                      setHoveredRowId(null);
-                      lastSpokenRef.current = '';
-                      if (!isPlayingSequence) stopAllAudio();
+                      if (wordToSpeak) speakWord(wordToSpeak);
                     }}
                   >
                     <div 
@@ -1270,7 +1256,10 @@ export default function App() {
 
                       {!item.isMulti && item.show && item.word && (
                         <div 
-                          onClick={() => speakWord(item.word, item.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            speakWord(item.word);
+                          }}
                           style={{
                             position: 'absolute',
                             left: item.leftPos,
@@ -1302,7 +1291,10 @@ export default function App() {
                             <React.Fragment key={i}>
                               {i > 0 && <span style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '20px' }}>/</span>}
                               <div 
-                                onClick={() => speakWord(item.multi[0]?.text || circle.text, item.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  speakWord(circle.text);
+                                }}
                                 style={{
                                   backgroundColor: circle.color,
                                   color: circleTextColor,
