@@ -1,30 +1,50 @@
 import React, { useState, useEffect } from 'react';
 
 export default function App() {
+  // บันทึกและดึง Gemini API Key จาก LocalStorage
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
   const [tempApiKey, setTempApiKey] = useState(apiKey);
   const [showApiInput, setShowApiInput] = useState(false);
   const [apiSaveStatus, setApiSaveStatus] = useState('');
 
+  // ตรวจสอบโหมด Display จอที่ 2 (?view=display)
   const [isDisplayWindow, setIsDisplayWindow] = useState(false);
+
+  // โหมดผันและมุมมองหน้าจอ
   const [mode, setMode] = useState('full5'); // 'full5' | 'highOnly' | 'lowOnly'
   const [viewLayout, setViewLayout] = useState('split'); // 'standard' | 'split' | 'present'
   const [inputText, setInputText] = useState('เมา');
+  const [inputError, setInputError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // การตั้งค่าสีและขนาดฟอนต์
   const [colorMid, setColorMid] = useState('#22c55e');    // กลาง (เขียว)
   const [colorHigh, setColorHigh] = useState('#ef4444');   // สูง (แดง)
   const [colorLow, setColorLow] = useState('#007bff');    // ต่ำ (น้ำเงิน)
   const [circleTextColor, setCircleTextColor] = useState('#ffffff'); // สีตัวอักษรในวงกลม
-  const [labelFontSize, setLabelFontSize] = useState(22);
-  const [hoveredLineId, setHoveredLineId] = useState(null);
+  const [labelFontSize, setLabelFontSize] = useState(20); // ขนาดตัวหนังสือหน้าเส้น (px)
 
-  const [analysisInfo, setAnalysisInfo] = useState({ type: '', vowelLen: '', desc: '', displayWord: '' });
+  // การตั้งค่าพื้นหลัง (Color หรือ Image Upload)
+  const [bgType, setBgType] = useState('color'); // 'color' | 'image'
+  const [bgColor, setBgColor] = useState('#e2e8f0');
+  const [bgImage, setBgImage] = useState('');
+
+  // ข้อมูลวิเคราะห์หลักภาษาและเส้น 5 เส้น
+  const [analysisInfo, setAnalysisInfo] = useState({ type: '', vowelLen: '', desc: '' });
   const [linesData, setLinesData] = useState([]);
+  const [hoveredRowId, setHoveredRowId] = useState(null);
 
+  // หมวดหมู่อักษร 3 หมู่
   const midConsonants = ['ก', 'จ', 'ด', 'ต', 'บ', 'ป', 'อ', 'ฎ', 'ฏ'];
   const highConsonants = ['ข', 'ฃ', 'ฉ', 'ฐ', 'ถ', 'ผ', 'ฝ', 'ศ', 'ษ', 'ส', 'ห'];
   const lowSingleConsonants = ['ง', 'ญ', 'น', 'ย', 'ณ', 'ร', 'ว', 'ม', 'ฬ', 'ล'];
+
+  // รายการคำควบกล้ำไทย (แท้ และ ไม่แท้/ห นำ)
+  const thaiClusters = [
+    'กร', 'กล', 'กว', 'ขร', 'ขล', 'ขว', 'คร', 'คล', 'คว', 'ตร', 'ตล', 
+    'ปร', 'ปล', 'พร', 'พล', 'ฟร', 'ฟล', 'หง', 'หญ', 'หน', 'หม', 'หย', 
+    'หร', 'หล', 'หว', 'ทร', 'ศร', 'สร', 'จร', 'ซร'
+  ];
 
   const quickConsonants = [
     'ก', 'ข', 'ค', 'ง', 'จ', 'ฉ', 'ช', 'ซ', 'ด', 'ต', 
@@ -81,12 +101,13 @@ export default function App() {
     }
   }, []);
 
+  // ระบบสื่อสารข้ามมอนิเตอร์ (BroadcastChannel Sync)
   useEffect(() => {
     const channel = new BroadcastChannel('thai_tone_sync_channel');
     
     if (isDisplayWindow) {
       channel.onmessage = (event) => {
-        const { lines, info, text, cText, cMid, cHigh, cLow, labelFS } = event.data;
+        const { lines, info, text, cText, cMid, cHigh, cLow, fontSize, bType, bColor, bImg } = event.data;
         if (lines) setLinesData(lines);
         if (info) setAnalysisInfo(info);
         if (text) setInputText(text);
@@ -94,7 +115,10 @@ export default function App() {
         if (cMid) setColorMid(cMid);
         if (cHigh) setColorHigh(cHigh);
         if (cLow) setColorLow(cLow);
-        if (labelFS) setLabelFontSize(labelFS);
+        if (fontSize) setLabelFontSize(fontSize);
+        if (bType) setBgType(bType);
+        if (bColor) setBgColor(bColor);
+        if (bImg !== undefined) setBgImage(bImg);
       };
     } else {
       channel.postMessage({
@@ -105,13 +129,17 @@ export default function App() {
         cMid: colorMid,
         cHigh: colorHigh,
         cLow: colorLow,
-        labelFS: labelFontSize
+        fontSize: labelFontSize,
+        bType: bgType,
+        bColor: bgColor,
+        bImg: bgImage
       });
     }
 
     return () => channel.close();
-  }, [linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, labelFontSize, isDisplayWindow]);
+  }, [linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, labelFontSize, bgType, bgColor, bgImage, isDisplayWindow]);
 
+  // ฟังก์ชันแยกพยัญชนะ (รองรับคำควบกล้ำ) และสระ
   const parseThaiWord = (word) => {
     if (!word) return { initial: '', frontVowel: '', rearVowel: '', toneMark: '' };
     let frontVowel = '';
@@ -125,11 +153,18 @@ export default function App() {
     let rearVowel = '';
     let toneMark = '';
 
+    // ตรวจสอบพยัญชนะต้นควบกล้ำ 2 ตัว
+    if (workStr.length >= 2 && thaiClusters.includes(workStr.slice(0, 2))) {
+      initial = workStr.slice(0, 2);
+      workStr = workStr.slice(2);
+    } else if (workStr.length > 0) {
+      initial = workStr[0];
+      workStr = workStr.slice(1);
+    }
+
     for (let char of workStr) {
       if (['่', '้', '๊', '๋'].includes(char)) {
         toneMark = char;
-      } else if (!initial) {
-        initial = char;
       } else {
         rearVowel += char;
       }
@@ -142,37 +177,30 @@ export default function App() {
     return `${frontVowel}${consonant}${tone}${rearVowel}`;
   };
 
+  // ตรวจสอบความถูกต้องของการกรอกข้อมูล (จำกัด 1 คำ / ควบกล้ำ)
+  const validateInput = (word) => {
+    if (!word || word.trim() === '') {
+      setInputError('กรุณากรอกคำศัพท์');
+      return false;
+    }
+    if (word.trim().includes(' ')) {
+      setInputError('⚠️ กรุณากรอกเพียง 1 คำเท่านั้น (ห้ามมีเว้นวรรค)');
+      return false;
+    }
+    if (word.length > 8) {
+      setInputError('⚠️ คำศัพท์ยาวเกินไป (กรอกได้สูงสุด 1 พยางค์/คำ)');
+      return false;
+    }
+    setInputError('');
+    return true;
+  };
+
   const analyzeSyllable = (word, currentMode) => {
     const { initial, frontVowel, rearVowel } = parseThaiWord(word);
+    const primaryConsonant = initial ? initial[0] : '';
+    
     const shortVowelChars = ['ะ', 'ิ', 'ึ', 'ุ', 'ั'];
     const deadEndings = ['ก', 'ข', 'ค', 'ฆ', 'บ', 'ป', 'พ', 'ฟ', 'ภ', 'ด', 'จ', 'ช', 'ซ', 'ฎ', 'ฏ', 'ฐ', 'ฑ', 'ฒ', 'ต', 'ถ', 'ท', 'ธ', 'ศ', 'ษ', 'ส'];
-
-    let effectiveInitial = initial;
-    let effectiveWord = word;
-
-    let highConsonant = '';
-    let lowConsonant = '';
-
-    if (!midConsonants.includes(initial)) {
-      if (highConsonants.includes(initial)) {
-        highConsonant = initial;
-        lowConsonant = Object.keys(pairMap).find(k => pairMap[k] === initial) || initial;
-      } else if (lowSingleConsonants.includes(initial)) {
-        lowConsonant = initial;
-        highConsonant = `ห${initial}`;
-      } else {
-        lowConsonant = initial;
-        highConsonant = pairMap[initial] || `ห${initial}`;
-      }
-
-      if (currentMode === 'highOnly') {
-        effectiveInitial = highConsonant[0] === 'ห' ? highConsonant[1] || highConsonant[0] : highConsonant;
-        effectiveWord = buildWord(frontVowel, highConsonant, '', rearVowel);
-      } else if (currentMode === 'lowOnly') {
-        effectiveInitial = lowConsonant;
-        effectiveWord = buildWord(frontVowel, lowConsonant, '', rearVowel);
-      }
-    }
 
     let isDead = false;
     let isShort = false;
@@ -192,33 +220,40 @@ export default function App() {
     const lenText = isShort ? 'สระเสียงสั้น' : 'สระเสียงยาว';
     let desc = '';
 
-    if (midConsonants.includes(effectiveInitial)) {
-      desc = isDead ? 'อักษรกลาง คำตาย (ผันได้เฉพาะ เอก, โท, ตรี, จัตวา)' : 'อักษรกลาง คำเป็น (ผันได้ครบ 5 เสียง)';
-    } else if (currentMode === 'highOnly') {
-      desc = isDead ? `อักษรสูง (${highConsonant}) คำตาย (ผันได้เฉพาะ เสียงเอก และ เสียงโท)` : `อักษรสูง (${highConsonant}) คำเป็น (ผันได้เฉพาะ เอก, โท, จัตวา)`;
-    } else if (currentMode === 'lowOnly') {
-      desc = isDead 
-        ? (isShort ? `อักษรต่ำ (${lowConsonant}) คำตายสระสั้น (พื้นเสียงตรี, ผันเสียงโทและจัตวา)` : `อักษรต่ำ (${lowConsonant}) คำตายสระยาว (พื้นเสียงโท, ผันเสียงตรี)`)
-        : `อักษรต่ำ (${lowConsonant}) คำเป็น (ผันได้ สามัญ, โท, ตรี)`;
+    const isCluster = initial.length > 1;
+    const clusterLabel = isCluster ? ` (คำควบกล้ำ "${initial}")` : '';
+
+    if (midConsonants.includes(primaryConsonant)) {
+      desc = isDead ? `อักษรกลาง${clusterLabel} คำตาย (ผันได้เฉพาะ เอก, โท, ตรี, จัตวา)` : `อักษรกลาง${clusterLabel} คำเป็น (ผันได้ครบ 5 เสียง)`;
+    } else if (highConsonants.includes(primaryConsonant) || initial.startsWith('ห')) {
+      desc = isDead ? `อักษรสูง${clusterLabel} คำตาย (ผันได้เฉพาะ เสียงเอก และ เสียงโท)` : `อักษรสูง${clusterLabel} คำเป็น (ผันได้เฉพาะ เอก, โท, จัตวา)`;
     } else {
-      /* Mode 'full5' with combined High + Low classes */
-      if (isDead) {
-        desc = `ผันคู่ อักษรสูง (${highConsonant}) [เอก, โท] + อักษรต่ำ (${lowConsonant}) [โท, ตรี] คำตาย`;
+      if (currentMode === 'full5') {
+        desc = isDead 
+          ? `ผันคู่ อักษรสูง/ห นำ [เอก, โท] + อักษรต่ำ [โท, ตรี]`
+          : `ผันคู่ อักษรสูง/ห นำ [เอก, โท, จัตวา] + อักษรต่ำ [สามัญ, โท, ตรี] รวมผันได้ครบทั้ง 5 เสียง`;
+      } else if (currentMode === 'highOnly') {
+        desc = `เทียบผันเป็น เสียงอักษรสูง/ห นำ${clusterLabel} (ผันได้เฉพาะ เอก, โท, จัตวา)`;
       } else {
-        desc = `ผันคู่ อักษรสูง/ห นำ (${highConsonant}) [เอก, โท, จัตวา] + อักษรต่ำ (${lowConsonant}) [สามัญ, โท, ตรี] รวมผันได้ครบทั้ง 5 เสียง`;
+        desc = isDead 
+          ? (isShort ? `อักษรต่ำ${clusterLabel} คำตายสระสั้น (พื้นเสียงตรี, ผันเสียงโทและจัตวา)` : `อักษรต่ำ${clusterLabel} คำตายสระยาว (พื้นเสียงโท, ผันเสียงตรี)`)
+          : `อักษรต่ำ${clusterLabel} คำเป็น (ผันได้ สามัญ, โท, ตรี)`;
       }
     }
 
-    return { type: typeText, vowelLen: lenText, desc, isDead, isShort, initial: effectiveInitial, frontVowel, rearVowel, displayWord: effectiveWord };
+    return { type: typeText, vowelLen: lenText, desc, isDead, isShort, initial, frontVowel, rearVowel, primaryConsonant };
   };
 
   const calculateTones = (word, currentMode, midC, highC, lowC) => {
     if (!word) return [];
+    const isValid = validateInput(word);
+    if (!isValid) return [];
+
     const info = analyzeSyllable(word, currentMode);
     setAnalysisInfo(info);
-    const { initial, frontVowel, rearVowel, isDead, isShort } = info;
+    const { initial, frontVowel, rearVowel, isDead, isShort, primaryConsonant } = info;
 
-    if (midConsonants.includes(initial)) {
+    if (midConsonants.includes(primaryConsonant)) {
       return [
         { id: 5, tone: 'เสียงจัตวา', mark: '◌๋', word: buildWord(frontVowel, initial, '๋', rearVowel), color: midC, isMulti: false, multi: [], show: true, leftPos: '80%' },
         { id: 4, tone: 'เสียงตรี', mark: '◌๊', word: buildWord(frontVowel, initial, '๊', rearVowel), color: midC, isMulti: false, multi: [], show: true, leftPos: '65%' },
@@ -228,19 +263,18 @@ export default function App() {
       ];
     }
 
-    let rawInitial = parseThaiWord(word).initial;
     let highConsonant = '';
     let lowConsonant = '';
 
-    if (highConsonants.includes(rawInitial)) {
-      highConsonant = rawInitial;
-      lowConsonant = Object.keys(pairMap).find(k => pairMap[k] === rawInitial) || rawInitial;
-    } else if (lowSingleConsonants.includes(rawInitial)) {
-      lowConsonant = rawInitial;
-      highConsonant = `ห${rawInitial}`;
+    if (highConsonants.includes(primaryConsonant) || initial.startsWith('ห')) {
+      highConsonant = initial;
+      lowConsonant = Object.keys(pairMap).find(k => pairMap[k] === primaryConsonant) || primaryConsonant;
+    } else if (lowSingleConsonants.includes(primaryConsonant)) {
+      lowConsonant = initial;
+      highConsonant = `ห${initial}`;
     } else {
-      lowConsonant = rawInitial;
-      highConsonant = pairMap[rawInitial] || `ห${rawInitial}`;
+      lowConsonant = initial;
+      highConsonant = pairMap[primaryConsonant] || `ห${initial}`;
     }
 
     if (currentMode === 'highOnly') {
@@ -285,6 +319,19 @@ export default function App() {
     setLinesData(calculateTones(inputText, mode, colorMid, colorHigh, colorLow));
   }, [inputText, mode, colorMid, colorHigh, colorLow]);
 
+  // ฟังก์ชันอัปโหลดภาพพื้นหลัง
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setBgImage(reader.result);
+        setBgType('image');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleOpenDualMonitor = () => {
     const currentUrl = window.location.href.split('?')[0];
     window.open(`${currentUrl}?view=display`, 'ThaiToneDisplayWindow', 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no');
@@ -312,7 +359,7 @@ export default function App() {
 
   const handleGenerate = async () => {
     const word = inputText.trim();
-    if (!word) return;
+    if (!validateInput(word)) return;
 
     if (!apiKey) {
       setLinesData(calculateTones(word, mode, colorMid, colorHigh, colorLow));
@@ -321,7 +368,7 @@ export default function App() {
 
     setLoading(true);
     try {
-      const promptText = `วิเคราะห์การผันวรรณยุกต์ภาษาไทยของคำว่า "${word}" ส่งคืนเฉพาะ JSON array 5 รายการเรียงจาก จัตวา, ตรี, โท, เอก, สามัญ รูปแบบ: [{"tone":"เสียงจัตวา","word":"เหมา","type":"high"},{"tone":"เสียงตรี","word":"เม้า","type":"low"},{"tone":"เสียงโท","words":["เม่า","เหม้า"],"type":"pair"},{"tone":"เสียงเอก","word":"เหม่","type":"high"},{"tone":"เสียงสามัญ","word":"เมา","type":"low"}]`;
+      const promptText = `วิเคราะห์การผันวรรณยุกต์ภาษาไทยของคำว่า "${word}" (รองรับคำควบกล้ำ) ส่งคืนเฉพาะ JSON array 5 รายการเรียงจาก จัตวา, ตรี, โท, เอก, สามัญ รูปแบบ: [{"tone":"เสียงจัตวา","word":"เหมา","type":"high"},{"tone":"เสียงตรี","word":"เม้า","type":"low"},{"tone":"เสียงโท","words":["เม่า","เหม้า"],"type":"pair"},{"tone":"เสียงเอก","word":"เหม่","type":"high"},{"tone":"เสียงสามัญ","word":"เมา","type":"low"}]`;
       
       const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
         method: 'POST',
@@ -383,91 +430,122 @@ export default function App() {
     1: { text: 'เสียงต่ำ', color: '#007bff' }
   };
 
+  // คำนวณการแสดงผลสไตล์พื้นหลัง
+  const getContainerBgStyle = () => {
+    if (bgType === 'image' && bgImage) {
+      return {
+        backgroundImage: `url(${bgImage})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat'
+      };
+    }
+    return { backgroundColor: bgColor };
+  };
+
+  // 1. หน้าจอที่สอง (Display Monitor): ขนาด 2 ใน 3 ส่วน (~68vh), ไร้ Scrollbar, ปรับพื้นหลังได้
   if (isDisplayWindow) {
     return (
-      <div style={{ height: '100vh', width: '100vw', backgroundColor: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', padding: '0', margin: '0', fontFamily: "'Sarabun', sans-serif", overflow: 'hidden', position: 'fixed', top: 0, left: 0 }}>
-        
-        {/* บอร์ดสีขาว ขนาด 2 ใน 3 ของความสูงจอ (68vh) โค้งมน */}
-        <div style={{ width: '68vw', height: '68vh', backgroundColor: '#ffffff', borderRadius: '28px', padding: '20px 48px', boxShadow: '0 15px 40px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxSizing: 'border-box', border: '1px solid #cbd5e1' }}>
+      <div 
+        style={{ 
+          height: '100vh', 
+          width: '100vw', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          boxSizing: 'border-box', 
+          padding: '0', 
+          margin: '0', 
+          fontFamily: "'Sarabun', sans-serif", 
+          overflow: 'hidden', 
+          position: 'fixed', 
+          top: 0, 
+          left: 0,
+          ...getContainerBgStyle()
+        }}
+      >
+        {/* บอร์ดกระดานสีขาว ความสูง 2 ใน 3 ส่วน (~68vh) */}
+        <div style={{ width: '68vw', height: '68vh', backgroundColor: 'rgba(255, 255, 255, 0.96)', borderRadius: '28px', padding: '24px 44px', boxShadow: '0 15px 40px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxSizing: 'border-box', border: '1px solid #cbd5e1', backdropFilter: 'blur(8px)' }}>
           
-          {/* หัวเรื่องและกล่องผลวิเคราะห์ */}
+          {/* ส่วนหัวกระดาน */}
           <div>
-            <h2 style={{ textAlign: 'center', margin: '0 0 6px 0', color: '#ea580c', fontSize: '30px', fontWeight: 'bold' }}>
+            <h2 style={{ textAlign: 'center', margin: '0 0 8px 0', color: '#ea580c', fontSize: '32px', fontWeight: 'bold' }}>
               ไตรยางศ์ หรือ อักษร 3 หมู่
             </h2>
 
             {analysisInfo.desc && (
-              <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '6px 18px', borderRadius: '10px', margin: '0 auto 2px auto', maxWidth: '850px', textAlign: 'center', fontSize: '15px', color: '#0369a1', fontWeight: 'bold' }}>
-                📌 ผลวิเคราะห์หลักภาษา: <span style={{ color: '#0284c7' }}>"{analysisInfo.displayWord || inputText}"</span> เป็น <span style={{ backgroundColor: '#e0f2fe', padding: '2px 8px', borderRadius: '4px' }}>{analysisInfo.type} ({analysisInfo.vowelLen})</span> — {analysisInfo.desc}
+              <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '8px 16px', borderRadius: '12px', margin: '0 auto 10px auto', maxWidth: '850px', textAlign: 'center', fontSize: '15px', color: '#0369a1', fontWeight: 'bold' }}>
+                📌 ผลวิเคราะห์หลักภาษา: <span style={{ color: '#0284c7' }}>"{inputText}"</span> เป็น <span style={{ backgroundColor: '#e0f2fe', padding: '2px 8px', borderRadius: '4px' }}>{analysisInfo.type} ({analysisInfo.vowelLen})</span> — {analysisInfo.desc}
               </div>
             )}
 
-            {/* คำว่า "รูปวรรณยุกต์" ย้ายลงมาให้ใกล้กับวงเล็บวรรณยุกต์เส้นแรกมากยิ่งขึ้น */}
-            <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr 140px', marginTop: '12px', marginBottom: '-18px', color: '#64748b', fontWeight: 'bold', fontSize: '15px' }}>
-              <div style={{ textAlign: 'right', paddingRight: '25px', color: '#475569', letterSpacing: '0.5px' }}>รูปวรรณยุกต์</div>
+            {/* เลื่อนคำว่า "รูปวรรณยุกต์" ลงมาชิดเหนือวงเล็บ [ ◌๋ ] บรรทัดแรก */}
+            <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr 140px', color: '#64748b', fontWeight: 'bold', fontSize: '16px', margin: '0 0 -2px 0' }}>
+              <div style={{ textAlign: 'right', paddingRight: '25px', color: '#475569', fontStyle: 'italic' }}>รูปวรรณยุกต์</div>
               <div></div>
               <div></div>
             </div>
           </div>
 
-          {/* บรรทัด 5 เส้น พร้อมวงกลมและตัวหนังสือปรับขนาดได้ */}
-          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', flex: 1, padding: '4px 0' }}>
+          {/* บรรทัด 5 เส้น */}
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', flex: 1, padding: '8px 0' }}>
             {linesData.map((item, idx) => {
               let rowHeaderColor = '#94a3b8';
               if (item.show) {
                 rowHeaderColor = item.isMulti ? item.multi[0]?.color : item.color;
               }
               const fixedRight = fixedRightLabels[item.id];
-              const isHovered = hoveredLineId === item.id;
+              const isHovered = hoveredRowId === item.id;
 
               return (
                 <div 
                   key={idx} 
                   style={{ display: 'grid', gridTemplateColumns: '240px 1fr 140px', alignItems: 'center' }}
-                  onMouseEnter={() => setHoveredLineId(item.id)}
-                  onMouseLeave={() => setHoveredLineId(null)}
+                  onMouseEnter={() => setHoveredRowId(item.id)}
+                  onMouseLeave={() => setHoveredRowId(null)}
                 >
                   
-                  {/* ชื่อเสียงวรรณยุกต์ด้านหน้า */}
-                  <div style={{ 
-                    textAlign: 'right', 
-                    paddingRight: '25px', 
-                    fontSize: `${isHovered ? labelFontSize * 1.16 : labelFontSize}px`, 
-                    color: isHovered ? (rowHeaderColor !== '#94a3b8' ? rowHeaderColor : '#334155') : rowHeaderColor, 
-                    fontWeight: 'bold',
-                    transform: isHovered ? 'scale(1.08)' : 'scale(1)',
-                    transformOrigin: 'right center',
-                    transition: 'all 0.18s ease'
-                  }}>
-                    {item.tone} <span style={{ fontSize: `${(isHovered ? labelFontSize * 1.16 : labelFontSize) - 2}px`, marginLeft: '6px' }}>[ {item.mark} ]</span>
+                  {/* ชื่อเสียงและสัญลักษณ์วรรณยุกต์หน้าเส้น (ขยายขนาดตาม Slider + Hover Zoom) */}
+                  <div 
+                    style={{ 
+                      textAlign: 'right', 
+                      paddingRight: '25px', 
+                      fontSize: `${isHovered ? labelFontSize * 1.15 : labelFontSize}px`, 
+                      color: rowHeaderColor, 
+                      fontWeight: 'bold',
+                      transition: 'all 0.15s ease',
+                      transform: isHovered ? 'scale(1.05)' : 'scale(1)'
+                    }}
+                  >
+                    {item.tone} <span style={{ fontSize: `${(isHovered ? labelFontSize * 1.15 : labelFontSize) - 2}px`, marginLeft: '6px' }}>[ {item.mark} ]</span>
                   </div>
 
-                  {/* เส้นบรรทัดและวงกลมคำศัพท์ */}
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '36px' }}>
-                    <div style={{ width: '100%', height: '3px', backgroundColor: isHovered ? '#64748b' : '#94a3b8', transition: 'background-color 0.18s ease' }}></div>
+                  {/* เส้นบรรทัดและวงกลมตัวอักษร */}
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '40px' }}>
+                    <div style={{ width: '100%', height: '3px', backgroundColor: '#94a3b8' }}></div>
 
-                    {/* วงกลมเดี่ยว */}
+                    {/* วงกลมเดี่ยว (ขนาดใหญ่ 60px + ฟอนต์ 24px + Hover Zoom) */}
                     {!item.isMulti && item.show && item.word && (
                       <div 
                         style={{
                           position: 'absolute',
                           left: item.leftPos,
-                          transform: isHovered ? 'translateX(-50%) scale(1.22)' : 'translateX(-50%) scale(1)',
-                          filter: isHovered ? 'brightness(1.15)' : 'brightness(1)',
+                          transform: `translateX(-50%) ${isHovered ? 'scale(1.2)' : 'scale(1)'}`,
                           backgroundColor: item.color,
                           color: circleTextColor,
-                          minWidth: '54px',
-                          height: '54px',
+                          minWidth: '60px',
+                          height: '60px',
                           padding: '0 12px',
-                          borderRadius: '27px',
+                          borderRadius: '30px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           fontWeight: 'bold',
-                          fontSize: '22px',
-                          boxShadow: isHovered ? '0 8px 20px rgba(0,0,0,0.3)' : '0 5px 14px rgba(0,0,0,0.22)',
+                          fontSize: '24px',
+                          boxShadow: isHovered ? '0 8px 20px rgba(0,0,0,0.35)' : '0 5px 14px rgba(0,0,0,0.22)',
                           cursor: 'pointer',
-                          transition: 'transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease'
+                          transition: 'all 0.15s ease',
+                          filter: isHovered ? 'brightness(1.12)' : 'brightness(1)'
                         }}
                       >
                         {item.word}
@@ -479,25 +557,25 @@ export default function App() {
                       <div style={{ position: 'absolute', left: item.leftPos, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '10px' }}>
                         {item.multi.map((circle, i) => (
                           <React.Fragment key={i}>
-                            {i > 0 && <span style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '22px' }}>/</span>}
+                            {i > 0 && <span style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '24px' }}>/</span>}
                             <div 
                               style={{
                                 backgroundColor: circle.color,
                                 color: circleTextColor,
-                                minWidth: '54px',
-                                height: '54px',
+                                minWidth: '60px',
+                                height: '60px',
                                 padding: '0 12px',
-                                borderRadius: '27px',
+                                borderRadius: '30px',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 fontWeight: 'bold',
-                                fontSize: '22px',
-                                transform: isHovered ? 'scale(1.22)' : 'scale(1)',
-                                filter: isHovered ? 'brightness(1.15)' : 'brightness(1)',
-                                boxShadow: isHovered ? '0 8px 20px rgba(0,0,0,0.3)' : '0 5px 14px rgba(0,0,0,0.22)',
+                                fontSize: '24px',
+                                boxShadow: isHovered ? '0 8px 20px rgba(0,0,0,0.35)' : '0 5px 14px rgba(0,0,0,0.22)',
                                 cursor: 'pointer',
-                                transition: 'transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease'
+                                transition: 'all 0.15s ease',
+                                transform: isHovered ? 'scale(1.2)' : 'scale(1)',
+                                filter: isHovered ? 'brightness(1.12)' : 'brightness(1)'
                               }}
                             >
                               {circle.text}
@@ -509,7 +587,7 @@ export default function App() {
                   </div>
 
                   {/* ระดับเสียงคงที่ด้านหลัง */}
-                  <div style={{ textAlign: 'center', color: fixedRight ? fixedRight.color : '#94a3b8', fontWeight: 'bold', fontSize: '19px' }}>
+                  <div style={{ textAlign: 'center', color: fixedRight ? fixedRight.color : '#94a3b8', fontWeight: 'bold', fontSize: '20px' }}>
                     {fixedRight ? fixedRight.text : ''}
                   </div>
 
@@ -555,12 +633,13 @@ export default function App() {
     );
   }
 
+  // 2. หน้าจอควบคุมหลัก (จอล่าง)
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5', padding: '24px 15px', fontFamily: "'Sarabun', sans-serif" }}>
+    <div style={{ minHeight: '100vh', padding: '24px 15px', fontFamily: "'Sarabun', sans-serif", transition: 'all 0.3s ease', ...getContainerBgStyle() }}>
       <div style={{ maxWidth: viewLayout === 'split' ? '1280px' : '920px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
         
         {/* แถบเครื่องมือมุมมองและปุ่มเปิดมอนิเตอร์ที่ 2 */}
-        <div style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.06)', flexWrap: 'wrap', gap: '12px', border: '1px solid #e2e8f0' }}>
+        <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '14px', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.06)', flexWrap: 'wrap', gap: '12px', border: '1px solid #e2e8f0', backdropFilter: 'blur(6px)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontWeight: 'bold', fontSize: '15px', color: '#1e293b' }}>🖥️ มุมมอง:</span>
             <button 
@@ -607,7 +686,6 @@ export default function App() {
           </button>
         </div>
 
-        {}
         <div style={{ display: 'grid', gridTemplateColumns: viewLayout === 'split' ? '400px 1fr' : '1fr', gap: '20px', alignItems: 'start' }}>
           
           {viewLayout !== 'present' && (
@@ -645,8 +723,8 @@ export default function App() {
                 </div>
               )}
 
-              {/* ตั้งค่าสี */}
-              <div style={{ marginBottom: '18px' }}>
+              {/* ปรับแต่งสีกรอบคำศัพท์ */}
+              <div style={{ marginBottom: '16px' }}>
                 <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#4b5563', marginBottom: '8px' }}>🎨 ตั้งค่าสีประจำหมู่ และสีตัวอักษร</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
                   <label style={{ height: '36px', backgroundColor: colorMid, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
@@ -668,11 +746,67 @@ export default function App() {
                 </div>
               </div>
 
-              {/* กำหนดขนาดตัวอักษรชื่อเสียงวรรณยุกต์หน้าเส้น */}
-              <div style={{ marginBottom: '18px', backgroundColor: '#f8fafc', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                  <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#334155' }}>📐 ขนาดชื่อเสียงวรรณยุกต์หน้าเส้น:</span>
-                  <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#0284c7', backgroundColor: '#e0f2fe', padding: '2px 8px', borderRadius: '6px' }}>{labelFontSize} px</span>
+              {/* เลือกสี/ภาพพื้นหลังจอภาพ */}
+              <div style={{ marginBottom: '16px', backgroundColor: '#f8fafc', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e293b', marginBottom: '8px' }}>🖼️ เลือกสีหรือรูปภาพพื้นหลังจอภาพ</div>
+                
+                {/* จานสีจานด่วน */}
+                <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', flexWrap: 'wrap' }}>
+                  {[
+                    { label: 'เทา', code: '#e2e8f0' },
+                    { label: 'สว่าง', code: '#f1f5f9' },
+                    { label: 'ฟ้าอ่อน', code: '#e0f2fe' },
+                    { label: 'มินต์', code: '#dcfce7' },
+                    { label: 'ส้มอ่อน', code: '#fef3c7' },
+                    { label: 'เข้ม', code: '#334155' }
+                  ].map((colorItem) => (
+                    <button
+                      key={colorItem.code}
+                      onClick={() => { setBgColor(colorItem.code); setBgType('color'); }}
+                      style={{
+                        backgroundColor: colorItem.code,
+                        border: bgColor === colorItem.code && bgType === 'color' ? '2px solid #0284c7' : '1px solid #cbd5e1',
+                        padding: '4px 8px',
+                        borderRadius: '6px',
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        color: colorItem.code === '#334155' ? '#fff' : '#1e293b',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {colorItem.label}
+                    </button>
+                  ))}
+                  
+                  {/* เลือกสี Custom */}
+                  <label style={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    เลือกสีเอง
+                    <input type="color" value={bgColor} onChange={(e) => { setBgColor(e.target.value); setBgType('color'); }} style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }} />
+                  </label>
+                </div>
+
+                {/* อัปโหลดไฟล์รูปภาพภายนอก */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <label style={{ backgroundColor: '#0284c7', color: '#fff', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'inline-block' }}>
+                    📁 อัปโหลดรูปภาพพื้นหลัง
+                    <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
+                  </label>
+                  {bgType === 'image' && (
+                    <button 
+                      onClick={() => { setBgType('color'); setBgImage(''); }}
+                      style={{ backgroundColor: '#ef4444', color: '#fff', border: 'none', padding: '6px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
+                    >
+                      ยกเลิกรูปภาพ
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Slider ปรับขนาดตัวหนังสือหน้าเส้น */}
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 'bold', color: '#4b5563', marginBottom: '4px' }}>
+                  <span>📐 ขนาดตัวหนังสือหน้าเส้น (จอที่ 2):</span>
+                  <span style={{ color: '#0284c7' }}>{labelFontSize}px</span>
                 </div>
                 <input 
                   type="range" 
@@ -680,7 +814,7 @@ export default function App() {
                   max="32" 
                   value={labelFontSize} 
                   onChange={(e) => setLabelFontSize(Number(e.target.value))}
-                  style={{ width: '100%', cursor: 'pointer', accentColor: '#0284c7' }}
+                  style={{ width: '100%', cursor: 'pointer' }}
                 />
               </div>
 
@@ -707,10 +841,13 @@ export default function App() {
                   <input 
                     type="text" 
                     value={inputText} 
-                    onChange={(e) => setInputText(e.target.value)}
+                    onChange={(e) => {
+                      setInputText(e.target.value);
+                      validateInput(e.target.value);
+                    }}
                     onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
-                    placeholder="พิมพ์คำ เช่น เมา, กา, ขอ" 
-                    style={{ flex: 1, padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '15px' }}
+                    placeholder="พิมพ์ 1 คำ เช่น เมา, กวาง, ครู" 
+                    style={{ flex: 1, padding: '8px 12px', borderRadius: '8px', border: inputError ? '2px solid #ef4444' : '1px solid #cbd5e1', fontSize: '15px' }}
                   />
                   <button 
                     onClick={handleGenerate}
@@ -720,9 +857,10 @@ export default function App() {
                     {loading ? '...' : 'ผันคำ'}
                   </button>
                 </div>
+                {inputError && <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px', fontWeight: 'bold' }}>{inputError}</div>}
               </div>
 
-              {}
+              {/* เลือกพยัญชนะด่วน */}
               <div style={{ marginBottom: '16px' }}>
                 <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', marginBottom: '6px' }}>⌨️ เลือกพยัญชนะด่วน:</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
@@ -747,7 +885,7 @@ export default function App() {
                 </div>
               </div>
 
-              {}
+              {/* เลือกสระด่วน */}
               <div>
                 <div style={{ fontSize: '12px', color: '#166534', fontWeight: 'bold', marginBottom: '6px' }}>🟢 สระเสียงยาว (คำเป็น):</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '12px' }}>
@@ -779,21 +917,21 @@ export default function App() {
             </div>
           )}
 
-          {}
-          <div style={{ backgroundColor: '#ffffff', borderRadius: '16px', padding: viewLayout === 'present' ? '40px 50px' : '35px 25px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
+          {/* กระดานบรรทัด 5 เส้น (จอล่าง) */}
+          <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '16px', padding: viewLayout === 'present' ? '40px 50px' : '35px 25px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', backdropFilter: 'blur(6px)' }}>
             
             <h2 style={{ textAlign: 'center', color: '#ea580c', fontSize: '28px', fontWeight: 'bold', margin: '0 0 20px 0' }}>
               ไตรยางศ์ หรือ อักษร 3 หมู่
             </h2>
 
             {analysisInfo.desc && (
-              <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '10px 16px', borderRadius: '10px', marginBottom: '20px', textAlign: 'center', fontSize: '14px', color: '#0369a1', fontWeight: 'bold' }}>
-                📌 ผลวิเคราะห์หลักภาษา: <span style={{ color: '#0284c7' }}>"{analysisInfo.displayWord || inputText}"</span> เป็น <span style={{ backgroundColor: '#e0f2fe', padding: '2px 8px', borderRadius: '4px' }}>{analysisInfo.type} ({analysisInfo.vowelLen})</span> — {analysisInfo.desc}
+              <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '10px 16px', borderRadius: '10px', marginBottom: '25px', textAlign: 'center', fontSize: '14px', color: '#0369a1', fontWeight: 'bold' }}>
+                📌 ผลวิเคราะห์หลักภาษา: <span style={{ color: '#0284c7' }}>"{inputText}"</span> เป็น <span style={{ backgroundColor: '#e0f2fe', padding: '2px 8px', borderRadius: '4px' }}>{analysisInfo.type} ({analysisInfo.vowelLen})</span> — {analysisInfo.desc}
               </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 110px', marginTop: '2px', marginBottom: '-2px', color: '#64748b', fontWeight: 'bold', fontSize: '15px' }}>
-              <div style={{ textAlign: 'right', paddingRight: '20px', color: '#475569', letterSpacing: '0.5px' }}>รูปวรรณยุกต์</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 110px', color: '#64748b', fontWeight: 'bold', fontSize: '14px', marginBottom: '4px' }}>
+              <div style={{ textAlign: 'right', paddingRight: '20px', color: '#475569', fontStyle: 'italic' }}>รูปวรรณยุกต์</div>
               <div></div>
               <div></div>
             </div>
@@ -805,39 +943,40 @@ export default function App() {
                   rowHeaderColor = item.isMulti ? item.multi[0]?.color : item.color;
                 }
                 const fixedRight = fixedRightLabels[item.id];
-                const isHovered = hoveredLineId === item.id;
+                const isHovered = hoveredRowId === item.id;
 
                 return (
                   <div 
                     key={idx} 
                     style={{ display: 'grid', gridTemplateColumns: '220px 1fr 110px', alignItems: 'center' }}
-                    onMouseEnter={() => setHoveredLineId(item.id)}
-                    onMouseLeave={() => setHoveredLineId(null)}
+                    onMouseEnter={() => setHoveredRowId(item.id)}
+                    onMouseLeave={() => setHoveredRowId(null)}
                   >
-                    {/* ชื่อเสียงวรรณยุกต์ด้านหน้า */}
-                    <div style={{ 
-                      textAlign: 'right', 
-                      paddingRight: '20px', 
-                      fontSize: `${isHovered ? 19 : 17}px`, 
-                      color: isHovered ? (rowHeaderColor !== '#94a3b8' ? rowHeaderColor : '#334155') : rowHeaderColor, 
-                      fontWeight: 'bold',
-                      transform: isHovered ? 'scale(1.08)' : 'scale(1)',
-                      transformOrigin: 'right center',
-                      transition: 'all 0.18s ease'
-                    }}>
+                    
+                    {/* ชื่อเสียงและสัญลักษณ์วรรณยุกต์ (Hover Zoom) */}
+                    <div 
+                      style={{ 
+                        textAlign: 'right', 
+                        paddingRight: '20px', 
+                        fontSize: `${isHovered ? 19 : 17}px`, 
+                        color: rowHeaderColor, 
+                        fontWeight: 'bold', 
+                        transition: 'all 0.15s ease',
+                        transform: isHovered ? 'scale(1.05)' : 'scale(1)'
+                      }}
+                    >
                       {item.tone} <span style={{ fontSize: `${isHovered ? 19 : 17}px`, marginLeft: '4px', letterSpacing: '1px' }}>[ {item.mark} ]</span>
                     </div>
 
                     <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '30px' }}>
-                      <div style={{ width: '100%', height: '2px', backgroundColor: isHovered ? '#64748b' : '#94a3b8', transition: 'background-color 0.18s ease' }}></div>
+                      <div style={{ width: '100%', height: '2px', backgroundColor: '#94a3b8' }}></div>
 
                       {!item.isMulti && item.show && item.word && (
                         <div 
                           style={{
                             position: 'absolute',
                             left: item.leftPos,
-                            transform: isHovered ? 'translateX(-50%) scale(1.18)' : 'translateX(-50%) scale(1)',
-                            filter: isHovered ? 'brightness(1.15)' : 'brightness(1)',
+                            transform: `translateX(-50%) ${isHovered ? 'scale(1.18)' : 'scale(1)'}`,
                             backgroundColor: item.color,
                             color: circleTextColor,
                             minWidth: '46px',
@@ -851,7 +990,8 @@ export default function App() {
                             fontSize: '18px',
                             boxShadow: isHovered ? '0 6px 16px rgba(0,0,0,0.3)' : '0 3px 8px rgba(0,0,0,0.25)',
                             cursor: 'pointer',
-                            transition: 'transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease'
+                            transition: 'all 0.15s ease',
+                            filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                           }}
                         >
                           {item.word}
@@ -876,11 +1016,11 @@ export default function App() {
                                   justifyContent: 'center',
                                   fontWeight: 'bold',
                                   fontSize: '18px',
-                                  transform: isHovered ? 'scale(1.18)' : 'scale(1)',
-                                  filter: isHovered ? 'brightness(1.15)' : 'brightness(1)',
                                   boxShadow: isHovered ? '0 6px 16px rgba(0,0,0,0.3)' : '0 3px 8px rgba(0,0,0,0.25)',
                                   cursor: 'pointer',
-                                  transition: 'transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease'
+                                  transition: 'all 0.15s ease',
+                                  transform: isHovered ? 'scale(1.18)' : 'scale(1)',
+                                  filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                                 }}
                               >
                                 {circle.text}
