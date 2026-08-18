@@ -1,9 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+
+// ใช้ API Key จากสภาพแวดล้อมรันไทม์
+const apiKey = "";
 
 export default function App() {
-  // บันทึกและดึง Gemini API Key จาก LocalStorage
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
-  const [tempApiKey, setTempApiKey] = useState(apiKey);
+  // บันทึกและดึง Custom API Key (ถ้ามี) จาก LocalStorage
+  const [customApiKey, setCustomApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
+  const [tempApiKey, setTempApiKey] = useState(customApiKey);
   const [showApiInput, setShowApiInput] = useState(false);
   const [apiSaveStatus, setApiSaveStatus] = useState('');
 
@@ -16,6 +19,16 @@ export default function App() {
   const [inputText, setInputText] = useState('กอ');
   const [inputError, setInputError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // การตั้งค่าเสียงและการเล่นคำศัพท์
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [speakingWord, setSpeakingWord] = useState('');
+  const [isPlayingSequence, setIsPlayingSequence] = useState(false);
+  const [ttsVoice, setTtsVoice] = useState('Kore'); // 'Kore' | 'Aoede' | 'Callirrhoe' | 'Puck' | 'Fenrir' | 'Orus' | 'Algieba'
+  
+  const lastSpokenRef = useRef('');
+  const audioContextRef = useRef(null);
+  const currentAudioSourceRef = useRef(null);
 
   // การตั้งค่าสีและขนาดฟอนต์
   const [colorMid, setColorMid] = useState('#22c55e');    // กลาง (เขียว)
@@ -107,7 +120,7 @@ export default function App() {
     
     if (isDisplayWindow) {
       channel.onmessage = (event) => {
-        const { lines, info, text, cText, cMid, cHigh, cLow, fontSize, bType, bColor, bImg } = event.data;
+        const { lines, info, text, cText, cMid, cHigh, cLow, fontSize, bType, bColor, bImg, activeRowId, sWord } = event.data;
         if (lines) setLinesData(lines);
         if (info) setAnalysisInfo(info);
         if (text) setInputText(text);
@@ -119,6 +132,8 @@ export default function App() {
         if (bType) setBgType(bType);
         if (bColor) setBgColor(bColor);
         if (bImg !== undefined) setBgImage(bImg);
+        if (activeRowId !== undefined) setHoveredRowId(activeRowId);
+        if (sWord !== undefined) setSpeakingWord(sWord);
       };
     } else {
       channel.postMessage({
@@ -132,12 +147,200 @@ export default function App() {
         fontSize: labelFontSize,
         bType: bgType,
         bColor: bgColor,
-        bImg: bgImage
+        bImg: bgImage,
+        activeRowId: hoveredRowId,
+        sWord: speakingWord
       });
     }
 
     return () => channel.close();
-  }, [linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, labelFontSize, bgType, bgColor, bgImage, isDisplayWindow]);
+  }, [linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, labelFontSize, bgType, bgColor, bgImage, hoveredRowId, speakingWord, isDisplayWindow]);
+
+  // หยุดเล่นเสียงทั้งหมดทันที (ตัดเสียงซ้ำ/ซ้อน)
+  const stopAllAudio = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    if (currentAudioSourceRef.current) {
+      try {
+        currentAudioSourceRef.current.stop();
+        currentAudioSourceRef.current.disconnect();
+      } catch (e) {}
+      currentAudioSourceRef.current = null;
+    }
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      try {
+        audioContextRef.current.close();
+      } catch (e) {}
+      audioContextRef.current = null;
+    }
+  };
+
+  // เล่นไฟล์ PCM16 Audio จาก Gemini TTS
+  const playPcm16Audio = async (base64Data, sampleRate = 24000) => {
+    stopAllAudio();
+    const binaryString = atob(base64Data);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const int16Array = new Int16Array(bytes.buffer);
+    
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate });
+    audioContextRef.current = audioCtx;
+
+    const buffer = audioCtx.createBuffer(1, int16Array.length, sampleRate);
+    const channelData = buffer.getChannelData(0);
+    for (let i = 0; i < int16Array.length; i++) {
+      channelData[i] = int16Array[i] / 32768.0;
+    }
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioCtx.destination);
+    currentAudioSourceRef.current = source;
+
+    return new Promise((resolve) => {
+      source.onended = () => {
+        if (currentAudioSourceRef.current === source) {
+          currentAudioSourceRef.current = null;
+        }
+        resolve();
+      };
+      source.start(0);
+    });
+  };
+
+  // เรียก Gemini 2.5 Flash TTS API
+  const fetchGeminiTts = async (textToSpeak) => {
+    const activeKey = customApiKey.trim() || apiKey;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${activeKey}`;
+    
+    // กำหนดคำสั่งกำกับเสียงเฉพาะ เพื่อป้องกันไม่ให้ AI อ่านสะกดตัวอักษร
+    const promptText = `Say clearly as a single Thai spoken word with exact tone pitch inflection: ${textToSpeak}`;
+    
+    const payload = {
+      contents: [{ parts: [{ text: promptText }] }],
+      generationConfig: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: ttsVoice }
+          }
+        }
+      },
+      model: "gemini-2.5-flash-preview-tts"
+    };
+
+    let delays = [1000, 2000, 4000, 8000, 16000];
+    for (let i = 0; i <= 5; i++) {
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const inlineData = data.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+        if (inlineData && inlineData.data) {
+          let sRate = 24000;
+          if (inlineData.mimeType && inlineData.mimeType.includes('rate=')) {
+            const match = inlineData.mimeType.match(/rate=(\d+)/);
+            if (match) sRate = parseInt(match[1], 10);
+          }
+          return { audioData: inlineData.data, sampleRate: sRate };
+        }
+      } catch (err) {
+        if (i === 5) throw err;
+        await new Promise(r => setTimeout(r, delays[i]));
+      }
+    }
+    throw new Error('Gemini TTS Failed');
+  };
+
+  // ระบบสำรองกรณีออฟไลน์ (Browser SpeechSynthesis Fallback)
+  const speakBrowserSpeech = (text, toneId) => {
+    return new Promise((resolve) => {
+      if (!('speechSynthesis' in window)) {
+        resolve();
+        return;
+      }
+      stopAllAudio();
+      
+      // เติมคำว่า "คำว่า " เพื่อป้องกันไม่ให้เอนจินของเบราว์เซอร์อ่านสะกดตัวอักษร
+      const speechText = text.length <= 4 ? `คำว่า ${text}` : text;
+      const utterance = new SpeechSynthesisUtterance(speechText);
+      utterance.lang = 'th-TH';
+
+      // ปรับระดับ Pitch ตามเสียงวรรณยุกต์สำหรับเบราว์เซอร์
+      if (toneId === 1) { utterance.pitch = 1.0; utterance.rate = 0.85; }
+      else if (toneId === 2) { utterance.pitch = 0.75; utterance.rate = 0.8; }
+      else if (toneId === 3) { utterance.pitch = 0.9; utterance.rate = 0.8; }
+      else if (toneId === 4) { utterance.pitch = 1.2; utterance.rate = 0.85; }
+      else if (toneId === 5) { utterance.pitch = 1.3; utterance.rate = 0.85; }
+      else { utterance.pitch = 1.0; utterance.rate = 0.85; }
+
+      const voices = window.speechSynthesis.getVoices();
+      const thaiVoice = voices.find(v => v.lang === 'th-TH' || v.lang.startsWith('th')) || voices.find(v => v.name.toLowerCase().includes('thai'));
+      if (thaiVoice) {
+        utterance.voice = thaiVoice;
+      }
+
+      utterance.onend = () => resolve();
+      utterance.onerror = () => resolve();
+      window.speechSynthesis.speak(utterance);
+    });
+  };
+
+  // ระบบ AI เปล่งเสียงคนเดียว คำเดียว ไม่ซ้อน
+  const speakWord = async (text, toneId) => {
+    // จอที่ 2 (Display Monitor) ล็อกปิดเสียงถาวร เพื่อให้เสียงออกที่โน้ตบุ๊กหลักจอเดียว
+    if (!soundEnabled || !text || isDisplayWindow) return;
+
+    stopAllAudio();
+    setSpeakingWord(text);
+    lastSpokenRef.current = text;
+
+    try {
+      // 1. เรียกใช้ Gemini 2.5 Flash High-Quality TTS เป็นหลัก
+      const ttsResult = await fetchGeminiTts(text);
+      await playPcm16Audio(ttsResult.audioData, ttsResult.sampleRate);
+    } catch (e) {
+      // 2. หากเรียก Gemini TTS ไม่ผ่าน ให้ใช้ระบบสำรอง
+      await speakBrowserSpeech(text, toneId);
+    } finally {
+      if (lastSpokenRef.current === text) {
+        setSpeakingWord('');
+      }
+    }
+  };
+
+  // เล่นเสียงผันคำเรียงบรรทัด (ออกเสียงเพียง 1 คำต่อ 1 บรรทัดวรรณยุกต์)
+  const handlePlayToneSequence = async () => {
+    if (isDisplayWindow) return;
+    if (!soundEnabled) setSoundEnabled(true);
+
+    stopAllAudio();
+    setIsPlayingSequence(true);
+
+    // เรียงบรรทัดจาก สามัญ (id=1) ขึ้นไปหา จัตวา (id=5)
+    const sortedLines = [...linesData].sort((a, b) => a.id - b.id).filter(item => item.show);
+
+    for (let item of sortedLines) {
+      // ดึงเฉพาะคำแรกของบรรทัดมาออกเสียงเพียงคำเดียว
+      const wordToSpeak = item.isMulti ? item.multi[0]?.text : item.word;
+      if (wordToSpeak) {
+        setHoveredRowId(item.id);
+        await speakWord(wordToSpeak, item.id);
+        await new Promise(r => setTimeout(r, 220));
+      }
+    }
+
+    setHoveredRowId(null);
+    setSpeakingWord('');
+    setIsPlayingSequence(false);
+  };
 
   // ฟังก์ชันแยกพยัญชนะ (รองรับคำควบกล้ำ) และสระ
   const parseThaiWord = (word) => {
@@ -153,7 +356,6 @@ export default function App() {
     let rearVowel = '';
     let toneMark = '';
 
-    // ตรวจสอบพยัญชนะต้นควบกล้ำ 2 ตัว
     if (workStr.length >= 2 && thaiClusters.includes(workStr.slice(0, 2))) {
       initial = workStr.slice(0, 2);
       workStr = workStr.slice(2);
@@ -177,7 +379,6 @@ export default function App() {
     return `${frontVowel}${consonant}${tone}${rearVowel}`;
   };
 
-  // ตรวจสอบความถูกต้องของการกรอกข้อมูล (จำกัด 1 คำ / ควบกล้ำ)
   const validateInput = (word) => {
     if (!word || word.trim() === '') {
       setInputError('กรุณากรอกคำศัพท์');
@@ -319,7 +520,6 @@ export default function App() {
     setLinesData(calculateTones(inputText, mode, colorMid, colorHigh, colorLow));
   }, [inputText, mode, colorMid, colorHigh, colorLow]);
 
-  // ฟังก์ชันอัปโหลดภาพพื้นหลัง
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -339,7 +539,7 @@ export default function App() {
 
   const handleSaveApiKey = () => {
     localStorage.setItem('gemini_api_key', tempApiKey.trim());
-    setApiKey(tempApiKey.trim());
+    setCustomApiKey(tempApiKey.trim());
     setApiSaveStatus('บันทึก API Key เรียบร้อยแล้ว!');
     setTimeout(() => setApiSaveStatus(''), 3000);
   };
@@ -361,7 +561,8 @@ export default function App() {
     const word = inputText.trim();
     if (!validateInput(word)) return;
 
-    if (!apiKey) {
+    const activeKey = customApiKey.trim() || apiKey;
+    if (!activeKey) {
       setLinesData(calculateTones(word, mode, colorMid, colorHigh, colorLow));
       return;
     }
@@ -370,7 +571,7 @@ export default function App() {
     try {
       const promptText = `วิเคราะห์การผันวรรณยุกต์ภาษาไทยของคำว่า "${word}" (รองรับคำควบกล้ำ) ส่งคืนเฉพาะ JSON array 5 รายการเรียงจาก จัตวา, ตรี, โท, เอก, สามัญ รูปแบบ: [{"tone":"เสียงจัตวา","word":"เหมา","type":"high"},{"tone":"เสียงตรี","word":"เม้า","type":"low"},{"tone":"เสียงโท","words":["เม่า","เหม้า"],"type":"pair"},{"tone":"เสียงเอก","word":"เหม่","type":"high"},{"tone":"เสียงสามัญ","word":"เมา","type":"low"}]`;
       
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${activeKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contents: [{ parts: [{ text: promptText }] }] })
@@ -430,7 +631,6 @@ export default function App() {
     1: { text: 'เสียงต่ำ', color: '#007bff' }
   };
 
-  // คำนวณการแสดงผลสไตล์พื้นหลัง
   const getContainerBgStyle = () => {
     if (bgType === 'image' && bgImage) {
       return {
@@ -443,7 +643,7 @@ export default function App() {
     return { backgroundColor: bgColor };
   };
 
-  // 1. หน้าจอที่สอง (Display Monitor): ปรับ Auto-Scale ตามการย่อ-ขยายหน้าจออัตโนมัติ
+  // 1. หน้าจอที่สอง (Display Monitor): แสดงผลกระดาน Auto-Scale (ไร้เสียงอ่านเพื่อป้องกันเสียงแทรก)
   if (isDisplayWindow) {
     return (
       <div 
@@ -464,7 +664,6 @@ export default function App() {
           ...getContainerBgStyle()
         }}
       >
-        {/* บอร์ดกระดานสีขาว Auto-Scale ตามสัดส่วนหน้าจอ (~70vw x ~70vh) */}
         <div 
           style={{ 
             width: 'clamp(320px, 70vw, 1200px)', 
@@ -483,7 +682,6 @@ export default function App() {
             backdropFilter: 'blur(8px)' 
           }}
         >
-          {/* ส่วนหัวกระดาน */}
           <div style={{ textAlign: 'center' }}>
             <h2 style={{ margin: '0 0 2px 0', color: '#ea580c', fontSize: 'clamp(22px, 2.4vw, 34px)', fontWeight: 'bold' }}>
               ไตรยางศ์ หรือ อักษร 3 หมู่
@@ -498,7 +696,6 @@ export default function App() {
               </div>
             )}
 
-            {/* เลื่อนคำว่า "รูปวรรณยุกต์" ลงมาชิดเหนือวงเล็บ [ ◌๋ ] บรรทัดแรก */}
             <div style={{ display: 'grid', gridTemplateColumns: 'clamp(150px, 20vw, 250px) 1fr clamp(80px, 10vw, 140px)', color: '#64748b', fontWeight: 'bold', fontSize: 'clamp(12px, 1.1vw, 16px)', margin: '0 0 -2px 0' }}>
               <div style={{ textAlign: 'right', paddingRight: '20px', color: '#475569', fontStyle: 'italic' }}>รูปวรรณยุกต์</div>
               <div></div>
@@ -506,7 +703,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* บรรทัด 5 เส้น Auto-Scale */}
           <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', flex: 1, padding: '4px 0' }}>
             {linesData.map((item, idx) => {
               let rowHeaderColor = '#94a3b8';
@@ -523,8 +719,6 @@ export default function App() {
                   onMouseEnter={() => setHoveredRowId(item.id)}
                   onMouseLeave={() => setHoveredRowId(null)}
                 >
-                  
-                  {/* ชื่อเสียงและสัญลักษณ์วรรณยุกต์หน้าเส้น */}
                   <div 
                     style={{ 
                       textAlign: 'right', 
@@ -533,23 +727,21 @@ export default function App() {
                       color: rowHeaderColor, 
                       fontWeight: 'bold',
                       transition: 'all 0.15s ease',
-                      transform: isHovered ? 'scale(1.05)' : 'scale(1)'
+                      transform: isHovered ? 'scale(1.08)' : 'scale(1)'
                     }}
                   >
                     {item.tone} <span style={{ fontSize: '0.9em', marginLeft: '4px' }}>[ {item.mark} ]</span>
                   </div>
 
-                  {/* เส้นบรรทัดและวงกลมตัวอักษร Auto-Scale */}
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: 'clamp(28px, 4vh, 44px)' }}>
                     <div style={{ width: '100%', height: '3px', backgroundColor: '#94a3b8' }}></div>
 
-                    {/* วงกลมเดี่ยว */}
                     {!item.isMulti && item.show && item.word && (
                       <div 
                         style={{
                           position: 'absolute',
                           left: item.leftPos,
-                          transform: `translateX(-50%) ${isHovered ? 'scale(1.18)' : 'scale(1)'}`,
+                          transform: `translateX(-50%) ${isHovered ? 'scale(1.22)' : 'scale(1)'}`,
                           backgroundColor: item.color,
                           color: circleTextColor,
                           minWidth: 'clamp(42px, 4.2vw, 64px)',
@@ -564,14 +756,13 @@ export default function App() {
                           boxShadow: isHovered ? '0 8px 20px rgba(0,0,0,0.35)' : '0 5px 14px rgba(0,0,0,0.22)',
                           cursor: 'pointer',
                           transition: 'all 0.15s ease',
-                          filter: isHovered ? 'brightness(1.12)' : 'brightness(1)'
+                          filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                         }}
                       >
                         {item.word}
                       </div>
                     )}
 
-                    {/* วงกลมคู่สำหรับเสียงโท */}
                     {item.isMulti && item.show && (
                       <div style={{ position: 'absolute', left: item.leftPos, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         {item.multi.map((circle, i) => (
@@ -593,8 +784,8 @@ export default function App() {
                                 boxShadow: isHovered ? '0 8px 20px rgba(0,0,0,0.35)' : '0 5px 14px rgba(0,0,0,0.22)',
                                 cursor: 'pointer',
                                 transition: 'all 0.15s ease',
-                                transform: isHovered ? 'scale(1.18)' : 'scale(1)',
-                                filter: isHovered ? 'brightness(1.12)' : 'brightness(1)'
+                                transform: isHovered ? 'scale(1.22)' : 'scale(1)',
+                                filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                               }}
                             >
                               {circle.text}
@@ -605,7 +796,6 @@ export default function App() {
                     )}
                   </div>
 
-                  {/* ระดับเสียงคงที่ด้านหลัง */}
                   <div style={{ textAlign: 'center', color: fixedRight ? fixedRight.color : '#94a3b8', fontWeight: 'bold', fontSize: 'clamp(13px, 1.3vw, 21px)' }}>
                     {fixedRight ? fixedRight.text : ''}
                   </div>
@@ -617,7 +807,6 @@ export default function App() {
 
         </div>
 
-        {/* ปุ่มสลับเต็มจออยู่ที่มุมล่างขวา */}
         <button 
           onClick={() => {
             if (!document.fullscreenElement) {
@@ -657,7 +846,7 @@ export default function App() {
     <div style={{ minHeight: '100vh', padding: '24px 15px', fontFamily: "'Sarabun', sans-serif", transition: 'all 0.3s ease', ...getContainerBgStyle() }}>
       <div style={{ maxWidth: viewLayout === 'split' ? '1280px' : '920px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
         
-        {/* แถบเครื่องมือมุมมองและปุ่มเปิดมอนิเตอร์ที่ 2 */}
+        {/* แถบมุมมองและเปิดจอที่ 2 */}
         <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '14px', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.06)', flexWrap: 'wrap', gap: '12px', border: '1px solid #e2e8f0', backdropFilter: 'blur(6px)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontWeight: 'bold', fontSize: '15px', color: '#1e293b' }}>🖥️ มุมมอง:</span>
@@ -705,72 +894,213 @@ export default function App() {
           </button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: viewLayout === 'split' ? '400px 1fr' : '1fr', gap: '20px', alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: viewLayout === 'split' ? '410px 1fr' : '1fr', gap: '20px', alignItems: 'start' }}>
           
           {viewLayout !== 'present' && (
-            <div style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '24px', boxShadow: '0 4px 14px rgba(0,0,0,0.06)', border: '1px solid #e5e7eb' }}>
+            <div style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '20px', boxShadow: '0 4px 14px rgba(0,0,0,0.06)', border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#1f2937' }}>⚙️ แผงควบคุม</h3>
-                <button 
-                  onClick={() => setShowApiInput(!showApiInput)}
-                  style={{ background: '#f8fafc', border: '1px solid #cbd5e1', padding: '5px 10px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: '#475569', fontWeight: 'bold' }}
-                >
-                  🔑 {apiKey ? 'เปลี่ยน Key' : 'เชื่อมต่อ AI'}
-                </button>
+                
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  {/* ตัวเลือกโมเดลเสียง AI ชาย/หญิง คมชัดแยกตามโค้ด */}
+                  <select 
+                    value={ttsVoice} 
+                    onChange={(e) => setTtsVoice(e.target.value)}
+                    style={{ padding: '5px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '11px', fontWeight: 'bold', backgroundColor: '#f8fafc', color: '#1e293b' }}
+                  >
+                    <option value="Kore">👩 หญิง - Kore (นุ่มนวล)</option>
+                    <option value="Aoede">👩 หญิง - Aoede (สดใส)</option>
+                    <option value="Callirrhoe">👩 หญิง - Callirrhoe (สไตล์ครู)</option>
+                    <option value="Puck">👨 ชาย - Puck (ทุ้ม มีพลัง)</option>
+                    <option value="Fenrir">👨 ชาย - Fenrir (นุ่มนวล)</option>
+                    <option value="Orus">👨 ชาย - Orus (สดใส)</option>
+                    <option value="Algieba">👨 ชาย - Algieba (สุภาพ)</option>
+                  </select>
+
+                  <button 
+                    onClick={() => {
+                      const next = !soundEnabled;
+                      setSoundEnabled(next);
+                      if (!next) stopAllAudio();
+                    }}
+                    style={{
+                      backgroundColor: soundEnabled ? '#dcfce7' : '#f1f5f9',
+                      color: soundEnabled ? '#15803d' : '#64748b',
+                      border: soundEnabled ? '1px solid #86efac' : '1px solid #cbd5e1',
+                      padding: '5px 10px',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {soundEnabled ? '🔊 เสียงเปิด' : '🔇 เสียงปิด'}
+                  </button>
+                </div>
               </div>
 
-              {showApiInput && (
-                <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '10px', border: '1px dashed #94a3b8' }}>
+              {/* 1. ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ */}
+              <div style={{ backgroundColor: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#1f2937', marginBottom: '8px' }}>✨ ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ</div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px', fontSize: '13px', color: '#334155' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                    <input type="radio" name="mode" checked={mode === 'full5'} onChange={() => setMode('full5')} />
+                    ผันครบทั้ง 5 บรรทัด (อักษรคู่ / ห นำ)
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                    <input type="radio" name="mode" checked={mode === 'highOnly'} onChange={() => setMode('highOnly')} />
+                    เฉพาะเสียงสูง (เอก, โท, จัตวา)
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                    <input type="radio" name="mode" checked={mode === 'lowOnly'} onChange={() => setMode('lowOnly')} />
+                    เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)
+                  </label>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <input 
+                    type="text" 
+                    value={inputText} 
+                    onChange={(e) => {
+                      setInputText(e.target.value);
+                      validateInput(e.target.value);
+                    }}
+                    onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
+                    placeholder="พิมพ์ 1 คำ เช่น กอ, เมา, กวาง" 
+                    style={{ 
+                      width: '100%', 
+                      padding: '8px 12px', 
+                      borderRadius: '8px', 
+                      border: inputError ? '2px solid #ef4444' : '1px solid #cbd5e1', 
+                      fontSize: '15px',
+                      backgroundColor: '#f1f5f9',
+                      color: '#0f172a',
+                      fontWeight: '600',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                  
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <input 
-                      type="password" 
-                      placeholder="วาง Gemini API Key..." 
-                      value={tempApiKey} 
-                      onChange={(e) => setTempApiKey(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSaveApiKey()}
-                      style={{ flex: 1, padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
-                    />
                     <button 
-                      onClick={handleSaveApiKey}
-                      style={{ backgroundColor: '#10b981', color: '#ffffff', border: 'none', padding: '0 14px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}
+                      onClick={handleGenerate}
+                      disabled={loading}
+                      style={{ flex: 1, backgroundColor: '#0284c7', color: '#ffffff', border: 'none', padding: '8px 12px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px' }}
                     >
-                      บันทึก
+                      {loading ? '...' : 'ผันคำ'}
+                    </button>
+
+                    <button 
+                      onClick={handlePlayToneSequence}
+                      disabled={isPlayingSequence}
+                      style={{ 
+                        flex: 1.2, 
+                        backgroundColor: isPlayingSequence ? '#ea580c' : '#16a34a', 
+                        color: '#ffffff', 
+                        border: 'none', 
+                        padding: '8px 12px', 
+                        borderRadius: '8px', 
+                        fontWeight: 'bold', 
+                        cursor: 'pointer', 
+                        fontSize: '13px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      {isPlayingSequence ? '🔊 กำลังผันเสียง...' : '🔊 เล่นผันเสียง'}
                     </button>
                   </div>
-                  {apiSaveStatus && <div style={{ color: '#059669', fontSize: '12px', marginTop: '6px', fontWeight: 'bold' }}>✓ {apiSaveStatus}</div>}
                 </div>
-              )}
+                {inputError && <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px', fontWeight: 'bold' }}>{inputError}</div>}
+              </div>
 
-              {/* ปรับแต่งสีกรอบคำศัพท์ */}
-              <div style={{ marginBottom: '16px' }}>
+              {/* 2. เลือกพยัญชนะด่วน */}
+              <div>
+                <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', marginBottom: '6px' }}>⌨️ เลือกพยัญชนะด่วน:</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                  {quickConsonants.map((c) => (
+                    <button 
+                      key={c}
+                      onClick={() => handleQuickConsonantClick(c)}
+                      style={{ 
+                        padding: '4px 7px', 
+                        borderRadius: '5px', 
+                        border: '1px solid #cbd5e1', 
+                        backgroundColor: '#ffffff', 
+                        fontSize: '13px', 
+                        fontWeight: 'bold', 
+                        cursor: 'pointer',
+                        color: midConsonants.includes(c) ? colorMid : highConsonants.includes(c) ? colorHigh : colorLow
+                      }}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 3. เลือกสระด่วน สระเสียงยาว/สระเสียงสั้น */}
+              <div>
+                <div style={{ fontSize: '12px', color: '#166534', fontWeight: 'bold', marginBottom: '6px' }}>🟢 สระเสียงยาว (คำเป็น):</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '10px' }}>
+                  {longVowels.map((v) => (
+                    <button 
+                      key={v.label}
+                      onClick={() => handleQuickVowelClick(v)}
+                      style={{ padding: '4px 8px', borderRadius: '5px', border: '1px solid #bbf7d0', backgroundColor: '#f0fdf4', color: '#15803d', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}
+                    >
+                      {v.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ fontSize: '12px', color: '#991b1b', fontWeight: 'bold', marginBottom: '6px' }}>🔴 สระเสียงสั้น (คำตาย):</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                  {shortVowels.map((v) => (
+                    <button 
+                      key={v.label}
+                      onClick={() => handleQuickVowelClick(v)}
+                      style={{ padding: '4px 8px', borderRadius: '5px', border: '1px solid #fecaca', backgroundColor: '#fef2f2', color: '#b91c1c', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}
+                    >
+                      {v.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <hr style={{ border: 'none', borderTop: '1px solid #f1f5f9', margin: '4px 0' }} />
+
+              {/* 4. การตั้งค่าสีประจำหมู่ */}
+              <div>
                 <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#4b5563', marginBottom: '8px' }}>🎨 ตั้งค่าสีประจำหมู่ และสีตัวอักษร</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
-                  <label style={{ height: '36px', backgroundColor: colorMid, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
+                  <label style={{ height: '34px', backgroundColor: colorMid, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
                     อักษรกลาง
                     <input type="color" value={colorMid} onChange={(e) => setColorMid(e.target.value)} style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }} />
                   </label>
-                  <label style={{ height: '36px', backgroundColor: colorHigh, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
+                  <label style={{ height: '34px', backgroundColor: colorHigh, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
                     อักษรสูง
                     <input type="color" value={colorHigh} onChange={(e) => setColorHigh(e.target.value)} style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }} />
                   </label>
-                  <label style={{ height: '36px', backgroundColor: colorLow, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
+                  <label style={{ height: '34px', backgroundColor: colorLow, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
                     อักษรต่ำ
                     <input type="color" value={colorLow} onChange={(e) => setColorLow(e.target.value)} style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }} />
                   </label>
-                  <label style={{ height: '36px', backgroundColor: '#334155', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: circleTextColor, fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', border: '1px solid #cbd5e1' }}>
+                  <label style={{ height: '34px', backgroundColor: '#334155', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: circleTextColor, fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', border: '1px solid #cbd5e1' }}>
                     สีตัวอักษร
                     <input type="color" value={circleTextColor} onChange={(e) => setCircleTextColor(e.target.value)} style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }} />
                   </label>
                 </div>
               </div>
 
-              {/* เลือกสี/ภาพพื้นหลังจอภาพ */}
-              <div style={{ marginBottom: '16px', backgroundColor: '#f8fafc', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+              {/* 5. เลือกสีหรือรูปภาพพื้นหลัง */}
+              <div style={{ backgroundColor: '#f8fafc', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
                 <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e293b', marginBottom: '8px' }}>🖼️ เลือกสีหรือรูปภาพพื้นหลังจอภาพ</div>
                 
-                {/* จานสีจานด่วน */}
-                <div style={{ display: 'flex', gap: '6px', marginBottom: '10px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
                   {[
                     { label: 'เทา', code: '#e2e8f0' },
                     { label: 'สว่าง', code: '#f1f5f9' },
@@ -797,23 +1127,21 @@ export default function App() {
                     </button>
                   ))}
                   
-                  {/* เลือกสี Custom */}
                   <label style={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
                     เลือกสีเอง
                     <input type="color" value={bgColor} onChange={(e) => { setBgColor(e.target.value); setBgType('color'); }} style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }} />
                   </label>
                 </div>
 
-                {/* อัปโหลดไฟล์รูปภาพภายนอก */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <label style={{ backgroundColor: '#0284c7', color: '#fff', padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'inline-block' }}>
+                  <label style={{ backgroundColor: '#0284c7', color: '#fff', padding: '5px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', display: 'inline-block' }}>
                     📁 อัปโหลดรูปภาพพื้นหลัง
                     <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
                   </label>
                   {bgType === 'image' && (
                     <button 
                       onClick={() => { setBgType('color'); setBgImage(''); }}
-                      style={{ backgroundColor: '#ef4444', color: '#fff', border: 'none', padding: '6px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
+                      style={{ backgroundColor: '#ef4444', color: '#fff', border: 'none', padding: '5px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
                     >
                       ยกเลิกรูปภาพ
                     </button>
@@ -821,9 +1149,9 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Slider ปรับขนาดตัวหนังสือหน้าเส้น */}
-              <div style={{ marginBottom: '16px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 'bold', color: '#4b5563', marginBottom: '4px' }}>
+              {/* 6. Slider ขนาดตัวหนังสือหน้าเส้น */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 'bold', color: '#4b5563', marginBottom: '4px' }}>
                   <span>📐 ขนาดตัวหนังสือหน้าเส้น (จอที่ 2):</span>
                   <span style={{ color: '#0284c7' }}>{labelFontSize}px</span>
                 </div>
@@ -837,110 +1165,36 @@ export default function App() {
                 />
               </div>
 
-              {/* เลือกโหมดผัน */}
-              <div style={{ backgroundColor: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0', marginBottom: '16px' }}>
-                <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#1f2937', marginBottom: '8px' }}>✨ ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ</div>
-                
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px', fontSize: '13px', color: '#334155' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-                    <input type="radio" name="mode" checked={mode === 'full5'} onChange={() => setMode('full5')} />
-                    ผันครบทั้ง 5 บรรทัด (อักษรคู่ / ห นำ)
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-                    <input type="radio" name="mode" checked={mode === 'highOnly'} onChange={() => setMode('highOnly')} />
-                    เฉพาะเสียงสูง (เอก, โท, จัตวา)
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-                    <input type="radio" name="mode" checked={mode === 'lowOnly'} onChange={() => setMode('lowOnly')} />
-                    เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)
-                  </label>
-                </div>
+              {/* 7. เชื่อมต่อ Custom Gemini API Key (ตัวเลือกเสริม) */}
+              <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '8px' }}>
+                <button 
+                  onClick={() => setShowApiInput(!showApiInput)}
+                  style={{ background: '#f8fafc', border: '1px solid #cbd5e1', padding: '6px 10px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', color: '#475569', fontWeight: 'bold', width: '100%' }}
+                >
+                  🔑 {customApiKey ? 'เปลี่ยน Custom Gemini API Key' : 'เพิ่ม API Key ส่วนตัว (ถ้าต้องการ)'}
+                </button>
 
-                {/* ช่องพิมพ์คำผันเสียง สีพื้นหลังสีเทาอ่อนมากๆ (#f1f5f9) ตามที่แนะนำ */}
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <input 
-                    type="text" 
-                    value={inputText} 
-                    onChange={(e) => {
-                      setInputText(e.target.value);
-                      validateInput(e.target.value);
-                    }}
-                    onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
-                    placeholder="พิมพ์ 1 คำ เช่น กอ, เมา, กวาง" 
-                    style={{ 
-                      flex: 1, 
-                      padding: '8px 12px', 
-                      borderRadius: '8px', 
-                      border: inputError ? '2px solid #ef4444' : '1px solid #cbd5e1', 
-                      fontSize: '15px',
-                      backgroundColor: '#f1f5f9',
-                      color: '#0f172a',
-                      fontWeight: '600'
-                    }}
-                  />
-                  <button 
-                    onClick={handleGenerate}
-                    disabled={loading}
-                    style={{ backgroundColor: '#0284c7', color: '#ffffff', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' }}
-                  >
-                    {loading ? '...' : 'ผันคำ'}
-                  </button>
-                </div>
-                {inputError && <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px', fontWeight: 'bold' }}>{inputError}</div>}
-              </div>
-
-              {/* เลือกพยัญชนะด่วน */}
-              <div style={{ marginBottom: '16px' }}>
-                <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', marginBottom: '6px' }}>⌨️ เลือกพยัญชนะด่วน:</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                  {quickConsonants.map((c) => (
-                    <button 
-                      key={c}
-                      onClick={() => handleQuickConsonantClick(c)}
-                      style={{ 
-                        padding: '4px 7px', 
-                        borderRadius: '5px', 
-                        border: '1px solid #cbd5e1', 
-                        backgroundColor: '#ffffff', 
-                        fontSize: '13px', 
-                        fontWeight: 'bold', 
-                        cursor: 'pointer',
-                        color: midConsonants.includes(c) ? colorMid : highConsonants.includes(c) ? colorHigh : colorLow
-                      }}
-                    >
-                      {c}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* เลือกสระด่วน */}
-              <div>
-                <div style={{ fontSize: '12px', color: '#166534', fontWeight: 'bold', marginBottom: '6px' }}>🟢 สระเสียงยาว (คำเป็น):</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '12px' }}>
-                  {longVowels.map((v) => (
-                    <button 
-                      key={v.label}
-                      onClick={() => handleQuickVowelClick(v)}
-                      style={{ padding: '4px 8px', borderRadius: '5px', border: '1px solid #bbf7d0', backgroundColor: '#f0fdf4', color: '#15803d', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}
-                    >
-                      {v.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div style={{ fontSize: '12px', color: '#991b1b', fontWeight: 'bold', marginBottom: '6px' }}>🔴 สระเสียงสั้น (คำตาย):</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                  {shortVowels.map((v) => (
-                    <button 
-                      key={v.label}
-                      onClick={() => handleQuickVowelClick(v)}
-                      style={{ padding: '4px 8px', borderRadius: '5px', border: '1px solid #fecaca', backgroundColor: '#fef2f2', color: '#b91c1c', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}
-                    >
-                      {v.label}
-                    </button>
-                  ))}
-                </div>
+                {showApiInput && (
+                  <div style={{ marginTop: '8px', padding: '10px', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px dashed #94a3b8' }}>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <input 
+                        type="password" 
+                        placeholder="วาง Gemini API Key ส่วนตัว..." 
+                        value={tempApiKey} 
+                        onChange={(e) => setTempApiKey(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSaveApiKey()}
+                        style={{ flex: 1, padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }}
+                      />
+                      <button 
+                        onClick={handleSaveApiKey}
+                        style={{ backgroundColor: '#10b981', color: '#ffffff', border: 'none', padding: '0 12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}
+                      >
+                        บันทึก
+                      </button>
+                    </div>
+                    {apiSaveStatus && <div style={{ color: '#059669', fontSize: '11px', marginTop: '4px', fontWeight: 'bold' }}>✓ {apiSaveStatus}</div>}
+                  </div>
+                )}
               </div>
 
             </div>
@@ -983,11 +1237,20 @@ export default function App() {
                   <div 
                     key={idx} 
                     style={{ display: 'grid', gridTemplateColumns: '220px 1fr 110px', alignItems: 'center' }}
-                    onMouseEnter={() => setHoveredRowId(item.id)}
-                    onMouseLeave={() => setHoveredRowId(null)}
+                    onMouseEnter={() => {
+                      setHoveredRowId(item.id);
+                      // ดึงเฉพาะคำแรกของบรรทัดมาออกเสียงเพียงคำเดียว เมื่อเมาส์ชี้
+                      const wordToSpeak = item.isMulti ? item.multi[0]?.text : item.word;
+                      if (wordToSpeak && lastSpokenRef.current !== wordToSpeak) {
+                        speakWord(wordToSpeak, item.id);
+                      }
+                    }}
+                    onMouseLeave={() => {
+                      setHoveredRowId(null);
+                      lastSpokenRef.current = '';
+                      if (!isPlayingSequence) stopAllAudio();
+                    }}
                   >
-                    
-                    {/* ชื่อเสียงและสัญลักษณ์วรรณยุกต์ (Hover Zoom) */}
                     <div 
                       style={{ 
                         textAlign: 'right', 
@@ -996,7 +1259,7 @@ export default function App() {
                         color: rowHeaderColor, 
                         fontWeight: 'bold', 
                         transition: 'all 0.15s ease',
-                        transform: isHovered ? 'scale(1.05)' : 'scale(1)'
+                        transform: isHovered ? 'scale(1.08)' : 'scale(1)'
                       }}
                     >
                       {item.tone} <span style={{ fontSize: `${isHovered ? 19 : 17}px`, marginLeft: '4px', letterSpacing: '1px' }}>[ {item.mark} ]</span>
@@ -1007,10 +1270,11 @@ export default function App() {
 
                       {!item.isMulti && item.show && item.word && (
                         <div 
+                          onClick={() => speakWord(item.word, item.id)}
                           style={{
                             position: 'absolute',
                             left: item.leftPos,
-                            transform: `translateX(-50%) ${isHovered ? 'scale(1.18)' : 'scale(1)'}`,
+                            transform: `translateX(-50%) ${isHovered ? 'scale(1.22)' : 'scale(1)'}`,
                             backgroundColor: item.color,
                             color: circleTextColor,
                             minWidth: '46px',
@@ -1038,6 +1302,7 @@ export default function App() {
                             <React.Fragment key={i}>
                               {i > 0 && <span style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '20px' }}>/</span>}
                               <div 
+                                onClick={() => speakWord(item.multi[0]?.text || circle.text, item.id)}
                                 style={{
                                   backgroundColor: circle.color,
                                   color: circleTextColor,
@@ -1053,7 +1318,7 @@ export default function App() {
                                   boxShadow: isHovered ? '0 6px 16px rgba(0,0,0,0.3)' : '0 3px 8px rgba(0,0,0,0.25)',
                                   cursor: 'pointer',
                                   transition: 'all 0.15s ease',
-                                  transform: isHovered ? 'scale(1.18)' : 'scale(1)',
+                                  transform: isHovered ? 'scale(1.22)' : 'scale(1)',
                                   filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                                 }}
                               >
