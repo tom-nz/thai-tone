@@ -10,10 +10,10 @@ export default function App() {
   // ตรวจสอบโหมด Display จอที่ 2 (?view=display)
   const [isDisplayWindow, setIsDisplayWindow] = useState(false);
 
-  // โหมดผันและมุมมองหน้าจอ
+  // โหมดผันและมุมมองหน้าจอ (ตั้งค่าเริ่มต้นคำว่า "กอ")
   const [mode, setMode] = useState('full5'); // 'full5' | 'highOnly' | 'lowOnly'
   const [viewLayout, setViewLayout] = useState('split'); // 'standard' | 'split' | 'present'
-  const [inputText, setInputText] = useState('เมา');
+  const [inputText, setInputText] = useState('กอ');
   const [inputError, setInputError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -443,7 +443,7 @@ export default function App() {
     return { backgroundColor: bgColor };
   };
 
-  // 1. หน้าจอที่สอง (Display Monitor): ขนาด 2 ใน 3 ส่วน (~68vh), ไร้ Scrollbar, ปรับพื้นหลังได้
+  // 1. หน้าจอที่สอง (Display Monitor): ปรับ Auto-Scale ตามการย่อ-ขยายหน้าจออัตโนมัติ
   if (isDisplayWindow) {
     return (
       <div 
@@ -464,31 +464,50 @@ export default function App() {
           ...getContainerBgStyle()
         }}
       >
-        {/* บอร์ดกระดานสีขาว ความสูง 2 ใน 3 ส่วน (~68vh) */}
-        <div style={{ width: '68vw', height: '68vh', backgroundColor: 'rgba(255, 255, 255, 0.96)', borderRadius: '28px', padding: '24px 44px', boxShadow: '0 15px 40px rgba(0,0,0,0.12)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxSizing: 'border-box', border: '1px solid #cbd5e1', backdropFilter: 'blur(8px)' }}>
-          
+        {/* บอร์ดกระดานสีขาว Auto-Scale ตามสัดส่วนหน้าจอ (~70vw x ~70vh) */}
+        <div 
+          style={{ 
+            width: 'clamp(320px, 70vw, 1200px)', 
+            height: 'clamp(320px, 70vh, 850px)', 
+            maxHeight: '88vh',
+            maxWidth: '92vw',
+            backgroundColor: 'rgba(255, 255, 255, 0.96)', 
+            borderRadius: 'clamp(16px, 2vw, 28px)', 
+            padding: 'clamp(16px, 2.2vw, 32px) clamp(20px, 3vw, 48px)', 
+            boxShadow: '0 15px 40px rgba(0,0,0,0.12)', 
+            display: 'flex', 
+            flexDirection: 'column', 
+            justifyContent: 'space-between', 
+            boxSizing: 'border-box', 
+            border: '1px solid #cbd5e1', 
+            backdropFilter: 'blur(8px)' 
+          }}
+        >
           {/* ส่วนหัวกระดาน */}
-          <div>
-            <h2 style={{ textAlign: 'center', margin: '0 0 8px 0', color: '#ea580c', fontSize: '32px', fontWeight: 'bold' }}>
+          <div style={{ textAlign: 'center' }}>
+            <h2 style={{ margin: '0 0 2px 0', color: '#ea580c', fontSize: 'clamp(22px, 2.4vw, 34px)', fontWeight: 'bold' }}>
               ไตรยางศ์ หรือ อักษร 3 หมู่
             </h2>
+            <div style={{ color: '#ea580c', fontSize: 'clamp(15px, 1.5vw, 22px)', fontWeight: '600', marginBottom: '10px' }}>
+              และการผันวรรณยุกต์
+            </div>
 
             {analysisInfo.desc && (
-              <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '8px 16px', borderRadius: '12px', margin: '0 auto 10px auto', maxWidth: '850px', textAlign: 'center', fontSize: '15px', color: '#0369a1', fontWeight: 'bold' }}>
+              <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: 'clamp(6px, 1vh, 10px) clamp(12px, 1.5vw, 20px)', borderRadius: '12px', margin: '0 auto 10px auto', maxWidth: '850px', textAlign: 'center', fontSize: 'clamp(12px, 1.1vw, 16px)', color: '#0369a1', fontWeight: 'bold' }}>
                 📌 ผลวิเคราะห์หลักภาษา: <span style={{ color: '#0284c7' }}>"{inputText}"</span> เป็น <span style={{ backgroundColor: '#e0f2fe', padding: '2px 8px', borderRadius: '4px' }}>{analysisInfo.type} ({analysisInfo.vowelLen})</span> — {analysisInfo.desc}
               </div>
             )}
 
             {/* เลื่อนคำว่า "รูปวรรณยุกต์" ลงมาชิดเหนือวงเล็บ [ ◌๋ ] บรรทัดแรก */}
-            <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr 140px', color: '#64748b', fontWeight: 'bold', fontSize: '16px', margin: '0 0 -2px 0' }}>
-              <div style={{ textAlign: 'right', paddingRight: '25px', color: '#475569', fontStyle: 'italic' }}>รูปวรรณยุกต์</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'clamp(150px, 20vw, 250px) 1fr clamp(80px, 10vw, 140px)', color: '#64748b', fontWeight: 'bold', fontSize: 'clamp(12px, 1.1vw, 16px)', margin: '0 0 -2px 0' }}>
+              <div style={{ textAlign: 'right', paddingRight: '20px', color: '#475569', fontStyle: 'italic' }}>รูปวรรณยุกต์</div>
               <div></div>
               <div></div>
             </div>
           </div>
 
-          {/* บรรทัด 5 เส้น */}
-          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', flex: 1, padding: '8px 0' }}>
+          {/* บรรทัด 5 เส้น Auto-Scale */}
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', flex: 1, padding: '4px 0' }}>
             {linesData.map((item, idx) => {
               let rowHeaderColor = '#94a3b8';
               if (item.show) {
@@ -500,48 +519,48 @@ export default function App() {
               return (
                 <div 
                   key={idx} 
-                  style={{ display: 'grid', gridTemplateColumns: '240px 1fr 140px', alignItems: 'center' }}
+                  style={{ display: 'grid', gridTemplateColumns: 'clamp(150px, 20vw, 250px) 1fr clamp(80px, 10vw, 140px)', alignItems: 'center' }}
                   onMouseEnter={() => setHoveredRowId(item.id)}
                   onMouseLeave={() => setHoveredRowId(null)}
                 >
                   
-                  {/* ชื่อเสียงและสัญลักษณ์วรรณยุกต์หน้าเส้น (ขยายขนาดตาม Slider + Hover Zoom) */}
+                  {/* ชื่อเสียงและสัญลักษณ์วรรณยุกต์หน้าเส้น */}
                   <div 
                     style={{ 
                       textAlign: 'right', 
-                      paddingRight: '25px', 
-                      fontSize: `${isHovered ? labelFontSize * 1.15 : labelFontSize}px`, 
+                      paddingRight: '20px', 
+                      fontSize: `clamp(14px, ${isHovered ? labelFontSize * 0.08 + 0.2 : labelFontSize * 0.08}vw, 26px)`, 
                       color: rowHeaderColor, 
                       fontWeight: 'bold',
                       transition: 'all 0.15s ease',
                       transform: isHovered ? 'scale(1.05)' : 'scale(1)'
                     }}
                   >
-                    {item.tone} <span style={{ fontSize: `${(isHovered ? labelFontSize * 1.15 : labelFontSize) - 2}px`, marginLeft: '6px' }}>[ {item.mark} ]</span>
+                    {item.tone} <span style={{ fontSize: '0.9em', marginLeft: '4px' }}>[ {item.mark} ]</span>
                   </div>
 
-                  {/* เส้นบรรทัดและวงกลมตัวอักษร */}
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '40px' }}>
+                  {/* เส้นบรรทัดและวงกลมตัวอักษร Auto-Scale */}
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: 'clamp(28px, 4vh, 44px)' }}>
                     <div style={{ width: '100%', height: '3px', backgroundColor: '#94a3b8' }}></div>
 
-                    {/* วงกลมเดี่ยว (ขนาดใหญ่ 60px + ฟอนต์ 24px + Hover Zoom) */}
+                    {/* วงกลมเดี่ยว */}
                     {!item.isMulti && item.show && item.word && (
                       <div 
                         style={{
                           position: 'absolute',
                           left: item.leftPos,
-                          transform: `translateX(-50%) ${isHovered ? 'scale(1.2)' : 'scale(1)'}`,
+                          transform: `translateX(-50%) ${isHovered ? 'scale(1.18)' : 'scale(1)'}`,
                           backgroundColor: item.color,
                           color: circleTextColor,
-                          minWidth: '60px',
-                          height: '60px',
-                          padding: '0 12px',
-                          borderRadius: '30px',
+                          minWidth: 'clamp(42px, 4.2vw, 64px)',
+                          height: 'clamp(42px, 4.2vw, 64px)',
+                          padding: '0 10px',
+                          borderRadius: '50%',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           fontWeight: 'bold',
-                          fontSize: '24px',
+                          fontSize: 'clamp(16px, 1.8vw, 26px)',
                           boxShadow: isHovered ? '0 8px 20px rgba(0,0,0,0.35)' : '0 5px 14px rgba(0,0,0,0.22)',
                           cursor: 'pointer',
                           transition: 'all 0.15s ease',
@@ -554,27 +573,27 @@ export default function App() {
 
                     {/* วงกลมคู่สำหรับเสียงโท */}
                     {item.isMulti && item.show && (
-                      <div style={{ position: 'absolute', left: item.leftPos, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ position: 'absolute', left: item.leftPos, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         {item.multi.map((circle, i) => (
                           <React.Fragment key={i}>
-                            {i > 0 && <span style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '24px' }}>/</span>}
+                            {i > 0 && <span style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: 'clamp(16px, 1.8vw, 26px)' }}>/</span>}
                             <div 
                               style={{
                                 backgroundColor: circle.color,
                                 color: circleTextColor,
-                                minWidth: '60px',
-                                height: '60px',
-                                padding: '0 12px',
-                                borderRadius: '30px',
+                                minWidth: 'clamp(42px, 4.2vw, 64px)',
+                                height: 'clamp(42px, 4.2vw, 64px)',
+                                padding: '0 10px',
+                                borderRadius: '50%',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 fontWeight: 'bold',
-                                fontSize: '24px',
+                                fontSize: 'clamp(16px, 1.8vw, 26px)',
                                 boxShadow: isHovered ? '0 8px 20px rgba(0,0,0,0.35)' : '0 5px 14px rgba(0,0,0,0.22)',
                                 cursor: 'pointer',
                                 transition: 'all 0.15s ease',
-                                transform: isHovered ? 'scale(1.2)' : 'scale(1)',
+                                transform: isHovered ? 'scale(1.18)' : 'scale(1)',
                                 filter: isHovered ? 'brightness(1.12)' : 'brightness(1)'
                               }}
                             >
@@ -587,7 +606,7 @@ export default function App() {
                   </div>
 
                   {/* ระดับเสียงคงที่ด้านหลัง */}
-                  <div style={{ textAlign: 'center', color: fixedRight ? fixedRight.color : '#94a3b8', fontWeight: 'bold', fontSize: '20px' }}>
+                  <div style={{ textAlign: 'center', color: fixedRight ? fixedRight.color : '#94a3b8', fontWeight: 'bold', fontSize: 'clamp(13px, 1.3vw, 21px)' }}>
                     {fixedRight ? fixedRight.text : ''}
                   </div>
 
@@ -837,6 +856,7 @@ export default function App() {
                   </label>
                 </div>
 
+                {/* ช่องพิมพ์คำผันเสียง สีพื้นหลังสีเทาอ่อนมากๆ (#f1f5f9) ตามที่แนะนำ */}
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <input 
                     type="text" 
@@ -846,8 +866,17 @@ export default function App() {
                       validateInput(e.target.value);
                     }}
                     onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
-                    placeholder="พิมพ์ 1 คำ เช่น เมา, กวาง, ครู" 
-                    style={{ flex: 1, padding: '8px 12px', borderRadius: '8px', border: inputError ? '2px solid #ef4444' : '1px solid #cbd5e1', fontSize: '15px' }}
+                    placeholder="พิมพ์ 1 คำ เช่น กอ, เมา, กวาง" 
+                    style={{ 
+                      flex: 1, 
+                      padding: '8px 12px', 
+                      borderRadius: '8px', 
+                      border: inputError ? '2px solid #ef4444' : '1px solid #cbd5e1', 
+                      fontSize: '15px',
+                      backgroundColor: '#f1f5f9',
+                      color: '#0f172a',
+                      fontWeight: '600'
+                    }}
                   />
                   <button 
                     onClick={handleGenerate}
@@ -920,9 +949,14 @@ export default function App() {
           {/* กระดานบรรทัด 5 เส้น (จอล่าง) */}
           <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '16px', padding: viewLayout === 'present' ? '40px 50px' : '35px 25px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', backdropFilter: 'blur(6px)' }}>
             
-            <h2 style={{ textAlign: 'center', color: '#ea580c', fontSize: '28px', fontWeight: 'bold', margin: '0 0 20px 0' }}>
-              ไตรยางศ์ หรือ อักษร 3 หมู่
-            </h2>
+            <div style={{ textAlign: 'center', margin: '0 0 20px 0' }}>
+              <h2 style={{ margin: '0 0 2px 0', color: '#ea580c', fontSize: '28px', fontWeight: 'bold' }}>
+                ไตรยางศ์ หรือ อักษร 3 หมู่
+              </h2>
+              <div style={{ color: '#ea580c', fontSize: '18px', fontWeight: '600' }}>
+                และการผันวรรณยุกต์
+              </div>
+            </div>
 
             {analysisInfo.desc && (
               <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '10px 16px', borderRadius: '10px', marginBottom: '25px', textAlign: 'center', fontSize: '14px', color: '#0369a1', fontWeight: 'bold' }}>
