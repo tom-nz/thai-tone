@@ -445,8 +445,14 @@ export default function App() {
     return { backgroundColor: bgColor };
   };
 
-  // 1. หน้าจอที่สอง (Display Monitor)
+  // 1. หน้าจอที่สอง (Display Monitor) - ปรับขนาดข้อความและวงกลมตามสัดส่วน labelFontSize
   if (isDisplayWindow) {
+    // อัตราส่วนขยายตาม labelFontSize (default 20 = 1.0)
+    const circleRatio = labelFontSize / 20;
+    const circleSize = `clamp(${Math.round(42 * circleRatio)}px, ${(4.2 * circleRatio).toFixed(2)}vw, ${Math.round(64 * circleRatio)}px)`;
+    const circleFontSize = `clamp(${Math.round(16 * circleRatio)}px, ${(1.8 * circleRatio).toFixed(2)}vw, ${Math.round(26 * circleRatio)}px)`;
+    const labelSize = `clamp(${Math.round(14 * circleRatio)}px, ${(0.08 * labelFontSize).toFixed(2)}vw, ${Math.round(26 * circleRatio)}px)`;
+
     return (
       <div 
         style={{ 
@@ -525,7 +531,7 @@ export default function App() {
                     style={{ 
                       textAlign: 'right', 
                       paddingRight: '20px', 
-                      fontSize: `clamp(14px, ${isHovered ? labelFontSize * 0.08 + 0.2 : labelFontSize * 0.08}vw, 26px)`, 
+                      fontSize: labelSize, 
                       color: rowHeaderColor, 
                       fontWeight: 'bold',
                       transition: 'all 0.15s ease',
@@ -535,7 +541,7 @@ export default function App() {
                     {item.tone} <span style={{ fontSize: '0.9em', marginLeft: '4px' }}>[ {item.mark} ]</span>
                   </div>
 
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: 'clamp(28px, 4vh, 44px)' }}>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: 'clamp(28px, 4vh, 60px)' }}>
                     <div style={{ width: '100%', height: '3px', backgroundColor: '#94a3b8' }}></div>
 
                     {!item.isMulti && item.show && item.word && (
@@ -546,15 +552,15 @@ export default function App() {
                           transform: `translateX(-50%) ${isHovered ? 'scale(1.22)' : 'scale(1)'}`,
                           backgroundColor: item.color,
                           color: circleTextColor,
-                          minWidth: 'clamp(42px, 4.2vw, 64px)',
-                          height: 'clamp(42px, 4.2vw, 64px)',
+                          minWidth: circleSize,
+                          height: circleSize,
                           padding: '0 10px',
                           borderRadius: '50%',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           fontWeight: 'bold',
-                          fontSize: 'clamp(16px, 1.8vw, 26px)',
+                          fontSize: circleFontSize,
                           boxShadow: isHovered ? '0 8px 20px rgba(0,0,0,0.35)' : '0 5px 14px rgba(0,0,0,0.22)',
                           cursor: 'pointer',
                           transition: 'all 0.15s ease',
@@ -569,20 +575,20 @@ export default function App() {
                       <div style={{ position: 'absolute', left: item.leftPos, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         {item.multi.map((circle, i) => (
                           <React.Fragment key={i}>
-                            {i > 0 && <span style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: 'clamp(16px, 1.8vw, 26px)' }}>/</span>}
+                            {i > 0 && <span style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: circleFontSize }}>/</span>}
                             <div 
                               style={{
                                 backgroundColor: circle.color,
                                 color: circleTextColor,
-                                minWidth: 'clamp(42px, 4.2vw, 64px)',
-                                height: 'clamp(42px, 4.2vw, 64px)',
+                                minWidth: circleSize,
+                                height: circleSize,
                                 padding: '0 10px',
                                 borderRadius: '50%',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 fontWeight: 'bold',
-                                fontSize: 'clamp(16px, 1.8vw, 26px)',
+                                fontSize: circleFontSize,
                                 boxShadow: isHovered ? '0 8px 20px rgba(0,0,0,0.35)' : '0 5px 14px rgba(0,0,0,0.22)',
                                 cursor: 'pointer',
                                 transition: 'all 0.15s ease',
@@ -901,10 +907,10 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 6. Slider ขนาดตัวหนังสือหน้าเส้น */}
+              {/* 6. Slider ขนาดตัวหนังสือและวงกลม (ปรับสัดส่วนพร้อมกันบนจอที่ 2) */}
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 'bold', color: '#4b5563', marginBottom: '4px' }}>
-                  <span>📐 ขนาดตัวหนังสือหน้าเส้น (จอที่ 2):</span>
+                  <span>📐 ขนาดตัวหนังสือและวงกลม (จอที่ 2):</span>
                   <span style={{ color: '#0284c7' }}>{labelFontSize}px</span>
                 </div>
                 <input 
