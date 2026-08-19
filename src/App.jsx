@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 // API Key จากสภาพแวดล้อมรันไทม์
 const apiKey = "";
 
-// คอมโพเนนต์หางตัวโน้ตดนตรี (เขบ็ตชั้นเดียว - ต่อจากเส้นสัมผัสด้านขวาสุดของวงกลม ยิงตรงขึ้นไปด้านบน)
+// คอมโพเนนต์หางตัวโน้ตดนตรี (เขบ็ตชั้นเดียว)
 const NoteStem = ({ color, scale = 1 }) => (
   <svg
     style={{
@@ -18,14 +18,14 @@ const NoteStem = ({ color, scale = 1 }) => (
     }}
     viewBox="0 0 20 44"
   >
-    {/* ก้านตัวโน้ต (Stem - เริ่มจากจุดสัมผัสด้านขวาสุดของวงกลม ยิงตรงขึ้นไปด้านบน) */}
+    {/* ก้านตัวโน้ต (Stem) */}
     <path
       d="M 2 44 L 2 2"
       stroke="currentColor"
       strokeWidth="3.5"
       strokeLinecap="round"
     />
-    {/* หางเขบ็ตชั้นเดียว (Single Flag - โค้งสวยงามสไตล์โน้ตดนตรี) */}
+    {/* หางเขบ็ตชั้นเดียว (Single Flag) */}
     <path
       d="M 2 2 C 9 8, 17 15, 13 24 C 9 17, 5 11, 2 7 Z"
       fill="currentColor"
@@ -85,24 +85,27 @@ export default function App() {
     'ย', 'ร', 'ล', 'ว', 'ส', 'ห', 'อ', 'ฮ'
   ];
 
+  // สระเสียงยาว (คำเป็น) - เรียงลำดับตามการท่องจำมาตรฐานภาษาไทย (อา อี อือ อู เอ แอ โอ ออ เออ เอีย เอือ อัว -ำ ใ- ไ- เ-า)
   const longVowels = [
     { label: '-า', front: '', rear: 'า' },
-    { label: 'เ-า', front: 'เ', rear: 'า' },
     { label: '-ี', front: '', rear: 'ี' },
+    { label: '-ือ', front: '', rear: 'ือ' },
     { label: '-ู', front: '', rear: 'ู' },
     { label: 'เ-', front: 'เ', rear: '' },
     { label: 'แ-', front: 'แ', rear: '' },
     { label: 'โ-', front: 'โ', rear: '' },
-    { label: 'ใ-', front: 'ใ', rear: '' },
-    { label: 'ไ-', front: 'ไ', rear: '' },
-    { label: '-ำ', front: '', rear: 'ำ' },
+    { label: '-อ', front: '', rear: 'อ' },
+    { label: 'เ-อ', front: 'เ', rear: 'อ' },
     { label: 'เ-ีย', front: 'เ', rear: 'ีย' },
     { label: 'เ-ือ', front: 'เ', rear: 'ือ' },
     { label: '-ัว', front: '', rear: 'ัว' },
-    { label: 'เ-อ', front: 'เ', rear: 'อ' },
-    { label: '-อ', front: '', rear: 'อ' }
+    { label: '-ำ', front: '', rear: 'ำ' },
+    { label: 'ใ-', front: 'ใ', rear: '' },
+    { label: 'ไ-', front: 'ไ', rear: '' },
+    { label: 'เ-า', front: 'เ', rear: 'า' }
   ];
 
+  // สระเสียงสั้น (คำตาย) - เรียงลำดับตามการท่องจำมาตรฐานภาษาไทย (ะ อิ อึ อุ เอะ แอะ โอะ เอาะ เออะ เอียะ เอือะ อัวะ)
   const shortVowels = [
     { label: '-ะ', front: '', rear: 'ะ' },
     { label: '-ิ', front: '', rear: 'ิ' },
@@ -111,7 +114,11 @@ export default function App() {
     { label: 'เ-ะ', front: 'เ', rear: 'ะ' },
     { label: 'แ-ะ', front: 'แ', rear: 'ะ' },
     { label: 'โ-ะ', front: 'โ', rear: 'ะ' },
-    { label: 'เ-าะ', front: 'เ', rear: 'าะ' }
+    { label: 'เ-าะ', front: 'เ', rear: 'าะ' },
+    { label: 'เ-อะ', front: 'เ', rear: 'อะ' },
+    { label: 'เ-ียะ', front: 'เ', rear: 'ียะ' },
+    { label: 'เ-ือะ', front: 'เ', rear: 'ือะ' },
+    { label: '-ัวะ', front: '', rear: 'ัวะ' }
   ];
 
   const pairMap = {
@@ -120,8 +127,7 @@ export default function App() {
     'ซ': 'ศ', 'ศ': 'ซ', 'ษ': 'ซ', 'ส': 'ซ',
     'ท': 'ถ', 'ธ': 'ถ', 'ฑ': 'ฐ', 'ฒ': 'ฐ', 'ถ': 'ท', 'ฐ': 'ท',
     'พ': 'ผ', 'ภ': 'ผ', 'ผ': 'พ',
-    'ฟ': 'ฝ', 'ฝ': 'ฟ',
-    'ฮ': 'ห', 'ห': 'ฮ'
+    'ฟ': 'ฝ', 'ฝ': 'ฟ', 'ฮ': 'ห', 'ห': 'ฮ'
   };
 
   useEffect(() => {
@@ -134,28 +140,51 @@ export default function App() {
     }
   }, []);
 
-  // ระบบสื่อสารข้ามมอนิเตอร์ (BroadcastChannel Sync)
+  // ระบบสื่อสารข้ามมอนิเตอร์ (BroadcastChannel Sync + LocalStorage Fallback)
   useEffect(() => {
     const channel = new BroadcastChannel('thai_tone_sync_channel');
     
+    // ฟังก์ชันสำหรับอัปเดต state ของ Display Window
+    const applySyncData = (data) => {
+      if (!data) return;
+      const { lines, info, text, cText, cMid, cHigh, cLow, fontSize, bType, bColor, bImg, activeRowId, modeVal } = data;
+      if (lines) setLinesData(lines);
+      if (info) setAnalysisInfo(info);
+      if (text) setInputText(text);
+      if (cText) setCircleTextColor(cText);
+      if (cMid) setColorMid(cMid);
+      if (cHigh) setColorHigh(cHigh);
+      if (cLow) setColorLow(cLow);
+      if (fontSize !== undefined) setLabelFontSize(fontSize);
+      if (bType) setBgType(bType);
+      if (bColor) setBgColor(bColor);
+      if (bImg !== undefined) setBgImage(bImg);
+      if (activeRowId !== undefined) setHoveredRowId(activeRowId);
+      if (modeVal) setMode(modeVal);
+    };
+
     if (isDisplayWindow) {
+      // อ่านข้อมูลล่าสุดจาก LocalStorage ทันทีที่เปิด Display Window
+      try {
+        const savedState = localStorage.getItem('thai_tone_live_sync_data');
+        if (savedState) {
+          applySyncData(JSON.parse(savedState));
+        }
+      } catch (e) {
+        console.error("Failed to read initial sync state", e);
+      }
+
+      // ฟังข้อความส่งต่อผ่าน BroadcastChannel
       channel.onmessage = (event) => {
-        const { lines, info, text, cText, cMid, cHigh, cLow, fontSize, bType, bColor, bImg, activeRowId } = event.data;
-        if (lines) setLinesData(lines);
-        if (info) setAnalysisInfo(info);
-        if (text) setInputText(text);
-        if (cText) setCircleTextColor(cText);
-        if (cMid) setColorMid(cMid);
-        if (cHigh) setColorHigh(cHigh);
-        if (cLow) setColorLow(cLow);
-        if (fontSize) setLabelFontSize(fontSize);
-        if (bType) setBgType(bType);
-        if (bColor) setBgColor(bColor);
-        if (bImg !== undefined) setBgImage(bImg);
-        if (activeRowId !== undefined) setHoveredRowId(activeRowId);
+        applySyncData(event.data);
       };
+
+      // ส่งคำร้องขอซิงค์ข้อมูลจากหน้าจอหลัก
+      channel.postMessage({ type: 'REQUEST_SYNC' });
     } else {
-      channel.postMessage({
+      // หน้าจอหลัก (Control Window): ส่งข้อมูลและบันทึกลง LocalStorage
+      const syncPayload = {
+        type: 'SYNC_STATE',
         lines: linesData,
         info: analysisInfo,
         text: inputText,
@@ -167,12 +196,27 @@ export default function App() {
         bType: bgType,
         bColor: bgColor,
         bImg: bgImage,
-        activeRowId: hoveredRowId
-      });
+        activeRowId: hoveredRowId,
+        modeVal: mode
+      };
+
+      try {
+        localStorage.setItem('thai_tone_live_sync_data', JSON.stringify(syncPayload));
+      } catch (e) {
+        console.error("Failed to save live sync state", e);
+      }
+
+      channel.postMessage(syncPayload);
+
+      channel.onmessage = (event) => {
+        if (event.data && event.data.type === 'REQUEST_SYNC') {
+          channel.postMessage(syncPayload);
+        }
+      };
     }
 
     return () => channel.close();
-  }, [linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, labelFontSize, bgType, bgColor, bgImage, hoveredRowId, isDisplayWindow]);
+  }, [linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, labelFontSize, bgType, bgColor, bgImage, hoveredRowId, mode, isDisplayWindow]);
 
   const parseThaiWord = (word) => {
     if (!word) return { initial: '', frontVowel: '', rearVowel: '', toneMark: '' };
@@ -348,8 +392,10 @@ export default function App() {
   };
 
   useEffect(() => {
-    setLinesData(calculateTones(inputText, mode, colorMid, colorHigh, colorLow));
-  }, [inputText, mode, colorMid, colorHigh, colorLow]);
+    if (!isDisplayWindow) {
+      setLinesData(calculateTones(inputText, mode, colorMid, colorHigh, colorLow));
+    }
+  }, [inputText, mode, colorMid, colorHigh, colorLow, isDisplayWindow]);
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
@@ -594,7 +640,6 @@ export default function App() {
                           filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                         }}
                       >
-                        {/* หางตัวโน้ตดนตรี เขบ็ต 1 ชั้น (ต่อเริ่มจากเส้นสัมผัสด้านขวาสุด) */}
                         <NoteStem color={item.color} scale={circleRatio} />
                         {item.word}
                       </div>
@@ -625,7 +670,6 @@ export default function App() {
                                 filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                               }}
                             >
-                              {/* หางตัวโน้ตดนตรี เขบ็ต 1 ชั้น (ต่อเริ่มจากเส้นสัมผัสด้านขวาสุด) */}
                               <NoteStem color={circle.color} scale={circleRatio} />
                               {circle.text}
                             </div>
@@ -830,7 +874,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 3. เลือกสระด่วน สระเสียงยาว/สระเสียงสั้น */}
+              {/* 3. เลือกสระด่วน สระเสียงยาว/สระเสียงสั้น (เรียงตามการท่องจำมาตรฐาน) */}
               <div>
                 <div style={{ fontSize: '12px', color: '#166534', fontWeight: 'bold', marginBottom: '6px' }}>🟢 สระเสียงยาว (คำเป็น):</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '10px' }}>
@@ -1079,7 +1123,6 @@ export default function App() {
                             filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                           }}
                         >
-                          {/* หางตัวโน้ตดนตรี เขบ็ต 1 ชั้น (ต่อเริ่มจากเส้นสัมผัสด้านขวาสุด) */}
                           <NoteStem color={item.color} scale={1} />
                           {item.word}
                         </div>
@@ -1110,7 +1153,6 @@ export default function App() {
                                   filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                                 }}
                               >
-                                {/* หางตัวโน้ตดนตรี เขบ็ต 1 ชั้น (ต่อเริ่มจากเส้นสัมผัสด้านขวาสุด) */}
                                 <NoteStem color={circle.color} scale={1} />
                                 {circle.text}
                               </div>
