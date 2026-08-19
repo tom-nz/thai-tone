@@ -1,40 +1,9 @@
 import React, { useState, useEffect } from 'react';
 
-// API Key จากสภาพแวดล้อมรันไทม์
 const apiKey = "";
 
-// คอมโพเนนต์หางตัวโน้ตดนตรี (เขบ็ตชั้นเดียว)
-const NoteStem = ({ color, scale = 1 }) => (
-  <svg
-    style={{
-      position: 'absolute',
-      top: `-${Math.round(20 * scale)}px`,
-      left: `calc(100% - ${Math.round(3 * scale)}px)`, // เริ่มต่อจากเส้นสัมผัสด้านขวาสุดของวงกลม
-      width: `${Math.round(20 * scale)}px`,
-      height: `${Math.round(44 * scale)}px`,
-      pointerEvents: 'none',
-      overflow: 'visible',
-      color: color || 'currentColor'
-    }}
-    viewBox="0 0 20 44"
-  >
-    {/* ก้านตัวโน้ต (Stem) */}
-    <path
-      d="M 2 44 L 2 2"
-      stroke="currentColor"
-      strokeWidth="3.5"
-      strokeLinecap="round"
-    />
-    {/* หางเขบ็ตชั้นเดียว (Single Flag) */}
-    <path
-      d="M 2 2 C 9 8, 17 15, 13 24 C 9 17, 5 11, 2 7 Z"
-      fill="currentColor"
-    />
-  </svg>
-);
-
 export default function App() {
-  // ระบบจัดการ Gemini API Key
+  // บันทึกและดึง Custom API Key (ถ้ามี) จาก LocalStorage
   const [customApiKey, setCustomApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
   const [tempApiKey, setTempApiKey] = useState(customApiKey);
   const [showApiInput, setShowApiInput] = useState(false);
@@ -43,7 +12,7 @@ export default function App() {
   // ตรวจสอบโหมด Display จอที่ 2 (?view=display)
   const [isDisplayWindow, setIsDisplayWindow] = useState(false);
 
-  // โหมดผันและมุมมองหน้าจอ
+  // โหมดผันและมุมมองหน้าจอ (ตั้งค่าเริ่มต้นคำว่า "กอ")
   const [mode, setMode] = useState('full5'); // 'full5' | 'highOnly' | 'lowOnly'
   const [viewLayout, setViewLayout] = useState('split'); // 'standard' | 'split' | 'present'
   const [inputText, setInputText] = useState('กอ');
@@ -80,7 +49,7 @@ export default function App() {
     'ย', 'ร', 'ล', 'ว', 'ส', 'ห', 'อ', 'ฮ'
   ];
 
-  // สระเสียงยาว (คำเป็น) - เรียงลำดับตามมาตรฐานการท่องจำ (อะ อา, อิ อี, อึ อือ, อุ อู...)
+  // สระเรียงลำดับมาตรฐานการท่องจำ (อะ อา, อิ อี, อึ อือ, อุ อู...)
   const longVowels = [
     { label: '-า', front: '', rear: 'า' },
     { label: '-ี', front: '', rear: 'ี' },
@@ -100,7 +69,6 @@ export default function App() {
     { label: 'เ-า', front: 'เ', rear: 'า' }
   ];
 
-  // สระเสียงสั้น (คำตาย)
   const shortVowels = [
     { label: '-ะ', front: '', rear: 'ะ' },
     { label: '-ิ', front: '', rear: 'ิ' },
@@ -125,7 +93,6 @@ export default function App() {
     'ฟ': 'ฝ', 'ฝ': 'ฟ', 'ฮ': 'ห', 'ห': 'ฮ'
   };
 
-  // ตัวแยกองค์ประกอบคำภาษาไทย (ปรับปรุงลำดับอักขระสระบน/ล่างอย่างถูกต้อง)
   const parseThaiWord = (word) => {
     if (!word) return { initial: '', frontVowel: '', aboveBelowVowel: '', rest: '', toneMark: '' };
     
@@ -331,9 +298,8 @@ export default function App() {
     }
   }, []);
 
-  // 1. ระบบกระจายข้อมูลจากหน้าจอหลัก (Master Screen 1)
   useEffect(() => {
-    if (isDisplayWindow) return; // ทำงานเฉพาะบนหน้าจอหลักเท่านั้น
+    if (isDisplayWindow) return; // Master screen only
 
     const channel = new BroadcastChannel('thai_tone_sync_channel');
 
@@ -360,10 +326,8 @@ export default function App() {
       console.error("Failed to save sync payload to localStorage", e);
     }
 
-    // กระจายข้อมูลไปยัง BroadcastChannel
     channel.postMessage(syncPayload);
 
-    // รับคำขอข้อมูลจาก Display Screen เมื่อเปิดหน้าต่างขึ้นมาใหม่
     const handleMessage = (event) => {
       if (event.data && event.data.type === 'REQUEST_SYNC') {
         channel.postMessage(syncPayload);
@@ -378,9 +342,8 @@ export default function App() {
     };
   }, [isDisplayWindow, linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, labelFontSize, bgType, bgColor, bgImage, hoveredRowId, mode]);
 
-  // 2. ระบบรับฟังข้อมูลบนหน้าจอที่ 2 (Display Screen 2) - ป้องกัน Loop อนันต์
   useEffect(() => {
-    if (!isDisplayWindow) return; // ทำงานเฉพาะบนหน้าจอที่ 2 เท่านั้น
+    if (!isDisplayWindow) return; // Display screen only
 
     const applySyncData = (data) => {
       if (!data) return;
@@ -400,7 +363,6 @@ export default function App() {
       if (modeVal) setMode(modeVal);
     };
 
-    // ดึงข้อมูลล่าสุดจาก LocalStorage เมื่อเปิดหน้าต่างขึ้นมา
     try {
       const savedState = localStorage.getItem('thai_tone_live_sync_data');
       if (savedState) {
@@ -413,7 +375,15 @@ export default function App() {
     const channel = new BroadcastChannel('thai_tone_sync_channel');
 
     const handleChannelMessage = (event) => {
-      if (event.data && event.data.type === 'SYNC_STATE') {
+      if (!event.data) return;
+      
+      // รองรับคำสั่งสลับเต็มจอจากหน้าจอควบคุมหลัก
+      if (event.data.type === 'TOGGLE_FULLSCREEN') {
+        toggleFullscreen();
+        return;
+      }
+
+      if (event.data.type === 'SYNC_STATE') {
         applySyncData(event.data);
       }
     };
@@ -432,7 +402,6 @@ export default function App() {
 
     window.addEventListener('storage', handleStorageChange);
 
-    // ส่งคำขอข้อมูลจาก Master เพียงครั้งเดียวเมื่อ Mount
     channel.postMessage({ type: 'REQUEST_SYNC' });
 
     return () => {
@@ -468,6 +437,28 @@ export default function App() {
       'ThaiToneDisplayWindow',
       'width=1200,height=800,resizable=yes,scrollbars=yes,status=yes'
     );
+  };
+
+  // คำสั่งส่งสัญญาณสลับเต็มจอบน Screen 2 จาก Screen 1
+  const handleToggleDisplayFullscreen = () => {
+    const channel = new BroadcastChannel('thai_tone_sync_channel');
+    channel.postMessage({ type: 'TOGGLE_FULLSCREEN' });
+    channel.close();
+  };
+
+  // ฟังก์ชันสลับเต็มจอสำหรับ Screen 2
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch((err) => {
+        console.log("Fullscreen request failed:", err);
+      });
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch((err) => {
+          console.log("Exit fullscreen failed:", err);
+        });
+      }
+    }
   };
 
   const handleSaveApiKey = () => {
@@ -585,6 +576,8 @@ export default function App() {
 
     return (
       <div 
+        onDoubleClick={toggleFullscreen}
+        title="ดับเบิ้ลคลิกเพื่อสลับโหมดเต็มจอ"
         style={{ 
           height: '100vh', 
           width: '100vw', 
@@ -599,6 +592,7 @@ export default function App() {
           position: 'fixed', 
           top: 0, 
           left: 0,
+          cursor: 'pointer',
           ...getContainerBgStyle()
         }}
       >
@@ -697,7 +691,23 @@ export default function App() {
                           filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                         }}
                       >
-                        <NoteStem color={item.color} scale={circleRatio} />
+                        {/* หางตัวโน้ตดนตรี (เขบ็ตชั้นเดียว) */}
+                        <svg
+                          style={{
+                            position: 'absolute',
+                            top: `-${Math.round(20 * circleRatio)}px`,
+                            left: `calc(100% - ${Math.round(3 * circleRatio)}px)`,
+                            width: `${Math.round(20 * circleRatio)}px`,
+                            height: `${Math.round(44 * circleRatio)}px`,
+                            pointerEvents: 'none',
+                            overflow: 'visible',
+                            color: item.color
+                          }}
+                          viewBox="0 0 20 44"
+                        >
+                          <path d="M 2 44 L 2 2" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" />
+                          <path d="M 2 2 C 9 8, 17 15, 13 24 C 9 17, 5 11, 2 7 Z" fill="currentColor" />
+                        </svg>
                         {item.word}
                       </div>
                     )}
@@ -727,7 +737,22 @@ export default function App() {
                                 filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                               }}
                             >
-                              <NoteStem color={circle.color} scale={circleRatio} />
+                              <svg
+                                style={{
+                                  position: 'absolute',
+                                  top: `-${Math.round(20 * circleRatio)}px`,
+                                  left: `calc(100% - ${Math.round(3 * circleRatio)}px)`,
+                                  width: `${Math.round(20 * circleRatio)}px`,
+                                  height: `${Math.round(44 * circleRatio)}px`,
+                                  pointerEvents: 'none',
+                                  overflow: 'visible',
+                                  color: circle.color
+                                }}
+                                viewBox="0 0 20 44"
+                              >
+                                <path d="M 2 44 L 2 2" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" />
+                                <path d="M 2 2 C 9 8, 17 15, 13 24 C 9 17, 5 11, 2 7 Z" fill="currentColor" />
+                              </svg>
                               {circle.text}
                             </div>
                           </React.Fragment>
@@ -747,36 +772,6 @@ export default function App() {
 
         </div>
 
-        <button 
-          onClick={() => {
-            if (!document.fullscreenElement) {
-              document.documentElement.requestFullscreen();
-            } else {
-              document.exitFullscreen();
-            }
-          }}
-          style={{
-            position: 'absolute',
-            bottom: '18px',
-            right: '24px',
-            padding: '8px 16px',
-            borderRadius: '8px',
-            border: '1px solid #cbd5e1',
-            backgroundColor: 'rgba(255, 255, 255, 0.95)',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-            cursor: 'pointer',
-            fontWeight: 'bold',
-            fontSize: '13px',
-            color: '#475569',
-            backdropFilter: 'blur(4px)',
-            transition: 'all 0.15s ease'
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.95)'}
-        >
-          ⛶ สลับเต็มจอ
-        </button>
-
       </div>
     );
   }
@@ -785,7 +780,7 @@ export default function App() {
     <div style={{ minHeight: '100vh', padding: '24px 15px', fontFamily: "'Sarabun', sans-serif", transition: 'all 0.3s ease', ...getContainerBgStyle() }}>
       <div style={{ maxWidth: viewLayout === 'split' ? '1280px' : '920px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
         
-        {/* แถบมุมมองและเปิดจอที่ 2 */}
+        {/* แถบมุมมองและปุ่มเปิด/สลับเต็มจอมอนิเตอร์ที่ 2 */}
         <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '14px', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.06)', flexWrap: 'wrap', gap: '12px', border: '1px solid #e2e8f0', backdropFilter: 'blur(6px)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontWeight: 'bold', fontSize: '15px', color: '#1e293b' }}>🖥️ มุมมอง:</span>
@@ -809,32 +804,58 @@ export default function App() {
             </button>
           </div>
 
-          <button 
-            onClick={handleOpenDualMonitor}
-            style={{ 
-              backgroundColor: '#16a34a', 
-              color: '#ffffff', 
-              border: 'none', 
-              padding: '9px 18px', 
-              borderRadius: '8px', 
-              fontWeight: 'bold', 
-              fontSize: '14px', 
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              boxShadow: '0 4px 10px rgba(22,163,74,0.3)',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#15803d'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#16a34a'}
-          >
-            🚀 เปิดกระดานแยกขึ้นมอนิเตอร์ที่ 2
-          </button>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button 
+              onClick={handleToggleDisplayFullscreen}
+              style={{ 
+                backgroundColor: '#0284c7', 
+                color: '#ffffff', 
+                border: 'none', 
+                padding: '9px 16px', 
+                borderRadius: '8px', 
+                fontWeight: 'bold', 
+                fontSize: '14px', 
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                boxShadow: '0 4px 10px rgba(2,132,199,0.25)',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0369a1'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0284c7'}
+            >
+              ⛶ สลับเต็มจอ จอที่ 2
+            </button>
+
+            <button 
+              onClick={handleOpenDualMonitor}
+              style={{ 
+                backgroundColor: '#16a34a', 
+                color: '#ffffff', 
+                border: 'none', 
+                padding: '9px 18px', 
+                borderRadius: '8px', 
+                fontWeight: 'bold', 
+                fontSize: '14px', 
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: '0 4px 10px rgba(22,163,74,0.3)',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#15803d'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#16a34a'}
+            >
+              🚀 เปิดกระดานแยกขึ้นมอนิเตอร์ที่ 2
+            </button>
+          </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: viewLayout === 'split' ? '410px 1fr' : '1fr', gap: '20px', alignItems: 'start' }}>
           
+          {/* แผงควบคุม (Control Panel) */}
           {viewLayout !== 'present' && (
             <div style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '20px', boxShadow: '0 4px 14px rgba(0,0,0,0.06)', border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               
@@ -1180,7 +1201,22 @@ export default function App() {
                             filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                           }}
                         >
-                          <NoteStem color={item.color} scale={1} />
+                          <svg
+                            style={{
+                              position: 'absolute',
+                              top: '-20px',
+                              left: 'calc(100% - 3px)',
+                              width: '20px',
+                              height: '44px',
+                              pointerEvents: 'none',
+                              overflow: 'visible',
+                              color: item.color
+                            }}
+                            viewBox="0 0 20 44"
+                          >
+                            <path d="M 2 44 L 2 2" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" />
+                            <path d="M 2 2 C 9 8, 17 15, 13 24 C 9 17, 5 11, 2 7 Z" fill="currentColor" />
+                          </svg>
                           {item.word}
                         </div>
                       )}
@@ -1210,7 +1246,22 @@ export default function App() {
                                   filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                                 }}
                               >
-                                <NoteStem color={circle.color} scale={1} />
+                                <svg
+                                  style={{
+                                    position: 'absolute',
+                                    top: '-20px',
+                                    left: 'calc(100% - 3px)',
+                                    width: '20px',
+                                    height: '44px',
+                                    pointerEvents: 'none',
+                                    overflow: 'visible',
+                                    color: circle.color
+                                  }}
+                                  viewBox="0 0 20 44"
+                                >
+                                  <path d="M 2 44 L 2 2" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" />
+                                  <path d="M 2 2 C 9 8, 17 15, 13 24 C 9 17, 5 11, 2 7 Z" fill="currentColor" />
+                                </svg>
                                 {circle.text}
                               </div>
                             </React.Fragment>
