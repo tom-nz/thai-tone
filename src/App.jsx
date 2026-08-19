@@ -62,11 +62,6 @@ export default function App() {
   const [bgColor, setBgColor] = useState('#e2e8f0');
   const [bgImage, setBgImage] = useState('');
 
-  // ข้อมูลวิเคราะห์หลักภาษาและเส้น 5 เส้น
-  const [analysisInfo, setAnalysisInfo] = useState({ type: '', vowelLen: '', desc: '' });
-  const [linesData, setLinesData] = useState([]);
-  const [hoveredRowId, setHoveredRowId] = useState(null);
-
   // หมวดหมู่อักษร 3 หมู่
   const midConsonants = ['ก', 'จ', 'ด', 'ต', 'บ', 'ป', 'อ', 'ฎ', 'ฏ'];
   const highConsonants = ['ข', 'ฃ', 'ฉ', 'ฐ', 'ถ', 'ผ', 'ฝ', 'ศ', 'ษ', 'ส', 'ห'];
@@ -85,7 +80,7 @@ export default function App() {
     'ย', 'ร', 'ล', 'ว', 'ส', 'ห', 'อ', 'ฮ'
   ];
 
-  // สระเสียงยาว (คำเป็น) - เรียงลำดับตามการท่องจำมาตรฐานภาษาไทย (อา อี อือ อู เอ แอ โอ ออ เออ เอีย เอือ อัว -ำ ใ- ไ- เ-า)
+  // สระเสียงยาว (คำเป็น) - เรียงลำดับตามมาตรฐานการท่องจำ (อะ อา, อิ อี, อึ อือ, อุ อู...)
   const longVowels = [
     { label: '-า', front: '', rear: 'า' },
     { label: '-ี', front: '', rear: 'ี' },
@@ -105,7 +100,7 @@ export default function App() {
     { label: 'เ-า', front: 'เ', rear: 'า' }
   ];
 
-  // สระเสียงสั้น (คำตาย) - เรียงลำดับตามการท่องจำมาตรฐานภาษาไทย (ะ อิ อึ อุ เอะ แอะ โอะ เอาะ เออะ เอียะ เอือะ อัวะ)
+  // สระเสียงสั้น (คำตาย)
   const shortVowels = [
     { label: '-ะ', front: '', rear: 'ะ' },
     { label: '-ิ', front: '', rear: 'ิ' },
@@ -129,94 +124,6 @@ export default function App() {
     'พ': 'ผ', 'ภ': 'ผ', 'ผ': 'พ',
     'ฟ': 'ฝ', 'ฝ': 'ฟ', 'ฮ': 'ห', 'ห': 'ฮ'
   };
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('view') === 'display') {
-      setIsDisplayWindow(true);
-      document.body.style.margin = '0';
-      document.body.style.overflow = 'hidden';
-      document.documentElement.style.overflow = 'hidden';
-    }
-  }, []);
-
-  // ระบบสื่อสารข้ามมอนิเตอร์ (BroadcastChannel Sync + LocalStorage Fallback)
-  useEffect(() => {
-    const channel = new BroadcastChannel('thai_tone_sync_channel');
-    
-    // ฟังก์ชันสำหรับอัปเดต state ของ Display Window
-    const applySyncData = (data) => {
-      if (!data) return;
-      const { lines, info, text, cText, cMid, cHigh, cLow, fontSize, bType, bColor, bImg, activeRowId, modeVal } = data;
-      if (lines) setLinesData(lines);
-      if (info) setAnalysisInfo(info);
-      if (text) setInputText(text);
-      if (cText) setCircleTextColor(cText);
-      if (cMid) setColorMid(cMid);
-      if (cHigh) setColorHigh(cHigh);
-      if (cLow) setColorLow(cLow);
-      if (fontSize !== undefined) setLabelFontSize(fontSize);
-      if (bType) setBgType(bType);
-      if (bColor) setBgColor(bColor);
-      if (bImg !== undefined) setBgImage(bImg);
-      if (activeRowId !== undefined) setHoveredRowId(activeRowId);
-      if (modeVal) setMode(modeVal);
-    };
-
-    if (isDisplayWindow) {
-      // อ่านข้อมูลล่าสุดจาก LocalStorage ทันทีที่เปิด Display Window
-      try {
-        const savedState = localStorage.getItem('thai_tone_live_sync_data');
-        if (savedState) {
-          applySyncData(JSON.parse(savedState));
-        }
-      } catch (e) {
-        console.error("Failed to read initial sync state", e);
-      }
-
-      // ฟังข้อความส่งต่อผ่าน BroadcastChannel
-      channel.onmessage = (event) => {
-        applySyncData(event.data);
-      };
-
-      // ส่งคำร้องขอซิงค์ข้อมูลจากหน้าจอหลัก
-      channel.postMessage({ type: 'REQUEST_SYNC' });
-    } else {
-      // หน้าจอหลัก (Control Window): ส่งข้อมูลและบันทึกลง LocalStorage
-      const syncPayload = {
-        type: 'SYNC_STATE',
-        lines: linesData,
-        info: analysisInfo,
-        text: inputText,
-        cText: circleTextColor,
-        cMid: colorMid,
-        cHigh: colorHigh,
-        cLow: colorLow,
-        fontSize: labelFontSize,
-        bType: bgType,
-        bColor: bgColor,
-        bImg: bgImage,
-        activeRowId: hoveredRowId,
-        modeVal: mode
-      };
-
-      try {
-        localStorage.setItem('thai_tone_live_sync_data', JSON.stringify(syncPayload));
-      } catch (e) {
-        console.error("Failed to save live sync state", e);
-      }
-
-      channel.postMessage(syncPayload);
-
-      channel.onmessage = (event) => {
-        if (event.data && event.data.type === 'REQUEST_SYNC') {
-          channel.postMessage(syncPayload);
-        }
-      };
-    }
-
-    return () => channel.close();
-  }, [linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, labelFontSize, bgType, bgColor, bgImage, hoveredRowId, mode, isDisplayWindow]);
 
   const parseThaiWord = (word) => {
     if (!word) return { initial: '', frontVowel: '', rearVowel: '', toneMark: '' };
@@ -321,12 +228,17 @@ export default function App() {
   };
 
   const calculateTones = (word, currentMode, midC, highC, lowC) => {
-    if (!word) return [];
-    const isValid = validateInput(word);
-    if (!isValid) return [];
+    if (!word || word.trim() === '') {
+      return [
+        { id: 5, tone: 'เสียงจัตวา', mark: '◌๋', word: '', color: highC, isMulti: false, multi: [], show: false, leftPos: '80%' },
+        { id: 4, tone: 'เสียงตรี', mark: '◌๊', word: '', color: lowC, isMulti: false, multi: [], show: false, leftPos: '65%' },
+        { id: 3, tone: 'เสียงโท', mark: '◌้', word: '', color: lowC, isMulti: false, multi: [], show: false, leftPos: '52%' },
+        { id: 2, tone: 'เสียงเอก', mark: '◌่', word: '', color: highC, isMulti: false, multi: [], show: false, leftPos: '40%' },
+        { id: 1, tone: 'เสียงสามัญ', mark: '—', word: '', color: lowC, isMulti: false, multi: [], show: false, leftPos: '28%' }
+      ];
+    }
 
     const info = analyzeSyllable(word, currentMode);
-    setAnalysisInfo(info);
     const { initial, frontVowel, rearVowel, isDead, isShort, primaryConsonant } = info;
 
     if (midConsonants.includes(primaryConsonant)) {
@@ -391,9 +303,102 @@ export default function App() {
     }
   };
 
+  const [analysisInfo, setAnalysisInfo] = useState(() => analyzeSyllable('กอ', 'full5'));
+  const [linesData, setLinesData] = useState(() => calculateTones('กอ', 'full5', '#22c55e', '#ef4444', '#007bff'));
+  const [hoveredRowId, setHoveredRowId] = useState(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('view') === 'display') {
+      setIsDisplayWindow(true);
+      document.body.style.margin = '0';
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+    }
+  }, []);
+
+  useEffect(() => {
+    const channel = new BroadcastChannel('thai_tone_sync_channel');
+    
+    const applySyncData = (data) => {
+      if (!data) return;
+      const { lines, info, text, cText, cMid, cHigh, cLow, fontSize, bType, bColor, bImg, activeRowId, modeVal } = data;
+      if (Array.isArray(lines) && lines.length > 0) setLinesData(lines);
+      if (info && info.desc) setAnalysisInfo(info);
+      if (text) setInputText(text);
+      if (cText) setCircleTextColor(cText);
+      if (cMid) setColorMid(cMid);
+      if (cHigh) setColorHigh(cHigh);
+      if (cLow) setColorLow(cLow);
+      if (fontSize !== undefined) setLabelFontSize(fontSize);
+      if (bType) setBgType(bType);
+      if (bColor) setBgColor(bColor);
+      if (bImg !== undefined) setBgImage(bImg);
+      if (activeRowId !== undefined) setHoveredRowId(activeRowId);
+      if (modeVal) setMode(modeVal);
+    };
+
+    if (isDisplayWindow) {
+      // 1. Read initial persisted state on Screen 2 mount
+      try {
+        const savedState = localStorage.getItem('thai_tone_live_sync_data');
+        if (savedState) {
+          applySyncData(JSON.parse(savedState));
+        }
+      } catch (e) {
+        console.error("Failed to read initial sync state", e);
+      }
+
+      // 2. Listen to sync updates from Screen 1
+      channel.onmessage = (event) => {
+        if (event.data && event.data.type === 'SYNC_STATE') {
+          applySyncData(event.data);
+        }
+      };
+
+      // 3. Request sync from Screen 1
+      channel.postMessage({ type: 'REQUEST_SYNC' });
+    } else {
+      // Screen 1 (Control Window): Broadcast updates and persist
+      const syncPayload = {
+        type: 'SYNC_STATE',
+        lines: linesData,
+        info: analysisInfo,
+        text: inputText,
+        cText: circleTextColor,
+        cMid: colorMid,
+        cHigh: colorHigh,
+        cLow: colorLow,
+        fontSize: labelFontSize,
+        bType: bgType,
+        bColor: bgColor,
+        bImg: bgImage,
+        activeRowId: hoveredRowId,
+        modeVal: mode
+      };
+
+      try {
+        localStorage.setItem('thai_tone_live_sync_data', JSON.stringify(syncPayload));
+      } catch (e) {
+        console.error("Failed to save live sync state", e);
+      }
+
+      channel.postMessage(syncPayload);
+
+      channel.onmessage = (event) => {
+        if (event.data && event.data.type === 'REQUEST_SYNC') {
+          channel.postMessage(syncPayload);
+        }
+      };
+    }
+
+    return () => channel.close();
+  }, [linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, labelFontSize, bgType, bgColor, bgImage, hoveredRowId, mode, isDisplayWindow]);
+
   useEffect(() => {
     if (!isDisplayWindow) {
       setLinesData(calculateTones(inputText, mode, colorMid, colorHigh, colorLow));
+      setAnalysisInfo(analyzeSyllable(inputText, mode));
     }
   }, [inputText, mode, colorMid, colorHigh, colorLow, isDisplayWindow]);
 
@@ -874,7 +879,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 3. เลือกสระด่วน สระเสียงยาว/สระเสียงสั้น (เรียงตามการท่องจำมาตรฐาน) */}
+              {/* 3. เลือกสระด่วน สระเสียงยาว/สระเสียงสั้น */}
               <div>
                 <div style={{ fontSize: '12px', color: '#166534', fontWeight: 'bold', marginBottom: '6px' }}>🟢 สระเสียงยาว (คำเป็น):</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '10px' }}>
