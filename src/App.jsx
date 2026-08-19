@@ -288,6 +288,9 @@ export default function App() {
   const [linesData, setLinesData] = useState(() => calculateTones('กอ', 'full5', '#22c55e', '#ef4444', '#007bff'));
   const [hoveredRowId, setHoveredRowId] = useState(null);
 
+  // แจ้งเตือนเมื่อการขอเต็มจอฝั่งจอที่ 2 ต้องใช้อินเทอร์แอคชัน
+  const [showFsNotice, setShowFsNotice] = useState(false);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('view') === 'display') {
@@ -398,6 +401,9 @@ export default function App() {
           console.error("Failed to parse storage sync data", err);
         }
       }
+      if (e.key === 'thai_tone_toggle_fs_signal') {
+        toggleFullscreen();
+      }
     };
 
     window.addEventListener('storage', handleStorageChange);
@@ -443,6 +449,9 @@ export default function App() {
   const handleToggleDisplayFullscreen = () => {
     const channel = new BroadcastChannel('thai_tone_sync_channel');
     channel.postMessage({ type: 'TOGGLE_FULLSCREEN' });
+    try {
+      localStorage.setItem('thai_tone_toggle_fs_signal', Date.now().toString());
+    } catch (e) {}
     channel.close();
   };
 
@@ -451,6 +460,8 @@ export default function App() {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch((err) => {
         console.log("Fullscreen request failed:", err);
+        setShowFsNotice(true);
+        setTimeout(() => setShowFsNotice(false), 3500);
       });
     } else {
       if (document.exitFullscreen) {
@@ -577,6 +588,12 @@ export default function App() {
     return (
       <div 
         onDoubleClick={toggleFullscreen}
+        onClick={() => {
+          if (showFsNotice) {
+            toggleFullscreen();
+            setShowFsNotice(false);
+          }
+        }}
         title="ดับเบิ้ลคลิกเพื่อสลับโหมดเต็มจอ"
         style={{ 
           height: '100vh', 
@@ -596,6 +613,28 @@ export default function App() {
           ...getContainerBgStyle()
         }}
       >
+        {showFsNotice && (
+          <div style={{
+            position: 'absolute',
+            top: '20px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            backgroundColor: 'rgba(15, 23, 42, 0.92)',
+            color: '#ffffff',
+            padding: '10px 22px',
+            borderRadius: '30px',
+            fontSize: '15px',
+            fontWeight: 'bold',
+            zIndex: 9999,
+            boxShadow: '0 10px 25px rgba(0,0,0,0.3)',
+            pointerEvents: 'none',
+            border: '1px solid #38bdf8',
+            backdropFilter: 'blur(8px)'
+          }}>
+            ⛶ คลิก 1 ครั้งตรงไหนก็ได้บนจอนี้เพื่อสลับเต็มจอ
+          </div>
+        )}
+
         <div 
           style={{ 
             width: 'clamp(320px, 70vw, 1200px)', 
