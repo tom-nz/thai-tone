@@ -483,11 +483,11 @@ export default function App() {
     setInputText(newWord);
   };
 
+  // แก้ไขการเลือกสระด่วน: แทนที่สระเดิมทั้งหมดโดยคงพยัญชนะต้นไว้
   const handleQuickVowelClick = (vowelObj) => {
     const { initial } = parseThaiWord(inputText);
     const cons = initial || 'ก';
-    const { aboveBelowVowel, rest } = parseThaiWord(vowelObj.rear);
-    const newWord = buildWord(vowelObj.front, cons, aboveBelowVowel, '', rest);
+    const newWord = `${vowelObj.front}${cons}${vowelObj.rear}`;
     setInputText(newWord);
   };
 
