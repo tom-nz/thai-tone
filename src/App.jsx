@@ -325,7 +325,7 @@ export default function App() {
       const { lines, info, text, cText, cMid, cHigh, cLow, fontSize, bType, bColor, bImg, activeRowId, modeVal } = data;
       if (Array.isArray(lines) && lines.length > 0) setLinesData(lines);
       if (info && info.desc) setAnalysisInfo(info);
-      if (text) setInputText(text);
+      if (text !== undefined) setInputText(text);
       if (cText) setCircleTextColor(cText);
       if (cMid) setColorMid(cMid);
       if (cHigh) setColorHigh(cHigh);
@@ -339,6 +339,7 @@ export default function App() {
     };
 
     if (isDisplayWindow) {
+      // 1. ดึงข้อมูลล่าสุดจาก LocalStorage เมื่อเปิดหน้าจอ 2
       try {
         const savedState = localStorage.getItem('thai_tone_live_sync_data');
         if (savedState) {
@@ -348,14 +349,34 @@ export default function App() {
         console.error("Failed to read initial sync state", e);
       }
 
+      // 2. ฟังข้อความจาก BroadcastChannel
       channel.onmessage = (event) => {
         if (event.data && event.data.type === 'SYNC_STATE') {
           applySyncData(event.data);
         }
       };
 
+      // 3. ฟังการอัปเดตผ่าน Storage Event (เสถียร 100% ข้ามหน้าต่าง)
+      const handleStorageChange = (e) => {
+        if (e.key === 'thai_tone_live_sync_data' && e.newValue) {
+          try {
+            applySyncData(JSON.parse(e.newValue));
+          } catch (err) {
+            console.error("Failed to parse storage sync data", err);
+          }
+        }
+      };
+      window.addEventListener('storage', handleStorageChange);
+
+      // ขอข้อมูลล่าสุดจากจอหลัก
       channel.postMessage({ type: 'REQUEST_SYNC' });
+
+      return () => {
+        window.removeEventListener('storage', handleStorageChange);
+        channel.close();
+      };
     } else {
+      // จอหลัก (Master Screen 1): ส่งข้อมูลการอัปเดตไปยังจอที่ 2
       const syncPayload = {
         type: 'SYNC_STATE',
         lines: linesData,
@@ -386,9 +407,9 @@ export default function App() {
           channel.postMessage(syncPayload);
         }
       };
-    }
 
-    return () => channel.close();
+      return () => channel.close();
+    }
   }, [linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, labelFontSize, bgType, bgColor, bgImage, hoveredRowId, mode, isDisplayWindow]);
 
   useEffect(() => {
