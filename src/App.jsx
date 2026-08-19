@@ -125,19 +125,21 @@ export default function App() {
     'ฟ': 'ฝ', 'ฝ': 'ฟ', 'ฮ': 'ห', 'ห': 'ฮ'
   };
 
+  // ตัวแยกองค์ประกอบคำภาษาไทย (ปรับปรุงลำดับอักขระสระบน/ล่างอย่างถูกต้อง)
   const parseThaiWord = (word) => {
-    if (!word) return { initial: '', frontVowel: '', rearVowel: '', toneMark: '' };
+    if (!word) return { initial: '', frontVowel: '', aboveBelowVowel: '', rest: '', toneMark: '' };
+    
+    let workStr = word.trim();
     let frontVowel = '';
-    let workStr = word;
-    if (['เ', 'แ', 'โ', 'ใ', 'ไ'].includes(word[0])) {
-      frontVowel = word[0];
-      workStr = word.slice(1);
+    
+    // 1. แยกสระหน้า (เ, แ, โ, ใ, ไ)
+    if (['เ', 'แ', 'โ', 'ใ', 'ไ'].includes(workStr[0])) {
+      frontVowel = workStr[0];
+      workStr = workStr.slice(1);
     }
 
+    // 2. แยกพยัญชนะต้น (รองรับคำควบกล้ำ)
     let initial = '';
-    let rearVowel = '';
-    let toneMark = '';
-
     if (workStr.length >= 2 && thaiClusters.includes(workStr.slice(0, 2))) {
       initial = workStr.slice(0, 2);
       workStr = workStr.slice(2);
@@ -146,19 +148,30 @@ export default function App() {
       workStr = workStr.slice(1);
     }
 
+    // 3. แยกสระบน/สระล่าง สัญลักษณ์วรรณยุกต์เดิม และส่วนสระหลัง/ตัวสะกด
+    const aboveBelowVowelChars = ['ิ', 'ี', 'ึ', 'ื', 'ุ', 'ู', 'ั', '็', 'ํ'];
+    const toneChars = ['่', '้', '๊', '๋'];
+
+    let aboveBelowVowel = '';
+    let toneMark = '';
+    let rest = '';
+
     for (let char of workStr) {
-      if (['่', '้', '๊', '๋'].includes(char)) {
+      if (toneChars.includes(char)) {
         toneMark = char;
+      } else if (aboveBelowVowelChars.includes(char)) {
+        aboveBelowVowel += char;
       } else {
-        rearVowel += char;
+        rest += char;
       }
     }
 
-    return { initial, frontVowel, rearVowel, toneMark };
+    return { initial, frontVowel, aboveBelowVowel, rest, toneMark };
   };
 
-  const buildWord = (frontVowel, consonant, tone, rearVowel) => {
-    return `${frontVowel}${consonant}${tone}${rearVowel}`;
+  // ประกอบคำโดยวางวรรณยุกต์เหนือสระบน/ล่าง (เช่น ก + ื + ่ + อ = กื่อ)
+  const buildWord = (frontVowel, initial, aboveBelowVowel, tone, rest) => {
+    return `${frontVowel}${initial}${aboveBelowVowel}${tone}${rest}`;
   };
 
   const validateInput = (word) => {
@@ -179,8 +192,9 @@ export default function App() {
   };
 
   const analyzeSyllable = (word, currentMode) => {
-    const { initial, frontVowel, rearVowel } = parseThaiWord(word);
+    const { initial, frontVowel, aboveBelowVowel, rest } = parseThaiWord(word);
     const primaryConsonant = initial ? initial[0] : '';
+    const rearVowel = aboveBelowVowel + rest;
     
     const shortVowelChars = ['ะ', 'ิ', 'ึ', 'ุ', 'ั'];
     const deadEndings = ['ก', 'ข', 'ค', 'ฆ', 'บ', 'ป', 'พ', 'ฟ', 'ภ', 'ด', 'จ', 'ช', 'ซ', 'ฎ', 'ฏ', 'ฐ', 'ฑ', 'ฒ', 'ต', 'ถ', 'ท', 'ธ', 'ศ', 'ษ', 'ส'];
@@ -195,7 +209,7 @@ export default function App() {
     const lastChar = rearVowel.slice(-1);
     if (deadEndings.includes(lastChar)) {
       isDead = true;
-    } else if (rearVowel.endsWith('ะ') || (isShort && !rearVowel)) {
+    } else if (rearVowel.endsWith('ะ') || (isShort && !rest)) {
       isDead = true;
     }
 
@@ -224,7 +238,7 @@ export default function App() {
       }
     }
 
-    return { type: typeText, vowelLen: lenText, desc, isDead, isShort, initial, frontVowel, rearVowel, primaryConsonant };
+    return { type: typeText, vowelLen: lenText, desc, isDead, isShort, initial, frontVowel, aboveBelowVowel, rest, primaryConsonant };
   };
 
   const calculateTones = (word, currentMode, midC, highC, lowC) => {
@@ -239,15 +253,15 @@ export default function App() {
     }
 
     const info = analyzeSyllable(word, currentMode);
-    const { initial, frontVowel, rearVowel, isDead, isShort, primaryConsonant } = info;
+    const { initial, frontVowel, aboveBelowVowel, rest, isDead, isShort, primaryConsonant } = info;
 
     if (midConsonants.includes(primaryConsonant)) {
       return [
-        { id: 5, tone: 'เสียงจัตวา', mark: '◌๋', word: buildWord(frontVowel, initial, '๋', rearVowel), color: midC, isMulti: false, multi: [], show: true, leftPos: '80%' },
-        { id: 4, tone: 'เสียงตรี', mark: '◌๊', word: buildWord(frontVowel, initial, '๊', rearVowel), color: midC, isMulti: false, multi: [], show: true, leftPos: '65%' },
-        { id: 3, tone: 'เสียงโท', mark: '◌้', word: buildWord(frontVowel, initial, '้', rearVowel), color: midC, isMulti: false, multi: [], show: true, leftPos: '52%' },
-        { id: 2, tone: 'เสียงเอก', mark: '◌่', word: isDead ? word : buildWord(frontVowel, initial, '่', rearVowel), color: midC, isMulti: false, multi: [], show: true, leftPos: '40%' },
-        { id: 1, tone: 'เสียงสามัญ', mark: '-', word: isDead ? '' : buildWord(frontVowel, initial, '', rearVowel), color: midC, isMulti: false, multi: [], show: !isDead, leftPos: '28%' }
+        { id: 5, tone: 'เสียงจัตวา', mark: '◌๋', word: buildWord(frontVowel, initial, aboveBelowVowel, '๋', rest), color: midC, isMulti: false, multi: [], show: true, leftPos: '80%' },
+        { id: 4, tone: 'เสียงตรี', mark: '◌๊', word: buildWord(frontVowel, initial, aboveBelowVowel, '๊', rest), color: midC, isMulti: false, multi: [], show: true, leftPos: '65%' },
+        { id: 3, tone: 'เสียงโท', mark: '◌้', word: buildWord(frontVowel, initial, aboveBelowVowel, '้', rest), color: midC, isMulti: false, multi: [], show: true, leftPos: '52%' },
+        { id: 2, tone: 'เสียงเอก', mark: '◌่', word: isDead ? word : buildWord(frontVowel, initial, aboveBelowVowel, '่', rest), color: midC, isMulti: false, multi: [], show: true, leftPos: '40%' },
+        { id: 1, tone: 'เสียงสามัญ', mark: '-', word: isDead ? '' : buildWord(frontVowel, initial, aboveBelowVowel, '', rest), color: midC, isMulti: false, multi: [], show: !isDead, leftPos: '28%' }
       ];
     }
 
@@ -267,38 +281,38 @@ export default function App() {
 
     if (currentMode === 'highOnly') {
       return [
-        { id: 5, tone: 'เสียงจัตวา', mark: '◌๋', word: buildWord(frontVowel, highConsonant, '', rearVowel), color: highC, isMulti: false, multi: [], show: !isDead, leftPos: '80%' },
+        { id: 5, tone: 'เสียงจัตวา', mark: '◌๋', word: buildWord(frontVowel, highConsonant, aboveBelowVowel, '', rest), color: highC, isMulti: false, multi: [], show: !isDead, leftPos: '80%' },
         { id: 4, tone: 'เสียงตรี', mark: '◌๊', word: '', color: highC, isMulti: false, multi: [], show: false, leftPos: '65%' },
-        { id: 3, tone: 'เสียงโท', mark: '◌้', word: buildWord(frontVowel, highConsonant, '้', rearVowel), color: highC, isMulti: false, multi: [], show: true, leftPos: '52%' },
-        { id: 2, tone: 'เสียงเอก', mark: '◌่', word: buildWord(frontVowel, highConsonant, '่', rearVowel), color: highC, isMulti: false, multi: [], show: true, leftPos: '40%' },
+        { id: 3, tone: 'เสียงโท', mark: '◌้', word: buildWord(frontVowel, highConsonant, aboveBelowVowel, '้', rest), color: highC, isMulti: false, multi: [], show: true, leftPos: '52%' },
+        { id: 2, tone: 'เสียงเอก', mark: '◌่', word: buildWord(frontVowel, highConsonant, aboveBelowVowel, '่', rest), color: highC, isMulti: false, multi: [], show: true, leftPos: '40%' },
         { id: 1, tone: 'เสียงสามัญ', mark: '-', word: '', color: highC, isMulti: false, multi: [], show: false, leftPos: '28%' }
       ];
     } else if (currentMode === 'lowOnly') {
       return [
         { id: 5, tone: 'เสียงจัตวา', mark: '◌๋', word: '', color: lowC, isMulti: false, multi: [], show: false, leftPos: '80%' },
-        { id: 4, tone: 'เสียงตรี', mark: '◌๊', word: buildWord(frontVowel, lowConsonant, isDead && isShort ? '' : '้', rearVowel), color: lowC, isMulti: false, multi: [], show: true, leftPos: '65%' },
-        { id: 3, tone: 'เสียงโท', mark: '◌้', word: buildWord(frontVowel, lowConsonant, isDead && !isShort ? '' : '่', rearVowel), color: lowC, isMulti: false, multi: [], show: true, leftPos: '52%' },
+        { id: 4, tone: 'เสียงตรี', mark: '◌๊', word: buildWord(frontVowel, lowConsonant, aboveBelowVowel, isDead && isShort ? '' : '้', rest), color: lowC, isMulti: false, multi: [], show: true, leftPos: '65%' },
+        { id: 3, tone: 'เสียงโท', mark: '◌้', word: buildWord(frontVowel, lowConsonant, aboveBelowVowel, isDead && !isShort ? '' : '่', rest), color: lowC, isMulti: false, multi: [], show: true, leftPos: '52%' },
         { id: 2, tone: 'เสียงเอก', mark: '◌่', word: '', color: lowC, isMulti: false, multi: [], show: false, leftPos: '40%' },
-        { id: 1, tone: 'เสียงสามัญ', mark: '-', word: isDead ? '' : buildWord(frontVowel, lowConsonant, '', rearVowel), color: lowC, isMulti: false, multi: [], show: !isDead, leftPos: '28%' }
+        { id: 1, tone: 'เสียงสามัญ', mark: '-', word: isDead ? '' : buildWord(frontVowel, lowConsonant, aboveBelowVowel, '', rest), color: lowC, isMulti: false, multi: [], show: !isDead, leftPos: '28%' }
       ];
     } else {
       return [
-        { id: 5, tone: 'เสียงจัตวา', mark: '◌๋', word: buildWord(frontVowel, highConsonant, '', rearVowel), color: highC, isMulti: false, multi: [], show: true, leftPos: '80%' },
-        { id: 4, tone: 'เสียงตรี', mark: '◌๊', word: buildWord(frontVowel, lowConsonant, isDead && isShort ? '' : '้', rearVowel), color: lowC, isMulti: false, multi: [], show: true, leftPos: '65%' },
+        { id: 5, tone: 'เสียงจัตวา', mark: '◌๋', word: buildWord(frontVowel, highConsonant, aboveBelowVowel, '', rest), color: highC, isMulti: false, multi: [], show: true, leftPos: '80%' },
+        { id: 4, tone: 'เสียงตรี', mark: '◌๊', word: buildWord(frontVowel, lowConsonant, aboveBelowVowel, isDead && isShort ? '' : '้', rest), color: lowC, isMulti: false, multi: [], show: true, leftPos: '65%' },
         { 
           id: 3, 
           tone: 'เสียงโท', 
           mark: '◌้', 
           isMulti: true, 
           multi: [
-            { text: buildWord(frontVowel, lowConsonant, isDead && !isShort ? '' : '่', rearVowel), color: lowC },
-            { text: buildWord(frontVowel, highConsonant, '้', rearVowel), color: highC }
+            { text: buildWord(frontVowel, lowConsonant, aboveBelowVowel, isDead && !isShort ? '' : '่', rest), color: lowC },
+            { text: buildWord(frontVowel, highConsonant, aboveBelowVowel, '้', rest), color: highC }
           ],
           show: true,
           leftPos: '52%'
         },
-        { id: 2, tone: 'เสียงเอก', mark: '◌่', word: buildWord(frontVowel, highConsonant, '่', rearVowel), color: highC, isMulti: false, multi: [], show: true, leftPos: '40%' },
-        { id: 1, tone: 'เสียงสามัญ', mark: '-', word: isDead ? '' : buildWord(frontVowel, lowConsonant, '', rearVowel), color: lowC, isMulti: false, multi: [], show: !isDead, leftPos: '28%' }
+        { id: 2, tone: 'เสียงเอก', mark: '◌่', word: buildWord(frontVowel, highConsonant, aboveBelowVowel, '่', rest), color: highC, isMulti: false, multi: [], show: true, leftPos: '40%' },
+        { id: 1, tone: 'เสียงสามัญ', mark: '-', word: isDead ? '' : buildWord(frontVowel, lowConsonant, aboveBelowVowel, '', rest), color: lowC, isMulti: false, multi: [], show: !isDead, leftPos: '28%' }
       ];
     }
   };
@@ -426,7 +440,7 @@ export default function App() {
       window.removeEventListener('storage', handleStorageChange);
       channel.close();
     };
-  }, [isDisplayWindow]); // ทำงานเพียงครั้งเดียวเมื่อเปิดจอที่ 2
+  }, [isDisplayWindow]);
 
   useEffect(() => {
     if (!isDisplayWindow) {
@@ -464,15 +478,16 @@ export default function App() {
   };
 
   const handleQuickConsonantClick = (c) => {
-    const { frontVowel, rearVowel } = parseThaiWord(inputText);
-    const newWord = buildWord(frontVowel || '', c, '', rearVowel || 'อ');
+    const { frontVowel, aboveBelowVowel, rest } = parseThaiWord(inputText);
+    const newWord = buildWord(frontVowel || '', c, aboveBelowVowel || '', '', rest || 'อ');
     setInputText(newWord);
   };
 
   const handleQuickVowelClick = (vowelObj) => {
     const { initial } = parseThaiWord(inputText);
     const cons = initial || 'ก';
-    const newWord = buildWord(vowelObj.front, cons, '', vowelObj.rear);
+    const { aboveBelowVowel, rest } = parseThaiWord(vowelObj.rear);
+    const newWord = buildWord(vowelObj.front, cons, aboveBelowVowel, '', rest);
     setInputText(newWord);
   };
 
