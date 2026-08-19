@@ -3,6 +3,36 @@ import React, { useState, useEffect } from 'react';
 // API Key จากสภาพแวดล้อมรันไทม์
 const apiKey = "";
 
+// คอมโพเนนต์หางตัวโน้ตดนตรี (เขบ็ตชั้นเดียว)
+const NoteStem = ({ color, scale = 1 }) => (
+  <svg
+    style={{
+      position: 'absolute',
+      top: `-${Math.round(18 * scale)}px`,
+      right: `${Math.round(2 * scale)}px`,
+      width: `${Math.round(14 * scale)}px`,
+      height: `${Math.round(26 * scale)}px`,
+      pointerEvents: 'none',
+      overflow: 'visible',
+      color: color || 'currentColor'
+    }}
+    viewBox="0 0 14 26"
+  >
+    {/* ก้านตัวโน้ต (Stem) */}
+    <path
+      d="M 2 26 L 2 2"
+      stroke="currentColor"
+      strokeWidth="2.8"
+      strokeLinecap="round"
+    />
+    {/* หางเขบ็ตชั้นเดียว (Single Flag) */}
+    <path
+      d="M 2 2 C 8 6, 12 10, 10 16 C 8 11, 5 7, 2 5 Z"
+      fill="currentColor"
+    />
+  </svg>
+);
+
 export default function App() {
   // ระบบจัดการ Gemini API Key
   const [customApiKey, setCustomApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
@@ -144,7 +174,6 @@ export default function App() {
     return () => channel.close();
   }, [linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, labelFontSize, bgType, bgColor, bgImage, hoveredRowId, isDisplayWindow]);
 
-  // ฟังก์ชันแยกพยัญชนะ (รองรับคำควบกล้ำ) และสระ
   const parseThaiWord = (word) => {
     if (!word) return { initial: '', frontVowel: '', rearVowel: '', toneMark: '' };
     let frontVowel = '';
@@ -445,9 +474,7 @@ export default function App() {
     return { backgroundColor: bgColor };
   };
 
-  // 1. หน้าจอที่สอง (Display Monitor) - ปรับขนาดข้อความและวงกลมตามสัดส่วน labelFontSize
   if (isDisplayWindow) {
-    // อัตราส่วนขยายตาม labelFontSize (default 20 = 1.0)
     const circleRatio = labelFontSize / 20;
     const circleSize = `clamp(${Math.round(42 * circleRatio)}px, ${(4.2 * circleRatio).toFixed(2)}vw, ${Math.round(64 * circleRatio)}px)`;
     const circleFontSize = `clamp(${Math.round(16 * circleRatio)}px, ${(1.8 * circleRatio).toFixed(2)}vw, ${Math.round(26 * circleRatio)}px)`;
@@ -567,6 +594,8 @@ export default function App() {
                           filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                         }}
                       >
+                        {/* หางตัวโน้ตดนตรี เขบ็ต 1 ชั้น */}
+                        <NoteStem color={item.color} scale={circleRatio} />
                         {item.word}
                       </div>
                     )}
@@ -596,6 +625,8 @@ export default function App() {
                                 filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                               }}
                             >
+                              {/* หางตัวโน้ตดนตรี เขบ็ต 1 ชั้น */}
+                              <NoteStem color={circle.color} scale={circleRatio} />
                               {circle.text}
                             </div>
                           </React.Fragment>
@@ -649,7 +680,6 @@ export default function App() {
     );
   }
 
-  // 2. หน้าจอควบคุมหลัก (จอล่าง)
   return (
     <div style={{ minHeight: '100vh', padding: '24px 15px', fontFamily: "'Sarabun', sans-serif", transition: 'all 0.3s ease', ...getContainerBgStyle() }}>
       <div style={{ maxWidth: viewLayout === 'split' ? '1280px' : '920px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -1049,6 +1079,8 @@ export default function App() {
                             filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                           }}
                         >
+                          {/* หางตัวโน้ตดนตรี เขบ็ต 1 ชั้น */}
+                          <NoteStem color={item.color} scale={1} />
                           {item.word}
                         </div>
                       )}
@@ -1078,6 +1110,8 @@ export default function App() {
                                   filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                                 }}
                               >
+                                {/* หางตัวโน้ตดนตรี เขบ็ต 1 ชั้น */}
+                                <NoteStem color={circle.color} scale={1} />
                                 {circle.text}
                               </div>
                             </React.Fragment>
