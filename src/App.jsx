@@ -317,9 +317,8 @@ export default function App() {
     }
   }, []);
 
+  // ระบบสื่อสารข้ามมอนิเตอร์ ( BroadcastChannel + Storage Event )
   useEffect(() => {
-    const channel = new BroadcastChannel('thai_tone_sync_channel');
-    
     const applySyncData = (data) => {
       if (!data) return;
       const { lines, info, text, cText, cMid, cHigh, cLow, fontSize, bType, bColor, bImg, activeRowId, modeVal } = data;
@@ -339,7 +338,7 @@ export default function App() {
     };
 
     if (isDisplayWindow) {
-      // 1. ดึงข้อมูลล่าสุดจาก LocalStorage เมื่อเปิดหน้าจอ 2
+      // 1. อ่านข้อมูลล่าสุดจาก LocalStorage บน Screen 2
       try {
         const savedState = localStorage.getItem('thai_tone_live_sync_data');
         if (savedState) {
@@ -349,14 +348,15 @@ export default function App() {
         console.error("Failed to read initial sync state", e);
       }
 
-      // 2. ฟังข้อความจาก BroadcastChannel
+      // 2. ฟังข้อความจาก BroadcastChannel โดยไม่ส่งวนกลับ
+      const channel = new BroadcastChannel('thai_tone_sync_channel');
       channel.onmessage = (event) => {
         if (event.data && event.data.type === 'SYNC_STATE') {
           applySyncData(event.data);
         }
       };
 
-      // 3. ฟังการอัปเดตผ่าน Storage Event (เสถียร 100% ข้ามหน้าต่าง)
+      // 3. ฟัง Storage Event ข้ามหน้าต่าง
       const handleStorageChange = (e) => {
         if (e.key === 'thai_tone_live_sync_data' && e.newValue) {
           try {
@@ -368,7 +368,7 @@ export default function App() {
       };
       window.addEventListener('storage', handleStorageChange);
 
-      // ขอข้อมูลล่าสุดจากจอหลัก
+      // ส่งคำขอข้อมูลจาก Master แค่ครั้งเดียวตอน Mount
       channel.postMessage({ type: 'REQUEST_SYNC' });
 
       return () => {
@@ -376,7 +376,9 @@ export default function App() {
         channel.close();
       };
     } else {
-      // จอหลัก (Master Screen 1): ส่งข้อมูลการอัปเดตไปยังจอที่ 2
+      // จอหลัก (Master Screen 1): กระจายข้อมูลการเปลี่ยนแปลงไปยัง Screen 2
+      const channel = new BroadcastChannel('thai_tone_sync_channel');
+
       const syncPayload = {
         type: 'SYNC_STATE',
         lines: linesData,
@@ -410,7 +412,7 @@ export default function App() {
 
       return () => channel.close();
     }
-  }, [linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, labelFontSize, bgType, bgColor, bgImage, hoveredRowId, mode, isDisplayWindow]);
+  }, [isDisplayWindow, linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, labelFontSize, bgType, bgColor, bgImage, hoveredRowId, mode]);
 
   useEffect(() => {
     if (!isDisplayWindow) {
@@ -433,7 +435,11 @@ export default function App() {
 
   const handleOpenDualMonitor = () => {
     const currentUrl = window.location.href.split('?')[0];
-    window.open(`${currentUrl}?view=display`, 'ThaiToneDisplayWindow', 'width=1400,height=900,menubar=no,toolbar=no,location=no,status=no');
+    window.open(
+      `${currentUrl}?view=display`,
+      'ThaiToneDisplayWindow',
+      'width=1400,height=900,resizable=yes,scrollbars=no,menubar=no,toolbar=no,location=no,status=no'
+    );
   };
 
   const handleSaveApiKey = () => {
@@ -1065,6 +1071,7 @@ export default function App() {
             </div>
           )}
 
+          { }
           {/* กระดานบรรทัด 5 เส้น (จอล่าง) */}
           <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '16px', padding: viewLayout === 'present' ? '40px 50px' : '35px 25px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', backdropFilter: 'blur(6px)' }}>
             
