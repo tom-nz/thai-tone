@@ -3,31 +3,31 @@ import React, { useState, useEffect } from 'react';
 // API Key จากสภาพแวดล้อมรันไทม์
 const apiKey = "";
 
-// คอมโพเนนต์หางตัวโน้ตดนตรี (เขบ็ตชั้นเดียว)
+// คอมโพเนนต์หางตัวโน้ตดนตรี (เขบ็ตชั้นเดียว - หนากว่าเดิม ต่อชิดขอบขวาสุดของวงกลม)
 const NoteStem = ({ color, scale = 1 }) => (
   <svg
     style={{
       position: 'absolute',
-      top: `-${Math.round(18 * scale)}px`,
-      right: `${Math.round(2 * scale)}px`,
-      width: `${Math.round(14 * scale)}px`,
-      height: `${Math.round(26 * scale)}px`,
+      top: `-${Math.round(20 * scale)}px`,
+      right: `-${Math.round(2 * scale)}px`, // ต่อชิดขอบขวาสุดของวงกลม
+      width: `${Math.round(18 * scale)}px`,
+      height: `${Math.round(32 * scale)}px`,
       pointerEvents: 'none',
       overflow: 'visible',
       color: color || 'currentColor'
     }}
-    viewBox="0 0 14 26"
+    viewBox="0 0 18 32"
   >
-    {/* ก้านตัวโน้ต (Stem) */}
+    {/* ก้านตัวโน้ต (Stem - เพิ่มความหนาเป็น 4px) */}
     <path
-      d="M 2 26 L 2 2"
+      d="M 3 32 L 3 2"
       stroke="currentColor"
-      strokeWidth="2.8"
+      strokeWidth="4"
       strokeLinecap="round"
     />
-    {/* หางเขบ็ตชั้นเดียว (Single Flag) */}
+    {/* หางเขบ็ตชั้นเดียว (Single Flag - โค้งหนาสวยงาม) */}
     <path
-      d="M 2 2 C 8 6, 12 10, 10 16 C 8 11, 5 7, 2 5 Z"
+      d="M 3 2 C 10 7, 17 13, 14 21 C 11 14, 7 8, 3 5 Z"
       fill="currentColor"
     />
   </svg>
@@ -594,7 +594,7 @@ export default function App() {
                           filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                         }}
                       >
-                        {/* หางตัวโน้ตดนตรี เขบ็ต 1 ชั้น */}
+                        {/* หางตัวโน้ตดนตรี เขบ็ต 1 ชั้น (ต่อชิดขอบขวาสุด) */}
                         <NoteStem color={item.color} scale={circleRatio} />
                         {item.word}
                       </div>
@@ -625,7 +625,7 @@ export default function App() {
                                 filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                               }}
                             >
-                              {/* หางตัวโน้ตดนตรี เขบ็ต 1 ชั้น */}
+                              {/* หางตัวโน้ตดนตรี เขบ็ต 1 ชั้น (ต่อชิดขอบขวาสุด) */}
                               <NoteStem color={circle.color} scale={circleRatio} />
                               {circle.text}
                             </div>
@@ -937,7 +937,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 6. Slider ขนาดตัวหนังสือและวงกลม (ปรับสัดส่วนพร้อมกันบนจอที่ 2) */}
+              {/* 6. Slider ขนาดตัวหนังสือและวงกลม */}
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 'bold', color: '#4b5563', marginBottom: '4px' }}>
                   <span>📐 ขนาดตัวหนังสือและวงกลม (จอที่ 2):</span>
@@ -953,7 +953,7 @@ export default function App() {
                 />
               </div>
 
-              {/* 7. เชื่อมต่อ Gemini API Key (ย้ายมาอยู่ล่างสุดของแผงควบคุม) */}
+              {/* 7. เชื่อมต่อ Gemini API Key */}
               <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
                 <button 
                   onClick={() => setShowApiInput(!showApiInput)}
@@ -1079,7 +1079,7 @@ export default function App() {
                             filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                           }}
                         >
-                          {/* หางตัวโน้ตดนตรี เขบ็ต 1 ชั้น */}
+                          {/* หางตัวโน้ตดนตรี เขบ็ต 1 ชั้น (ต่อชิดขอบขวาสุด) */}
                           <NoteStem color={item.color} scale={1} />
                           {item.word}
                         </div>
@@ -1110,7 +1110,7 @@ export default function App() {
                                   filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                                 }}
                               >
-                                {/* หางตัวโน้ตดนตรี เขบ็ต 1 ชั้น */}
+                                {/* หางตัวโน้ตดนตรี เขบ็ต 1 ชั้น (ต่อชิดขอบขวาสุด) */}
                                 <NoteStem color={circle.color} scale={1} />
                                 {circle.text}
                               </div>
