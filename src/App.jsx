@@ -3,31 +3,31 @@ import React, { useState, useEffect } from 'react';
 // API Key จากสภาพแวดล้อมรันไทม์
 const apiKey = "";
 
-// คอมโพเนนต์หางตัวโน้ตดนตรี (เขบ็ตชั้นเดียว - หนากว่าเดิม ต่อชิดขอบขวาสุดของวงกลม)
+// คอมโพเนนต์หางตัวโน้ตดนตรี (เขบ็ตชั้นเดียว - ต่อจากเส้นสัมผัสด้านขวาสุดของวงกลม ยิงตรงขึ้นไปด้านบน)
 const NoteStem = ({ color, scale = 1 }) => (
   <svg
     style={{
       position: 'absolute',
       top: `-${Math.round(20 * scale)}px`,
-      right: `-${Math.round(2 * scale)}px`, // ต่อชิดขอบขวาสุดของวงกลม
-      width: `${Math.round(18 * scale)}px`,
-      height: `${Math.round(32 * scale)}px`,
+      left: `calc(100% - ${Math.round(3 * scale)}px)`, // เริ่มต่อจากเส้นสัมผัสด้านขวาสุดของวงกลม
+      width: `${Math.round(20 * scale)}px`,
+      height: `${Math.round(44 * scale)}px`,
       pointerEvents: 'none',
       overflow: 'visible',
       color: color || 'currentColor'
     }}
-    viewBox="0 0 18 32"
+    viewBox="0 0 20 44"
   >
-    {/* ก้านตัวโน้ต (Stem - เพิ่มความหนาเป็น 4px) */}
+    {/* ก้านตัวโน้ต (Stem - เริ่มจากจุดสัมผัสด้านขวาสุดของวงกลม ยิงตรงขึ้นไปด้านบน) */}
     <path
-      d="M 3 32 L 3 2"
+      d="M 2 44 L 2 2"
       stroke="currentColor"
-      strokeWidth="4"
+      strokeWidth="3.5"
       strokeLinecap="round"
     />
-    {/* หางเขบ็ตชั้นเดียว (Single Flag - โค้งหนาสวยงาม) */}
+    {/* หางเขบ็ตชั้นเดียว (Single Flag - โค้งสวยงามสไตล์โน้ตดนตรี) */}
     <path
-      d="M 3 2 C 10 7, 17 13, 14 21 C 11 14, 7 8, 3 5 Z"
+      d="M 2 2 C 9 8, 17 15, 13 24 C 9 17, 5 11, 2 7 Z"
       fill="currentColor"
     />
   </svg>
@@ -594,7 +594,7 @@ export default function App() {
                           filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                         }}
                       >
-                        {/* หางตัวโน้ตดนตรี เขบ็ต 1 ชั้น (ต่อชิดขอบขวาสุด) */}
+                        {/* หางตัวโน้ตดนตรี เขบ็ต 1 ชั้น (ต่อเริ่มจากเส้นสัมผัสด้านขวาสุด) */}
                         <NoteStem color={item.color} scale={circleRatio} />
                         {item.word}
                       </div>
@@ -625,7 +625,7 @@ export default function App() {
                                 filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                               }}
                             >
-                              {/* หางตัวโน้ตดนตรี เขบ็ต 1 ชั้น (ต่อชิดขอบขวาสุด) */}
+                              {/* หางตัวโน้ตดนตรี เขบ็ต 1 ชั้น (ต่อเริ่มจากเส้นสัมผัสด้านขวาสุด) */}
                               <NoteStem color={circle.color} scale={circleRatio} />
                               {circle.text}
                             </div>
@@ -1079,7 +1079,7 @@ export default function App() {
                             filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                           }}
                         >
-                          {/* หางตัวโน้ตดนตรี เขบ็ต 1 ชั้น (ต่อชิดขอบขวาสุด) */}
+                          {/* หางตัวโน้ตดนตรี เขบ็ต 1 ชั้น (ต่อเริ่มจากเส้นสัมผัสด้านขวาสุด) */}
                           <NoteStem color={item.color} scale={1} />
                           {item.word}
                         </div>
@@ -1110,7 +1110,7 @@ export default function App() {
                                   filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                                 }}
                               >
-                                {/* หางตัวโน้ตดนตรี เขบ็ต 1 ชั้น (ต่อชิดขอบขวาสุด) */}
+                                {/* หางตัวโน้ตดนตรี เขบ็ต 1 ชั้น (ต่อเริ่มจากเส้นสัมผัสด้านขวาสุด) */}
                                 <NoteStem color={circle.color} scale={1} />
                                 {circle.text}
                               </div>
