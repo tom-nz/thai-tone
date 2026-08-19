@@ -234,7 +234,7 @@ export default function App() {
         { id: 4, tone: 'เสียงตรี', mark: '◌๊', word: '', color: lowC, isMulti: false, multi: [], show: false, leftPos: '65%' },
         { id: 3, tone: 'เสียงโท', mark: '◌้', word: '', color: lowC, isMulti: false, multi: [], show: false, leftPos: '52%' },
         { id: 2, tone: 'เสียงเอก', mark: '◌่', word: '', color: highC, isMulti: false, multi: [], show: false, leftPos: '40%' },
-        { id: 1, tone: 'เสียงสามัญ', mark: '—', word: '', color: lowC, isMulti: false, multi: [], show: false, leftPos: '28%' }
+        { id: 1, tone: 'เสียงสามัญ', mark: '-', word: '', color: lowC, isMulti: false, multi: [], show: false, leftPos: '28%' }
       ];
     }
 
@@ -247,7 +247,7 @@ export default function App() {
         { id: 4, tone: 'เสียงตรี', mark: '◌๊', word: buildWord(frontVowel, initial, '๊', rearVowel), color: midC, isMulti: false, multi: [], show: true, leftPos: '65%' },
         { id: 3, tone: 'เสียงโท', mark: '◌้', word: buildWord(frontVowel, initial, '้', rearVowel), color: midC, isMulti: false, multi: [], show: true, leftPos: '52%' },
         { id: 2, tone: 'เสียงเอก', mark: '◌่', word: isDead ? word : buildWord(frontVowel, initial, '่', rearVowel), color: midC, isMulti: false, multi: [], show: true, leftPos: '40%' },
-        { id: 1, tone: 'เสียงสามัญ', mark: '—', word: isDead ? '' : buildWord(frontVowel, initial, '', rearVowel), color: midC, isMulti: false, multi: [], show: !isDead, leftPos: '28%' }
+        { id: 1, tone: 'เสียงสามัญ', mark: '-', word: isDead ? '' : buildWord(frontVowel, initial, '', rearVowel), color: midC, isMulti: false, multi: [], show: !isDead, leftPos: '28%' }
       ];
     }
 
@@ -271,7 +271,7 @@ export default function App() {
         { id: 4, tone: 'เสียงตรี', mark: '◌๊', word: '', color: highC, isMulti: false, multi: [], show: false, leftPos: '65%' },
         { id: 3, tone: 'เสียงโท', mark: '◌้', word: buildWord(frontVowel, highConsonant, '้', rearVowel), color: highC, isMulti: false, multi: [], show: true, leftPos: '52%' },
         { id: 2, tone: 'เสียงเอก', mark: '◌่', word: buildWord(frontVowel, highConsonant, '่', rearVowel), color: highC, isMulti: false, multi: [], show: true, leftPos: '40%' },
-        { id: 1, tone: 'เสียงสามัญ', mark: '—', word: '', color: highC, isMulti: false, multi: [], show: false, leftPos: '28%' }
+        { id: 1, tone: 'เสียงสามัญ', mark: '-', word: '', color: highC, isMulti: false, multi: [], show: false, leftPos: '28%' }
       ];
     } else if (currentMode === 'lowOnly') {
       return [
@@ -279,7 +279,7 @@ export default function App() {
         { id: 4, tone: 'เสียงตรี', mark: '◌๊', word: buildWord(frontVowel, lowConsonant, isDead && isShort ? '' : '้', rearVowel), color: lowC, isMulti: false, multi: [], show: true, leftPos: '65%' },
         { id: 3, tone: 'เสียงโท', mark: '◌้', word: buildWord(frontVowel, lowConsonant, isDead && !isShort ? '' : '่', rearVowel), color: lowC, isMulti: false, multi: [], show: true, leftPos: '52%' },
         { id: 2, tone: 'เสียงเอก', mark: '◌่', word: '', color: lowC, isMulti: false, multi: [], show: false, leftPos: '40%' },
-        { id: 1, tone: 'เสียงสามัญ', mark: '—', word: isDead ? '' : buildWord(frontVowel, lowConsonant, '', rearVowel), color: lowC, isMulti: false, multi: [], show: !isDead, leftPos: '28%' }
+        { id: 1, tone: 'เสียงสามัญ', mark: '-', word: isDead ? '' : buildWord(frontVowel, lowConsonant, '', rearVowel), color: lowC, isMulti: false, multi: [], show: !isDead, leftPos: '28%' }
       ];
     } else {
       return [
@@ -298,7 +298,7 @@ export default function App() {
           leftPos: '52%'
         },
         { id: 2, tone: 'เสียงเอก', mark: '◌่', word: buildWord(frontVowel, highConsonant, '่', rearVowel), color: highC, isMulti: false, multi: [], show: true, leftPos: '40%' },
-        { id: 1, tone: 'เสียงสามัญ', mark: '—', word: isDead ? '' : buildWord(frontVowel, lowConsonant, '', rearVowel), color: lowC, isMulti: false, multi: [], show: !isDead, leftPos: '28%' }
+        { id: 1, tone: 'เสียงสามัญ', mark: '-', word: isDead ? '' : buildWord(frontVowel, lowConsonant, '', rearVowel), color: lowC, isMulti: false, multi: [], show: !isDead, leftPos: '28%' }
       ];
     }
   };
@@ -339,7 +339,6 @@ export default function App() {
     };
 
     if (isDisplayWindow) {
-      // 1. Read initial persisted state on Screen 2 mount
       try {
         const savedState = localStorage.getItem('thai_tone_live_sync_data');
         if (savedState) {
@@ -349,17 +348,14 @@ export default function App() {
         console.error("Failed to read initial sync state", e);
       }
 
-      // 2. Listen to sync updates from Screen 1
       channel.onmessage = (event) => {
         if (event.data && event.data.type === 'SYNC_STATE') {
           applySyncData(event.data);
         }
       };
 
-      // 3. Request sync from Screen 1
       channel.postMessage({ type: 'REQUEST_SYNC' });
     } else {
-      // Screen 1 (Control Window): Broadcast updates and persist
       const syncPayload = {
         type: 'SYNC_STATE',
         lines: linesData,
@@ -465,7 +461,7 @@ export default function App() {
       const parsed = JSON.parse(cleanJson);
 
       const toneNames = ['เสียงจัตวา', 'เสียงตรี', 'เสียงโท', 'เสียงเอก', 'เสียงสามัญ'];
-      const marks = ['◌๋', '◌๊', '◌้', '◌่', '—'];
+      const marks = ['◌๋', '◌๊', '◌้', '◌่', '-'];
       const leftPositions = ['80%', '65%', '52%', '40%', '28%'];
 
       const formatted = parsed.map((item, idx) => {
