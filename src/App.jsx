@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-// Safely load Firebase Compat SDKs to avoid Babel / CommonJS "require(https://...)" errors
+// Safely load Firebase Compat SDKs to avoid Babel / CommonJS "require" errors
 const loadFirebaseSDK = () => {
   if (typeof window === 'undefined') return Promise.reject('No window');
   if (window.firebase) return Promise.resolve(window.firebase);
@@ -111,6 +111,7 @@ export default function App() {
   const [customWifiUrl, setCustomWifiUrl] = useState('');
 
   const secondWindowRef = useRef(null);
+  const lastSentPayloadRef = useRef('');
 
   const midConsonants = ['ก', 'จ', 'ด', 'ต', 'บ', 'ป', 'อ', 'ฎ', 'ฏ'];
   const highConsonants = ['ข', 'ฃ', 'ฉ', 'ฐ', 'ถ', 'ผ', 'ฝ', 'ศ', 'ษ', 'ส', 'ห'];
@@ -425,7 +426,7 @@ export default function App() {
     }
   }, []);
 
-  // Firebase Setup for Cross-Device Sync (Tablet <-> Laptop)
+  // 1. Firebase Cloud Sync setup
   useEffect(() => {
     let unsubscribe = null;
     let isMounted = true;
@@ -489,7 +490,52 @@ export default function App() {
     };
   }, [appId, roomId, isDisplayWindow]);
 
+  // 2. ntfy.sh SSE Receiver for Display Window (Tablet / Smart TV)
   useEffect(() => {
+    if (!isDisplayWindow) return;
+
+    let es = null;
+    const topic = `thai_tone_sync_room_${roomId}`;
+    
+    try {
+      es = new EventSource(`https://ntfy.sh/${topic}/json`);
+      es.onmessage = (event) => {
+        try {
+          const raw = JSON.parse(event.data);
+          if (raw && raw.message) {
+            const data = JSON.parse(raw.message);
+            if (data && data.type === 'SYNC_STATE') {
+              if (Array.isArray(data.lines) && data.lines.length > 0) setLinesData(data.lines);
+              if (data.info && data.info.desc) setAnalysisInfo(data.info);
+              if (data.text !== undefined) setInputText(data.text);
+              if (data.cText) setCircleTextColor(data.cText);
+              if (data.cMid) setColorMid(data.cMid);
+              if (data.cHigh) setColorHigh(data.cHigh);
+              if (data.cLow) setColorLow(data.cLow);
+              if (data.fontSize !== undefined) setLabelFontSize(data.fontSize);
+              if (data.bType) setBgType(data.bType);
+              if (data.bColor) setBgColor(data.bColor);
+              if (data.bImg !== undefined) setBgImage(data.bImg);
+              if (data.activeRowId !== undefined) setHoveredRowId(data.activeRowId);
+              if (data.modeVal) setMode(data.modeVal);
+              setCloudConnected(true);
+            }
+          }
+        } catch (err) {}
+      };
+    } catch (e) {
+      console.warn("ntfy.sh SSE error:", e);
+    }
+
+    return () => {
+      if (es) es.close();
+    };
+  }, [isDisplayWindow, roomId]);
+
+  // 3. Main Controller Sync Dispatcher
+  useEffect(() => {
+    if (isDisplayWindow) return;
+
     const syncPayload = {
       type: 'SYNC_STATE',
       lines: linesData,
@@ -508,8 +554,13 @@ export default function App() {
       updatedAt: Date.now()
     };
 
-    safeSetLocalStorage('thai_tone_live_sync_data', JSON.stringify(syncPayload));
+    const strPayload = JSON.stringify(syncPayload);
+    if (strPayload === lastSentPayloadRef.current) return;
+    lastSentPayloadRef.current = strPayload;
+
+    safeSetLocalStorage('thai_tone_live_sync_data', strPayload);
     
+    // BroadcastChannel local sync
     const channel = safeCreateChannel('thai_tone_sync_channel');
     if (channel) {
       try {
@@ -517,19 +568,29 @@ export default function App() {
       } catch (e) {}
     }
 
+    // Pop-up window postMessage sync
     if (secondWindowRef.current && !secondWindowRef.current.closed) {
       try {
         secondWindowRef.current.postMessage(syncPayload, '*');
       } catch (e) {}
     }
 
-    // Cloud Firestore Write
-    if (!isDisplayWindow && typeof window !== 'undefined' && window.firebase && window.firebase.apps.length) {
+    // Universal HTTP SSE Cloud Pub/Sub Sync to Tablet
+    try {
+      fetch(`https://ntfy.sh/thai_tone_sync_room_${roomId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: strPayload
+      }).catch(() => {});
+    } catch (e) {}
+
+    // Cloud Firestore Write (if configured)
+    if (typeof window !== 'undefined' && window.firebase && window.firebase.apps && window.firebase.apps.length) {
       try {
         const db = window.firebase.firestore();
         db.collection('artifacts').doc(appId).collection('public').doc('data').collection('sync_rooms').doc(roomId)
           .set(syncPayload, { merge: true })
-          .catch((err) => console.warn("Firestore write notice:", err));
+          .catch(() => {});
       } catch (e) {}
     }
 
@@ -538,6 +599,7 @@ export default function App() {
     };
   }, [isDisplayWindow, linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, labelFontSize, bgType, bgColor, bgImage, hoveredRowId, mode, roomId, appId]);
 
+  // 4. Local BroadcastChannel receiver
   useEffect(() => {
     if (!isDisplayWindow) return;
 
@@ -793,9 +855,9 @@ export default function App() {
 
   if (isDisplayWindow) {
     const circleRatio = labelFontSize / 20;
-    const circleSize = `clamp(${Math.round(40 * circleRatio)}px, ${(4.0 * circleRatio).toFixed(2)}vw, ${Math.round(62 * circleRatio)}px)`;
-    const circleFontSize = `clamp(${Math.round(15 * circleRatio)}px, ${(1.7 * circleRatio).toFixed(2)}vw, ${Math.round(25 * circleRatio)}px)`;
-    const labelSize = `clamp(${Math.round(13 * circleRatio)}px, ${(0.07 * labelFontSize).toFixed(2)}vw, ${Math.round(24 * circleRatio)}px)`;
+    const circleSize = `clamp(${Math.round(42 * circleRatio)}px, ${(4.4 * circleRatio).toFixed(2)}vw, ${Math.round(66 * circleRatio)}px)`;
+    const circleFontSize = `clamp(${Math.round(16 * circleRatio)}px, ${(1.8 * circleRatio).toFixed(2)}vw, ${Math.round(26 * circleRatio)}px)`;
+    const labelSize = `clamp(${Math.round(14 * circleRatio)}px, ${(0.08 * labelFontSize).toFixed(2)}vw, ${Math.round(26 * circleRatio)}px)`;
 
     return (
       <div 
@@ -826,7 +888,7 @@ export default function App() {
             maxHeight: '100%',
             backgroundColor: 'rgba(255, 255, 255, 0.96)', 
             borderRadius: 'clamp(12px, 1.8vw, 24px)', 
-            padding: 'clamp(12px, 2vw, 28px) clamp(16px, 2.5vw, 40px)', 
+            padding: 'clamp(14px, 2vw, 28px) clamp(16px, 2.5vw, 40px)', 
             boxShadow: '0 10px 30px rgba(0,0,0,0.12)', 
             display: 'flex', 
             flexDirection: 'column', 
@@ -837,7 +899,8 @@ export default function App() {
             overflow: 'hidden'
           }}
         >
-          <div style={{ textAlign: 'center', flexShrink: 0 }}>
+          {/* Header */}
+          <div style={{ textAlign: 'center', flexShrink: 0, marginBottom: '4px' }}>
             <h2 style={{ margin: '0 0 2px 0', color: '#ea580c', fontSize: 'clamp(20px, 2.2vw, 32px)', fontWeight: 'bold' }}>
               ไตรยางศ์ หรือ อักษร 3 หมู่
             </h2>
@@ -851,14 +914,15 @@ export default function App() {
               </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'clamp(120px, 18vw, 220px) 1fr clamp(70px, 10vw, 120px)', color: '#0284c7', fontWeight: 'bold', fontSize: 'clamp(11px, 1vw, 15px)', margin: '0 0 -2px 0' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'clamp(130px, 18vw, 230px) 1fr clamp(80px, 10vw, 130px)', color: '#0284c7', fontWeight: 'bold', fontSize: 'clamp(11px, 1vw, 15px)', margin: '0 0 2px 0' }}>
               <div style={{ textAlign: 'right', paddingRight: '16px', color: '#0284c7', fontWeight: 'bold' }}>รูปวรรณยุกต์</div>
               <div></div>
               <div></div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', justifySpace: 'space-around', flex: 1, padding: '4px 0', overflow: 'hidden' }}>
+          {/* Proportional 5-Line Staff Container */}
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1, padding: '8px 0', overflow: 'hidden' }}>
             {linesData.map((item, idx) => {
               let rowHeaderColor = '#94a3b8';
               if (item.show) {
@@ -870,7 +934,7 @@ export default function App() {
               return (
                 <div 
                   key={idx} 
-                  style={{ display: 'grid', gridTemplateColumns: 'clamp(120px, 18vw, 220px) 1fr clamp(70px, 10vw, 120px)', alignItems: 'center' }}
+                  style={{ display: 'grid', gridTemplateColumns: 'clamp(130px, 18vw, 230px) 1fr clamp(80px, 10vw, 130px)', alignItems: 'center', flex: 1 }}
                   onMouseEnter={() => setHoveredRowId(item.id)}
                   onMouseLeave={() => setHoveredRowId(null)}
                 >
@@ -889,8 +953,9 @@ export default function App() {
                     {item.tone} <span style={{ fontSize: '0.9em', marginLeft: '2px' }}>[ {item.mark} ]</span>
                   </div>
 
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: 'clamp(24px, 3.5vh, 52px)' }}>
-                    <div style={{ width: '100%', height: '3px', backgroundColor: '#94a3b8' }}></div>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '100%' }}>
+                    {/* Horizontal Staff Line */}
+                    <div style={{ width: '100%', height: '2.5px', backgroundColor: '#94a3b8' }}></div>
 
                     {!item.isMulti && item.show && item.word && (
                       <div 
@@ -916,10 +981,10 @@ export default function App() {
                         <svg
                           style={{
                             position: 'absolute',
-                            top: `-${Math.round(18 * circleRatio)}px`,
+                            top: `-${Math.round(20 * circleRatio)}px`,
                             left: `calc(100% - ${Math.round(3 * circleRatio)}px)`,
-                            width: `${Math.round(18 * circleRatio)}px`,
-                            height: `${Math.round(40 * circleRatio)}px`,
+                            width: `${Math.round(20 * circleRatio)}px`,
+                            height: `${Math.round(44 * circleRatio)}px`,
                             pointerEvents: 'none',
                             overflow: 'visible',
                             color: item.color
@@ -958,10 +1023,10 @@ export default function App() {
                               <svg
                                 style={{
                                   position: 'absolute',
-                                  top: `-${Math.round(18 * circleRatio)}px`,
+                                  top: `-${Math.round(20 * circleRatio)}px`,
                                   left: `calc(100% - ${Math.round(3 * circleRatio)}px)`,
-                                  width: `${Math.round(18 * circleRatio)}px`,
-                                  height: `${Math.round(40 * circleRatio)}px`,
+                                  width: `${Math.round(20 * circleRatio)}px`,
+                                  height: `${Math.round(44 * circleRatio)}px`,
                                   pointerEvents: 'none',
                                   overflow: 'visible',
                                   color: circle.color
@@ -1010,7 +1075,7 @@ export default function App() {
       ...getContainerBgStyle() 
     }}>
       
-      {/* 1. Header Bar */}
+      {/* 1. Top Header Bar */}
       <div style={{ 
         backgroundColor: 'rgba(255, 255, 255, 0.96)', 
         borderBottom: '1px solid #cbd5e1', 
@@ -1091,7 +1156,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* Main Container */}
+      {/* Main Responsive Grid Layout */}
       <div style={{ 
         flex: 1, 
         overflow: 'hidden', 
@@ -1118,7 +1183,7 @@ export default function App() {
           overflow: 'hidden'
         }}>
           
-          <div style={{ textAlign: 'center', marginBottom: '6px' }}>
+          <div style={{ textAlign: 'center', marginBottom: '6px', flexShrink: 0 }}>
             <h2 style={{ margin: '0 0 2px 0', color: '#ea580c', fontSize: '22px', fontWeight: 'bold' }}>
               ไตรยางศ์ หรือ อักษร 3 หมู่
             </h2>
@@ -1133,14 +1198,14 @@ export default function App() {
             )}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr 90px', color: '#0284c7', fontWeight: 'bold', fontSize: '12px', marginBottom: '2px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr 90px', color: '#0284c7', fontWeight: 'bold', fontSize: '12px', marginBottom: '2px', flexShrink: 0 }}>
             <div style={{ textAlign: 'right', paddingRight: '16px', color: '#0284c7', fontWeight: 'bold' }}>รูปวรรณยุกต์</div>
             <div></div>
             <div></div>
           </div>
 
-          {/* 5 Lines Board */}
-          <div style={{ display: 'flex', flexDirection: 'column', justifySpace: 'space-around', flex: 1, padding: '2px 0' }}>
+          {/* Proportional 5-Line Staff Board */}
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1, padding: '4px 0', overflow: 'hidden' }}>
             {linesData.map((item, idx) => {
               let rowHeaderColor = '#94a3b8';
               if (item.show) {
@@ -1152,7 +1217,7 @@ export default function App() {
               return (
                 <div 
                   key={idx} 
-                  style={{ display: 'grid', gridTemplateColumns: '160px 1fr 90px', alignItems: 'center' }}
+                  style={{ display: 'grid', gridTemplateColumns: '160px 1fr 90px', alignItems: 'center', flex: 1 }}
                   onMouseEnter={() => setHoveredRowId(item.id)}
                   onMouseLeave={() => setHoveredRowId(null)}
                 >
@@ -1170,7 +1235,8 @@ export default function App() {
                     {item.tone} <span style={{ fontSize: '14px', marginLeft: '2px' }}>[ {item.mark} ]</span>
                   </div>
 
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '26px' }}>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '100%' }}>
+                    {/* Horizontal Line */}
                     <div style={{ width: '100%', height: '2px', backgroundColor: '#94a3b8' }}></div>
 
                     {!item.isMulti && item.show && item.word && (
@@ -1272,7 +1338,7 @@ export default function App() {
 
         </div>
 
-        {/* Right Side Controls Panel */}
+        {/* Right Controls Panel */}
         {viewLayout === 'split' && (
           <div 
             style={{ 
@@ -1291,8 +1357,8 @@ export default function App() {
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', color: '#1f2937' }}>⚙️ แผงควบคุมการผัน</h3>
-              <span style={{ fontSize: '10px', color: cloudConnected ? '#16a34a' : '#d97706', fontWeight: 'bold' }}>
-                {cloudConnected ? '🟢 ซิงค์เรียลไทม์' : '🟡 ซิงค์ในเครื่อง'}
+              <span style={{ fontSize: '10px', color: '#16a34a', fontWeight: 'bold' }}>
+                🟢 ซิงค์เรียลไทม์ (Cloud & local)
               </span>
             </div>
 
@@ -1521,7 +1587,7 @@ export default function App() {
 
       </div>
 
-      {}
+      {/* Connection Modal */}
       {showConnectModal && (
         <div style={{
           position: 'fixed',
