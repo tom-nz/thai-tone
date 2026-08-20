@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
+// ตัวแปร API Key สำรองสำหรับเรียก Gemini API
 const apiKey = "";
 
 export default function App() {
@@ -31,9 +32,7 @@ export default function App() {
   const [bgColor, setBgColor] = useState('#e2e8f0');
   const [bgImage, setBgImage] = useState('');
 
-  // ข้อมูลวิเคราะห์หลักภาษาและเส้น 5 เส้น
-  const [analysisInfo, setAnalysisInfo] = useState({ type: '', vowelLen: '', desc: '' });
-  const [linesData, setLinesData] = useState([]);
+  // สถานะ Hover และการแจ้งเตือนเต็มจอ
   const [hoveredRowId, setHoveredRowId] = useState(null);
   const [showFsNotice, setShowFsNotice] = useState(false);
 
@@ -145,7 +144,7 @@ export default function App() {
     return { initial, frontVowel, aboveBelowVowel, rest, toneMark };
   };
 
-  // ประกอบคำโดยวางวรรณยุกต์เหนือสระบน/ล่าง ตาม Thai Unicode Canonical Order (เช่น ก + ื + ่ + อ = กื่อ)
+  // ประกอบคำโดยวางวรรณยุกต์เหนือสระบน/ล่าง ตาม Thai Unicode Canonical Order
   const buildWord = (frontVowel, initial, aboveBelowVowel, tone, rest) => {
     return `${frontVowel}${initial}${aboveBelowVowel}${tone}${rest}`;
   };
@@ -237,7 +236,7 @@ export default function App() {
     const info = analyzeSyllable(word, currentMode);
     const { initial, frontVowel, aboveBelowVowel, rest, isDead, isShort, primaryConsonant } = info;
 
-    // อักษรกลาง: สามารถผันได้ครบทุกเสียง และปรับตามโหมดผันสูง/ต่ำได้ตามต้องการ
+    // อักษรกลาง
     if (midConsonants.includes(primaryConsonant)) {
       if (currentMode === 'highOnly') {
         return [
@@ -319,6 +318,7 @@ export default function App() {
     }
   };
 
+  // ประกาศตัวแปรคำนวนผลลัพธ์หลักเพียงจุดเดียว
   const [analysisInfo, setAnalysisInfo] = useState(() => analyzeSyllable('กอ', 'full5'));
   const [linesData, setLinesData] = useState(() => calculateTones('กอ', 'full5', '#22c55e', '#ef4444', '#007bff'));
 
@@ -332,6 +332,7 @@ export default function App() {
     }
   }, []);
 
+  // Sync effect บน Master Window
   useEffect(() => {
     if (isDisplayWindow) return; // Master screen only
 
@@ -376,6 +377,7 @@ export default function App() {
     };
   }, [isDisplayWindow, linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, labelFontSize, bgType, bgColor, bgImage, hoveredRowId, mode]);
 
+  // Sync effect บน Display Window
   useEffect(() => {
     if (!isDisplayWindow) return; // Display screen only
 
