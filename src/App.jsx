@@ -318,7 +318,7 @@ export default function App() {
     }
   };
 
-  // ประกาศตัวแปรคำนวนผลลัพธ์หลักเพียงจุดเดียว
+  // Single declaration of analysisInfo & linesData
   const [analysisInfo, setAnalysisInfo] = useState(() => analyzeSyllable('กอ', 'full5'));
   const [linesData, setLinesData] = useState(() => calculateTones('กอ', 'full5', '#22c55e', '#ef4444', '#007bff'));
 
@@ -332,7 +332,6 @@ export default function App() {
     }
   }, []);
 
-  // Sync effect บน Master Window
   useEffect(() => {
     if (isDisplayWindow) return; // Master screen only
 
@@ -377,7 +376,6 @@ export default function App() {
     };
   }, [isDisplayWindow, linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, labelFontSize, bgType, bgColor, bgImage, hoveredRowId, mode]);
 
-  // Sync effect บน Display Window
   useEffect(() => {
     if (!isDisplayWindow) return; // Display screen only
 
@@ -696,8 +694,8 @@ export default function App() {
               </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'clamp(150px, 20vw, 250px) 1fr clamp(80px, 10vw, 140px)', color: '#64748b', fontWeight: 'bold', fontSize: 'clamp(12px, 1.1vw, 16px)', margin: '0 0 -2px 0' }}>
-              <div style={{ textAlign: 'right', paddingRight: '20px', color: '#475569', fontStyle: 'italic' }}>รูปวรรณยุกต์</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'clamp(150px, 20vw, 250px) 1fr clamp(80px, 10vw, 140px)', color: '#0284c7', fontWeight: 'bold', fontSize: 'clamp(12px, 1.1vw, 16px)', margin: '0 0 -2px 0' }}>
+              <div style={{ textAlign: 'right', paddingRight: '20px', color: '#0284c7', fontWeight: 'bold' }}>รูปวรรณยุกต์</div>
               <div></div>
               <div></div>
             </div>
@@ -995,23 +993,27 @@ export default function App() {
                 {inputError && <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px', fontWeight: 'bold' }}>{inputError}</div>}
               </div>
 
-              {/* 2. เลือกพยัญชนะด่วน (แสดงครบ 44 ตัว เรียงตาม ก-ฮ) */}
+              {/* 2. เลือกพยัญชนะด่วน (แสดงครบ 44 ตัว เรียง 11 ตัวต่อแถว ทั้งหมด 4 แถว) */}
               <div>
                 <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', marginBottom: '6px' }}>⌨️ เลือกพยัญชนะด่วน (๔๔ ตัว):</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(11, 1fr)', gap: '5px' }}>
                   {quickConsonants.map((c) => (
                     <button 
                       key={c}
                       onClick={() => handleQuickConsonantClick(c)}
                       style={{ 
-                        padding: '4px 7px', 
-                        borderRadius: '5px', 
+                        height: '36px',
+                        borderRadius: '6px', 
                         border: '1px solid #cbd5e1', 
                         backgroundColor: '#ffffff', 
-                        fontSize: '13px', 
+                        fontSize: '15px', 
                         fontWeight: 'bold', 
                         cursor: 'pointer',
-                        color: midConsonants.includes(c) ? colorMid : highConsonants.includes(c) ? colorHigh : colorLow
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: midConsonants.includes(c) ? colorMid : highConsonants.includes(c) ? colorHigh : colorLow,
+                        padding: 0
                       }}
                     >
                       {c}
@@ -1020,15 +1022,28 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 3. เลือกสระด่วน สระเสียงยาว/สระเสียงสั้น */}
+              {/* 3. เลือกสระด่วน สระเสียงยาว/สระเสียงสั้น (ปรับขนาดปุ่มให้ใหญ่เท่าปุ่มพยัญชนะด่วน) */}
               <div>
                 <div style={{ fontSize: '12px', color: '#166534', fontWeight: 'bold', marginBottom: '6px' }}>🟢 สระเสียงยาว (คำเป็น):</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '10px' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginBottom: '10px' }}>
                   {longVowels.map((v) => (
                     <button 
                       key={v.label}
                       onClick={() => handleQuickVowelClick(v)}
-                      style={{ padding: '4px 8px', borderRadius: '5px', border: '1px solid #bbf7d0', backgroundColor: '#f0fdf4', color: '#15803d', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}
+                      style={{ 
+                        height: '36px',
+                        padding: '0 10px', 
+                        borderRadius: '6px', 
+                        border: '1px solid #bbf7d0', 
+                        backgroundColor: '#f0fdf4', 
+                        color: '#15803d', 
+                        fontSize: '15px', 
+                        fontWeight: 'bold', 
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
                     >
                       {v.label}
                     </button>
@@ -1036,12 +1051,25 @@ export default function App() {
                 </div>
 
                 <div style={{ fontSize: '12px', color: '#991b1b', fontWeight: 'bold', marginBottom: '6px' }}>🔴 สระเสียงสั้น (คำตาย):</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
                   {shortVowels.map((v) => (
                     <button 
                       key={v.label}
                       onClick={() => handleQuickVowelClick(v)}
-                      style={{ padding: '4px 8px', borderRadius: '5px', border: '1px solid #fecaca', backgroundColor: '#fef2f2', color: '#b91c1c', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer' }}
+                      style={{ 
+                        height: '36px',
+                        padding: '0 10px', 
+                        borderRadius: '6px', 
+                        border: '1px solid #fecaca', 
+                        backgroundColor: '#fef2f2', 
+                        color: '#b91c1c', 
+                        fontSize: '15px', 
+                        fontWeight: 'bold', 
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
                     >
                       {v.label}
                     </button>
@@ -1207,8 +1235,8 @@ export default function App() {
               </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 110px', color: '#64748b', fontWeight: 'bold', fontSize: '14px', marginBottom: '4px' }}>
-              <div style={{ textAlign: 'right', paddingRight: '20px', color: '#475569', fontStyle: 'italic' }}>รูปวรรณยุกต์</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 110px', color: '#0284c7', fontWeight: 'bold', fontSize: '14px', marginBottom: '4px' }}>
+              <div style={{ textAlign: 'right', paddingRight: '20px', color: '#0284c7', fontWeight: 'bold' }}>รูปวรรณยุกต์</div>
               <div></div>
               <div></div>
             </div>
