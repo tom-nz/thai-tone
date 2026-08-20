@@ -318,7 +318,6 @@ export default function App() {
     }
   };
 
-  // Single declaration of analysisInfo & linesData
   const [analysisInfo, setAnalysisInfo] = useState(() => analyzeSyllable('กอ', 'full5'));
   const [linesData, setLinesData] = useState(() => calculateTones('กอ', 'full5', '#22c55e', '#ef4444', '#007bff'));
 
@@ -919,11 +918,186 @@ export default function App() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: viewLayout === 'split' ? '410px 1fr' : '1fr', gap: '20px', alignItems: 'start' }}>
+        {/* โครงสร้าง layout: การแสดงผลขยับมาอยู่ซ้ายมือ (1fr) และ แผงควบคุมอยู่ขวามือ (410px) */}
+        <div style={{ display: 'grid', gridTemplateColumns: viewLayout === 'split' ? '1fr 410px' : '1fr', gap: '20px', alignItems: 'start' }}>
           
-          {/* แผงควบคุม (Control Panel) */}
+          {/* 1. กระดานบรรทัด 5 เส้น แสดงผล (ซ้ายมือ) */}
+          <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '16px', padding: viewLayout === 'present' ? '40px 50px' : '35px 25px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', backdropFilter: 'blur(6px)' }}>
+            
+            <div style={{ textAlign: 'center', margin: '0 0 20px 0' }}>
+              <h2 style={{ margin: '0 0 2px 0', color: '#ea580c', fontSize: '28px', fontWeight: 'bold' }}>
+                ไตรยางศ์ หรือ อักษร 3 หมู่
+              </h2>
+              <div style={{ color: '#ea580c', fontSize: '18px', fontWeight: '600' }}>
+                และการผันวรรณยุกต์
+              </div>
+            </div>
+
+            {analysisInfo.desc && (
+              <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '10px 16px', borderRadius: '10px', marginBottom: '25px', textAlign: 'center', fontSize: '14px', color: '#0369a1', fontWeight: 'bold' }}>
+                📌 ผลวิเคราะห์หลักภาษา: <span style={{ color: '#0284c7' }}>"{inputText}"</span> เป็น <span style={{ backgroundColor: '#e0f2fe', padding: '2px 8px', borderRadius: '4px' }}>{analysisInfo.type} ({analysisInfo.vowelLen})</span> — {analysisInfo.desc}
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 110px', color: '#0284c7', fontWeight: 'bold', fontSize: '14px', marginBottom: '4px' }}>
+              <div style={{ textAlign: 'right', paddingRight: '20px', color: '#0284c7', fontWeight: 'bold' }}>รูปวรรณยุกต์</div>
+              <div></div>
+              <div></div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '34px' }}>
+              {linesData.map((item, idx) => {
+                let rowHeaderColor = '#94a3b8';
+                if (item.show) {
+                  rowHeaderColor = item.isMulti ? item.multi[0]?.color : item.color;
+                }
+                const fixedRight = fixedRightLabels[item.id];
+                const isHovered = hoveredRowId === item.id;
+
+                return (
+                  <div 
+                    key={idx} 
+                    style={{ display: 'grid', gridTemplateColumns: '220px 1fr 110px', alignItems: 'center' }}
+                    onMouseEnter={() => setHoveredRowId(item.id)}
+                    onMouseLeave={() => setHoveredRowId(null)}
+                  >
+                    <div 
+                      style={{ 
+                        textAlign: 'right', 
+                        paddingRight: '20px', 
+                        fontSize: `${isHovered ? 19 : 17}px`, 
+                        color: rowHeaderColor, 
+                        fontWeight: 'bold', 
+                        transition: 'all 0.15s ease',
+                        transform: isHovered ? 'scale(1.08)' : 'scale(1)'
+                      }}
+                    >
+                      {item.tone} <span style={{ fontSize: `${isHovered ? 19 : 17}px`, marginLeft: '4px', letterSpacing: '1px' }}>[ {item.mark} ]</span>
+                    </div>
+
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '30px' }}>
+                      <div style={{ width: '100%', height: '2px', backgroundColor: '#94a3b8' }}></div>
+
+                      {!item.isMulti && item.show && item.word && (
+                        <div 
+                          style={{
+                            position: 'absolute',
+                            left: item.leftPos,
+                            transform: `translateX(-50%) ${isHovered ? 'scale(1.22)' : 'scale(1)'}`,
+                            backgroundColor: item.color,
+                            color: circleTextColor,
+                            minWidth: '46px',
+                            height: '46px',
+                            padding: '0 10px',
+                            borderRadius: '23px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 'bold',
+                            fontSize: '18px',
+                            boxShadow: isHovered ? '0 6px 16px rgba(0,0,0,0.3)' : '0 3px 8px rgba(0,0,0,0.25)',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                            filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
+                          }}
+                        >
+                          <svg
+                            style={{
+                              position: 'absolute',
+                              top: '-20px',
+                              left: 'calc(100% - 3px)',
+                              width: '20px',
+                              height: '44px',
+                              pointerEvents: 'none',
+                              overflow: 'visible',
+                              color: item.color
+                            }}
+                            viewBox="0 0 20 44"
+                          >
+                            <path d="M 2 44 L 2 2" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" />
+                            <path d="M 2 2 C 9 8, 17 15, 13 24 C 9 17, 5 11, 2 7 Z" fill="currentColor" />
+                          </svg>
+                          {item.word}
+                        </div>
+                      )}
+
+                      {item.isMulti && item.show && (
+                        <div style={{ position: 'absolute', left: item.leftPos, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          {item.multi.map((circle, i) => (
+                            <React.Fragment key={i}>
+                              {i > 0 && <span style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '20px' }}>/</span>}
+                              <div 
+                                style={{
+                                  backgroundColor: circle.color,
+                                  color: circleTextColor,
+                                  minWidth: '46px',
+                                  height: '46px',
+                                  padding: '0 10px',
+                                  borderRadius: '23px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontWeight: 'bold',
+                                  fontSize: '18px',
+                                  boxShadow: isHovered ? '0 6px 16px rgba(0,0,0,0.3)' : '0 3px 8px rgba(0,0,0,0.25)',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease',
+                                  transform: isHovered ? 'scale(1.22)' : 'scale(1)',
+                                  filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
+                                }}
+                              >
+                                <svg
+                                  style={{
+                                    position: 'absolute',
+                                    top: '-20px',
+                                    left: 'calc(100% - 3px)',
+                                    width: '20px',
+                                    height: '44px',
+                                    pointerEvents: 'none',
+                                    overflow: 'visible',
+                                    color: circle.color
+                                  }}
+                                  viewBox="0 0 20 44"
+                                >
+                                  <path d="M 2 44 L 2 2" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" />
+                                  <path d="M 2 2 C 9 8, 17 15, 13 24 C 9 17, 5 11, 2 7 Z" fill="currentColor" />
+                                </svg>
+                                {circle.text}
+                              </div>
+                            </React.Fragment>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ textAlign: 'center', color: fixedRight ? fixedRight.color : '#94a3b8', fontWeight: 'bold', fontSize: '16px' }}>
+                      {fixedRight ? fixedRight.text : ''}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+          </div>
+
+          {/* 2. แผงควบคุมพร้อมแถบเลื่อน Scrollbar (ขวามือ) */}
           {viewLayout !== 'present' && (
-            <div style={{ backgroundColor: '#ffffff', borderRadius: '14px', padding: '20px', boxShadow: '0 4px 14px rgba(0,0,0,0.06)', border: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div 
+              style={{ 
+                backgroundColor: '#ffffff', 
+                borderRadius: '14px', 
+                padding: '20px', 
+                boxShadow: '0 4px 14px rgba(0,0,0,0.06)', 
+                border: '1px solid #e5e7eb', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: '16px',
+                maxHeight: viewLayout === 'split' ? 'calc(100vh - 100px)' : 'none',
+                overflowY: viewLayout === 'split' ? 'auto' : 'visible',
+                position: viewLayout === 'split' ? 'sticky' : 'static',
+                top: '20px'
+              }}
+            >
               
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#1f2937' }}>⚙️ แผงควบคุม</h3>
@@ -1022,7 +1196,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* 3. เลือกสระด่วน สระเสียงยาว/สระเสียงสั้น (ปรับขนาดปุ่มให้ใหญ่เท่าปุ่มพยัญชนะด่วน) */}
+              {/* 3. เลือกสระด่วน สระเสียงยาว/สระเสียงสั้น */}
               <div>
                 <div style={{ fontSize: '12px', color: '#166534', fontWeight: 'bold', marginBottom: '6px' }}>🟢 สระเสียงยาว (คำเป็น):</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginBottom: '10px' }}>
@@ -1216,165 +1390,6 @@ export default function App() {
 
             </div>
           )}
-
-          {/* กระดานบรรทัด 5 เส้น (จอล่าง) */}
-          <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '16px', padding: viewLayout === 'present' ? '40px 50px' : '35px 25px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', backdropFilter: 'blur(6px)' }}>
-            
-            <div style={{ textAlign: 'center', margin: '0 0 20px 0' }}>
-              <h2 style={{ margin: '0 0 2px 0', color: '#ea580c', fontSize: '28px', fontWeight: 'bold' }}>
-                ไตรยางศ์ หรือ อักษร 3 หมู่
-              </h2>
-              <div style={{ color: '#ea580c', fontSize: '18px', fontWeight: '600' }}>
-                และการผันวรรณยุกต์
-              </div>
-            </div>
-
-            {analysisInfo.desc && (
-              <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '10px 16px', borderRadius: '10px', marginBottom: '25px', textAlign: 'center', fontSize: '14px', color: '#0369a1', fontWeight: 'bold' }}>
-                📌 ผลวิเคราะห์หลักภาษา: <span style={{ color: '#0284c7' }}>"{inputText}"</span> เป็น <span style={{ backgroundColor: '#e0f2fe', padding: '2px 8px', borderRadius: '4px' }}>{analysisInfo.type} ({analysisInfo.vowelLen})</span> — {analysisInfo.desc}
-              </div>
-            )}
-
-            <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 110px', color: '#0284c7', fontWeight: 'bold', fontSize: '14px', marginBottom: '4px' }}>
-              <div style={{ textAlign: 'right', paddingRight: '20px', color: '#0284c7', fontWeight: 'bold' }}>รูปวรรณยุกต์</div>
-              <div></div>
-              <div></div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '34px' }}>
-              {linesData.map((item, idx) => {
-                let rowHeaderColor = '#94a3b8';
-                if (item.show) {
-                  rowHeaderColor = item.isMulti ? item.multi[0]?.color : item.color;
-                }
-                const fixedRight = fixedRightLabels[item.id];
-                const isHovered = hoveredRowId === item.id;
-
-                return (
-                  <div 
-                    key={idx} 
-                    style={{ display: 'grid', gridTemplateColumns: '220px 1fr 110px', alignItems: 'center' }}
-                    onMouseEnter={() => setHoveredRowId(item.id)}
-                    onMouseLeave={() => setHoveredRowId(null)}
-                  >
-                    <div 
-                      style={{ 
-                        textAlign: 'right', 
-                        paddingRight: '20px', 
-                        fontSize: `${isHovered ? 19 : 17}px`, 
-                        color: rowHeaderColor, 
-                        fontWeight: 'bold', 
-                        transition: 'all 0.15s ease',
-                        transform: isHovered ? 'scale(1.08)' : 'scale(1)'
-                      }}
-                    >
-                      {item.tone} <span style={{ fontSize: `${isHovered ? 19 : 17}px`, marginLeft: '4px', letterSpacing: '1px' }}>[ {item.mark} ]</span>
-                    </div>
-
-                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '30px' }}>
-                      <div style={{ width: '100%', height: '2px', backgroundColor: '#94a3b8' }}></div>
-
-                      {!item.isMulti && item.show && item.word && (
-                        <div 
-                          style={{
-                            position: 'absolute',
-                            left: item.leftPos,
-                            transform: `translateX(-50%) ${isHovered ? 'scale(1.22)' : 'scale(1)'}`,
-                            backgroundColor: item.color,
-                            color: circleTextColor,
-                            minWidth: '46px',
-                            height: '46px',
-                            padding: '0 10px',
-                            borderRadius: '23px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontWeight: 'bold',
-                            fontSize: '18px',
-                            boxShadow: isHovered ? '0 6px 16px rgba(0,0,0,0.3)' : '0 3px 8px rgba(0,0,0,0.25)',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s ease',
-                            filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
-                          }}
-                        >
-                          <svg
-                            style={{
-                              position: 'absolute',
-                              top: '-20px',
-                              left: 'calc(100% - 3px)',
-                              width: '20px',
-                              height: '44px',
-                              pointerEvents: 'none',
-                              overflow: 'visible',
-                              color: item.color
-                            }}
-                            viewBox="0 0 20 44"
-                          >
-                            <path d="M 2 44 L 2 2" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" />
-                            <path d="M 2 2 C 9 8, 17 15, 13 24 C 9 17, 5 11, 2 7 Z" fill="currentColor" />
-                          </svg>
-                          {item.word}
-                        </div>
-                      )}
-
-                      {item.isMulti && item.show && (
-                        <div style={{ position: 'absolute', left: item.leftPos, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          {item.multi.map((circle, i) => (
-                            <React.Fragment key={i}>
-                              {i > 0 && <span style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '20px' }}>/</span>}
-                              <div 
-                                style={{
-                                  backgroundColor: circle.color,
-                                  color: circleTextColor,
-                                  minWidth: '46px',
-                                  height: '46px',
-                                  padding: '0 10px',
-                                  borderRadius: '23px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontWeight: 'bold',
-                                  fontSize: '18px',
-                                  boxShadow: isHovered ? '0 6px 16px rgba(0,0,0,0.3)' : '0 3px 8px rgba(0,0,0,0.25)',
-                                  cursor: 'pointer',
-                                  transition: 'all 0.15s ease',
-                                  transform: isHovered ? 'scale(1.22)' : 'scale(1)',
-                                  filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
-                                }}
-                              >
-                                <svg
-                                  style={{
-                                    position: 'absolute',
-                                    top: '-20px',
-                                    left: 'calc(100% - 3px)',
-                                    width: '20px',
-                                    height: '44px',
-                                    pointerEvents: 'none',
-                                    overflow: 'visible',
-                                    color: circle.color
-                                  }}
-                                  viewBox="0 0 20 44"
-                                >
-                                  <path d="M 2 44 L 2 2" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" />
-                                  <path d="M 2 2 C 9 8, 17 15, 13 24 C 9 17, 5 11, 2 7 Z" fill="currentColor" />
-                                </svg>
-                                {circle.text}
-                              </div>
-                            </React.Fragment>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div style={{ textAlign: 'center', color: fixedRight ? fixedRight.color : '#94a3b8', fontWeight: 'bold', fontSize: '16px' }}>
-                      {fixedRight ? fixedRight.text : ''}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-          </div>
 
         </div>
 
