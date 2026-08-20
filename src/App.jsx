@@ -31,6 +31,12 @@ export default function App() {
   const [bgColor, setBgColor] = useState('#e2e8f0');
   const [bgImage, setBgImage] = useState('');
 
+  // ข้อมูลวิเคราะห์หลักภาษาและเส้น 5 เส้น
+  const [analysisInfo, setAnalysisInfo] = useState({ type: '', vowelLen: '', desc: '' });
+  const [linesData, setLinesData] = useState([]);
+  const [hoveredRowId, setHoveredRowId] = useState(null);
+  const [showFsNotice, setShowFsNotice] = useState(false);
+
   // หมวดหมู่อักษร 3 หมู่
   const midConsonants = ['ก', 'จ', 'ด', 'ต', 'บ', 'ป', 'อ', 'ฎ', 'ฏ'];
   const highConsonants = ['ข', 'ฃ', 'ฉ', 'ฐ', 'ถ', 'ผ', 'ฝ', 'ศ', 'ษ', 'ส', 'ห'];
@@ -139,7 +145,7 @@ export default function App() {
     return { initial, frontVowel, aboveBelowVowel, rest, toneMark };
   };
 
-  // ประกอบคำโดยวางวรรณยุกต์เหนือสระบน/ล่าง (เช่น ก + ื + ่ + อ = กื่อ)
+  // ประกอบคำโดยวางวรรณยุกต์เหนือสระบน/ล่าง ตาม Thai Unicode Canonical Order (เช่น ก + ื + ่ + อ = กื่อ)
   const buildWord = (frontVowel, initial, aboveBelowVowel, tone, rest) => {
     return `${frontVowel}${initial}${aboveBelowVowel}${tone}${rest}`;
   };
@@ -191,7 +197,13 @@ export default function App() {
     const clusterLabel = isCluster ? ` (คำควบกล้ำ "${initial}")` : '';
 
     if (midConsonants.includes(primaryConsonant)) {
-      desc = isDead ? `อักษรกลาง${clusterLabel} คำตาย (ผันได้เฉพาะ เอก, โท, ตรี, จัตวา)` : `อักษรกลาง${clusterLabel} คำเป็น (ผันได้ครบ 5 เสียง)`;
+      if (currentMode === 'highOnly') {
+        desc = `อักษรกลาง${clusterLabel} เทียบผันเฉพาะเสียงสูง [เอก, โท, จัตวา]`;
+      } else if (currentMode === 'lowOnly') {
+        desc = `อักษรกลาง${clusterLabel} เทียบผันเฉพาะเสียงต่ำ [สามัญ, โท, ตรี]`;
+      } else {
+        desc = isDead ? `อักษรกลาง${clusterLabel} คำตาย (ผันได้เฉพาะ เอก, โท, ตรี, จัตวา)` : `อักษรกลาง${clusterLabel} คำเป็น (ผันได้ครบ 5 เสียง)`;
+      }
     } else if (highConsonants.includes(primaryConsonant) || initial.startsWith('ห')) {
       desc = isDead ? `อักษรสูง${clusterLabel} คำตาย (ผันได้เฉพาะ เสียงเอก และ เสียงโท)` : `อักษรสูง${clusterLabel} คำเป็น (ผันได้เฉพาะ เอก, โท, จัตวา)`;
     } else {
@@ -225,16 +237,36 @@ export default function App() {
     const info = analyzeSyllable(word, currentMode);
     const { initial, frontVowel, aboveBelowVowel, rest, isDead, isShort, primaryConsonant } = info;
 
+    // อักษรกลาง: สามารถผันได้ครบทุกเสียง และปรับตามโหมดผันสูง/ต่ำได้ตามต้องการ
     if (midConsonants.includes(primaryConsonant)) {
-      return [
-        { id: 5, tone: 'เสียงจัตวา', mark: '◌๋', word: buildWord(frontVowel, initial, aboveBelowVowel, '๋', rest), color: midC, isMulti: false, multi: [], show: true, leftPos: '80%' },
-        { id: 4, tone: 'เสียงตรี', mark: '◌๊', word: buildWord(frontVowel, initial, aboveBelowVowel, '๊', rest), color: midC, isMulti: false, multi: [], show: true, leftPos: '65%' },
-        { id: 3, tone: 'เสียงโท', mark: '◌้', word: buildWord(frontVowel, initial, aboveBelowVowel, '้', rest), color: midC, isMulti: false, multi: [], show: true, leftPos: '52%' },
-        { id: 2, tone: 'เสียงเอก', mark: '◌่', word: isDead ? word : buildWord(frontVowel, initial, aboveBelowVowel, '่', rest), color: midC, isMulti: false, multi: [], show: true, leftPos: '40%' },
-        { id: 1, tone: 'เสียงสามัญ', mark: '-', word: isDead ? '' : buildWord(frontVowel, initial, aboveBelowVowel, '', rest), color: midC, isMulti: false, multi: [], show: !isDead, leftPos: '28%' }
-      ];
+      if (currentMode === 'highOnly') {
+        return [
+          { id: 5, tone: 'เสียงจัตวา', mark: '◌๋', word: buildWord(frontVowel, initial, aboveBelowVowel, '๋', rest), color: midC, isMulti: false, multi: [], show: true, leftPos: '80%' },
+          { id: 4, tone: 'เสียงตรี', mark: '◌๊', word: '', color: midC, isMulti: false, multi: [], show: false, leftPos: '65%' },
+          { id: 3, tone: 'เสียงโท', mark: '◌้', word: buildWord(frontVowel, initial, aboveBelowVowel, '้', rest), color: midC, isMulti: false, multi: [], show: true, leftPos: '52%' },
+          { id: 2, tone: 'เสียงเอก', mark: '◌่', word: buildWord(frontVowel, initial, aboveBelowVowel, '่', rest), color: midC, isMulti: false, multi: [], show: true, leftPos: '40%' },
+          { id: 1, tone: 'เสียงสามัญ', mark: '-', word: '', color: midC, isMulti: false, multi: [], show: false, leftPos: '28%' }
+        ];
+      } else if (currentMode === 'lowOnly') {
+        return [
+          { id: 5, tone: 'เสียงจัตวา', mark: '◌๋', word: '', color: midC, isMulti: false, multi: [], show: false, leftPos: '80%' },
+          { id: 4, tone: 'เสียงตรี', mark: '◌๊', word: buildWord(frontVowel, initial, aboveBelowVowel, '๊', rest), color: midC, isMulti: false, multi: [], show: true, leftPos: '65%' },
+          { id: 3, tone: 'เสียงโท', mark: '◌้', word: buildWord(frontVowel, initial, aboveBelowVowel, '้', rest), color: midC, isMulti: false, multi: [], show: true, leftPos: '52%' },
+          { id: 2, tone: 'เสียงเอก', mark: '◌่', word: '', color: midC, isMulti: false, multi: [], show: false, leftPos: '40%' },
+          { id: 1, tone: 'เสียงสามัญ', mark: '-', word: isDead ? '' : buildWord(frontVowel, initial, aboveBelowVowel, '', rest), color: midC, isMulti: false, multi: [], show: !isDead, leftPos: '28%' }
+        ];
+      } else {
+        return [
+          { id: 5, tone: 'เสียงจัตวา', mark: '◌๋', word: buildWord(frontVowel, initial, aboveBelowVowel, '๋', rest), color: midC, isMulti: false, multi: [], show: true, leftPos: '80%' },
+          { id: 4, tone: 'เสียงตรี', mark: '◌๊', word: buildWord(frontVowel, initial, aboveBelowVowel, '๊', rest), color: midC, isMulti: false, multi: [], show: true, leftPos: '65%' },
+          { id: 3, tone: 'เสียงโท', mark: '◌้', word: buildWord(frontVowel, initial, aboveBelowVowel, '้', rest), color: midC, isMulti: false, multi: [], show: true, leftPos: '52%' },
+          { id: 2, tone: 'เสียงเอก', mark: '◌่', word: isDead ? word : buildWord(frontVowel, initial, aboveBelowVowel, '่', rest), color: midC, isMulti: false, multi: [], show: true, leftPos: '40%' },
+          { id: 1, tone: 'เสียงสามัญ', mark: '-', word: isDead ? '' : buildWord(frontVowel, initial, aboveBelowVowel, '', rest), color: midC, isMulti: false, multi: [], show: !isDead, leftPos: '28%' }
+        ];
+      }
     }
 
+    // คู่เสียงสูง-ต่ำ
     let highConsonant = '';
     let lowConsonant = '';
 
@@ -289,8 +321,6 @@ export default function App() {
 
   const [analysisInfo, setAnalysisInfo] = useState(() => analyzeSyllable('กอ', 'full5'));
   const [linesData, setLinesData] = useState(() => calculateTones('กอ', 'full5', '#22c55e', '#ef4444', '#007bff'));
-  const [hoveredRowId, setHoveredRowId] = useState(null);
-  const [showFsNotice, setShowFsNotice] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
