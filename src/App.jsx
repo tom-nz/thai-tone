@@ -36,17 +36,20 @@ export default function App() {
   const highConsonants = ['ข', 'ฃ', 'ฉ', 'ฐ', 'ถ', 'ผ', 'ฝ', 'ศ', 'ษ', 'ส', 'ห'];
   const lowSingleConsonants = ['ง', 'ญ', 'น', 'ย', 'ณ', 'ร', 'ว', 'ม', 'ฬ', 'ล'];
 
+  // รายการพยัญชนะไทยครบ 44 ตัว เรียงตามลำดับ ก-ฮ
+  const quickConsonants = [
+    'ก', 'ข', 'ฃ', 'ค', 'ฅ', 'ฆ', 'ง', 'จ', 'ฉ', 'ช', 
+    'ซ', 'ฌ', 'ญ', 'ฎ', 'ฏ', 'ฐ', 'ฑ', 'ฒ', 'ณ', 'ด', 
+    'ต', 'ถ', 'ท', 'ธ', 'น', 'บ', 'ป', 'ผ', 'ฝ', 'พ', 
+    'ฟ', 'ภ', 'ม', 'ย', 'ร', 'ล', 'ว', 'ศ', 'ษ', 'ส', 
+    'ห', 'ฬ', 'อ', 'ฮ'
+  ];
+
   // รายการคำควบกล้ำไทย
   const thaiClusters = [
     'กร', 'กล', 'กว', 'ขร', 'ขล', 'ขว', 'คร', 'คล', 'คว', 'ตร', 'ตล', 
     'ปร', 'ปล', 'พร', 'พล', 'ฟร', 'ฟล', 'หง', 'หญ', 'หน', 'หม', 'หย', 
     'หร', 'หล', 'หว', 'ทร', 'ศร', 'สร', 'จร', 'ซร'
-  ];
-
-  const quickConsonants = [
-    'ก', 'ข', 'ค', 'ง', 'จ', 'ฉ', 'ช', 'ซ', 'ด', 'ต', 
-    'ถ', 'ท', 'น', 'บ', 'ป', 'ผ', 'ฝ', 'พ', 'ฟ', 'ม', 
-    'ย', 'ร', 'ล', 'ว', 'ส', 'ห', 'อ', 'ฮ'
   ];
 
   // สระเรียงลำดับมาตรฐานการท่องจำ (อะ อา, อิ อี, อึ อือ, อุ อู...)
@@ -85,7 +88,7 @@ export default function App() {
   ];
 
   const pairMap = {
-    'ค': 'ข', 'ฅ': 'ฃ', 'ฆ': 'ข', 'ข': 'ค', 'ฃ': 'ค',
+    'ค': 'ข', 'ฅ': 'ฃ', 'ฆ': 'ข', 'ข': 'ค', 'ฃ': 'ฅ',
     'ช': 'ฉ', 'ฌ': 'ฉ', 'ฉ': 'ช',
     'ซ': 'ศ', 'ศ': 'ซ', 'ษ': 'ซ', 'ส': 'ซ',
     'ท': 'ถ', 'ธ': 'ถ', 'ฑ': 'ฐ', 'ฒ': 'ฐ', 'ถ': 'ท', 'ฐ': 'ท',
@@ -287,8 +290,6 @@ export default function App() {
   const [analysisInfo, setAnalysisInfo] = useState(() => analyzeSyllable('กอ', 'full5'));
   const [linesData, setLinesData] = useState(() => calculateTones('กอ', 'full5', '#22c55e', '#ef4444', '#007bff'));
   const [hoveredRowId, setHoveredRowId] = useState(null);
-
-  // แจ้งเตือนเมื่อการขอเต็มจอฝั่งจอที่ 2 ต้องใช้อินเทอร์แอคชัน
   const [showFsNotice, setShowFsNotice] = useState(false);
 
   useEffect(() => {
@@ -380,7 +381,6 @@ export default function App() {
     const handleChannelMessage = (event) => {
       if (!event.data) return;
       
-      // รองรับคำสั่งสลับเต็มจอจากหน้าจอควบคุมหลัก
       if (event.data.type === 'TOGGLE_FULLSCREEN') {
         toggleFullscreen();
         return;
@@ -445,7 +445,6 @@ export default function App() {
     );
   };
 
-  // คำสั่งส่งสัญญาณสลับเต็มจอบน Screen 2 จาก Screen 1
   const handleToggleDisplayFullscreen = () => {
     const channel = new BroadcastChannel('thai_tone_sync_channel');
     channel.postMessage({ type: 'TOGGLE_FULLSCREEN' });
@@ -455,7 +454,6 @@ export default function App() {
     channel.close();
   };
 
-  // ฟังก์ชันสลับเต็มจอสำหรับ Screen 2
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch((err) => {
@@ -485,7 +483,6 @@ export default function App() {
     setInputText(newWord);
   };
 
-  // แก้ไขการเลือกสระด่วน: แทนที่สระเดิมทั้งหมดโดยคงพยัญชนะต้นไว้
   const handleQuickVowelClick = (vowelObj) => {
     const { initial } = parseThaiWord(inputText);
     const cons = initial || 'ก';
@@ -966,9 +963,9 @@ export default function App() {
                 {inputError && <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px', fontWeight: 'bold' }}>{inputError}</div>}
               </div>
 
-              {/* 2. เลือกพยัญชนะด่วน */}
+              {/* 2. เลือกพยัญชนะด่วน (แสดงครบ 44 ตัว เรียงตาม ก-ฮ) */}
               <div>
-                <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', marginBottom: '6px' }}>⌨️ เลือกพยัญชนะด่วน:</div>
+                <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', marginBottom: '6px' }}>⌨️ เลือกพยัญชนะด่วน (๔๔ ตัว):</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                   {quickConsonants.map((c) => (
                     <button 
