@@ -1,8 +1,35 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-const apiKey = "";
+// Safely load Firebase Compat SDKs to avoid Babel / CommonJS "require(https://...)" errors
+const loadFirebaseSDK = () => {
+  if (typeof window === 'undefined') return Promise.reject('No window');
+  if (window.firebase) return Promise.resolve(window.firebase);
+  if (window.__firebaseLoadingPromise) return window.__firebaseLoadingPromise;
 
-// ฟังก์ชันสำหรับอ่านและเขียน LocalStorage อย่างปลอดภัย
+  window.__firebaseLoadingPromise = new Promise((resolve, reject) => {
+    const s1 = document.createElement('script');
+    s1.src = 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js';
+    s1.onload = () => {
+      const s2 = document.createElement('script');
+      s2.src = 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js';
+      s2.onload = () => {
+        const s3 = document.createElement('script');
+        s3.src = 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js';
+        s3.onload = () => resolve(window.firebase);
+        s3.onerror = reject;
+        document.head.appendChild(s3);
+      };
+      s2.onerror = reject;
+      document.head.appendChild(s2);
+    };
+    s1.onerror = reject;
+    document.head.appendChild(s1);
+  });
+
+  return window.__firebaseLoadingPromise;
+};
+
+// Safe LocalStorage helpers
 const safeGetLocalStorage = (key, defaultValue = '') => {
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
@@ -30,12 +57,15 @@ const safeCreateChannel = (channelName) => {
       return new BroadcastChannel(channelName);
     }
   } catch (e) {
-    console.warn('BroadcastChannel blocked or unsupported:', e);
+    console.warn('BroadcastChannel blocked:', e);
   }
   return null;
 };
 
 export default function App() {
+  const apiKey = "";
+  const appId = typeof __app_id !== 'undefined' ? __app_id : 'thai-tone-app-default';
+
   const [customApiKey, setCustomApiKey] = useState(() => safeGetLocalStorage('gemini_api_key', ''));
   const [tempApiKey, setTempApiKey] = useState(customApiKey);
   const [showApiInput, setShowApiInput] = useState(false);
@@ -43,6 +73,13 @@ export default function App() {
 
   // โหมด Display จอที่ 2 (?view=display)
   const [isDisplayWindow, setIsDisplayWindow] = useState(false);
+  const [roomId, setRoomId] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('room') || '1001';
+    }
+    return '1001';
+  });
 
   // ตั้งค่าเริ่มต้นการผันคำ
   const [mode, setMode] = useState('full5'); // 'full5' | 'highOnly' | 'lowOnly'
@@ -52,9 +89,9 @@ export default function App() {
   const [loading, setLoading] = useState(false);
 
   // การตั้งค่าสีและขนาดฟอนต์
-  const [colorMid, setColorMid] = useState('#22c55e');    // กลาง (เขียว)
-  const [colorHigh, setColorHigh] = useState('#ef4444');   // สูง (แดง)
-  const [colorLow, setColorLow] = useState('#007bff');    // ต่ำ (น้ำเงิน)
+  const [colorMid, setColorMid] = useState('#22c55e');
+  const [colorHigh, setColorHigh] = useState('#ef4444');
+  const [colorLow, setColorLow] = useState('#007bff');
   const [circleTextColor, setCircleTextColor] = useState('#ffffff');
   const [labelFontSize, setLabelFontSize] = useState(20);
 
@@ -63,20 +100,16 @@ export default function App() {
   const [bgColor, setBgColor] = useState('#e2e8f0');
   const [bgImage, setBgImage] = useState('');
 
-  // สถานะ Hover และแจ้งเตือน
+  // สถานะ Hover, การซิงค์ และป็อปอัป
   const [hoveredRowId, setHoveredRowId] = useState(null);
-  const [showFsNotice, setShowFsNotice] = useState(false);
+  const [cloudConnected, setCloudConnected] = useState(false);
 
   // สถานะการเชื่อมต่อ
   const [showConnectModal, setShowConnectModal] = useState(false);
   const [activeConnectTab, setActiveConnectTab] = useState('wifi');
-  const [btConnected, setBtConnected] = useState(false);
-  const [btDeviceName, setBtDeviceName] = useState('');
-  const [btStatusMsg, setBtStatusMsg] = useState('');
   const [copysuccess, setCopySuccess] = useState(false);
   const [customWifiUrl, setCustomWifiUrl] = useState('');
 
-  // อ้างอิงหน้าต่าง Pop-up ที่เปิดออกไป
   const secondWindowRef = useRef(null);
 
   const midConsonants = ['ก', 'จ', 'ด', 'ต', 'บ', 'ป', 'อ', 'ฎ', 'ฏ'];
@@ -143,17 +176,14 @@ export default function App() {
   const extractInitialConsonantOnly = (word) => {
     if (!word) return 'ก';
     let workStr = word.trim();
-    
     if (['เ', 'แ', 'โ', 'ใ', 'ไ'].includes(workStr[0])) {
       workStr = workStr.slice(1);
     }
-
     for (let cluster of thaiClusters) {
       if (workStr.startsWith(cluster)) {
         return cluster;
       }
     }
-
     if (workStr.length > 0) {
       return workStr[0];
     }
@@ -385,17 +415,81 @@ export default function App() {
         if (params.get('view') === 'display') {
           setIsDisplayWindow(true);
         }
+        const roomParam = params.get('room');
+        if (roomParam) {
+          setRoomId(roomParam);
+        }
       }
     } catch (e) {
       console.warn('URL parsing notice:', e);
     }
   }, []);
 
+  // Firebase Setup for Cross-Device Sync (Tablet <-> Laptop)
   useEffect(() => {
-    if (isDisplayWindow) return;
+    let unsubscribe = null;
+    let isMounted = true;
 
-    const channel = safeCreateChannel('thai_tone_sync_channel');
+    const initFirebase = async () => {
+      try {
+        if (typeof __firebase_config === 'undefined') return;
+        const fb = await loadFirebaseSDK();
+        if (!fb || !isMounted) return;
 
+        const config = JSON.parse(__firebase_config);
+        if (!fb.apps.length) {
+          fb.initializeApp(config);
+        }
+
+        const auth = fb.auth();
+        if (!auth.currentUser) {
+          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            await auth.signInWithCustomToken(__initial_auth_token);
+          } else {
+            await auth.signInAnonymously();
+          }
+        }
+        setCloudConnected(true);
+
+        const db = fb.firestore();
+        const docRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection('sync_rooms').doc(roomId);
+
+        if (isDisplayWindow) {
+          unsubscribe = docRef.onSnapshot((docSnapshot) => {
+            if (docSnapshot.exists) {
+              const data = docSnapshot.data();
+              if (data) {
+                if (Array.isArray(data.lines)) setLinesData(data.lines);
+                if (data.info) setAnalysisInfo(data.info);
+                if (data.text !== undefined) setInputText(data.text);
+                if (data.cText) setCircleTextColor(data.cText);
+                if (data.cMid) setColorMid(data.cMid);
+                if (data.cHigh) setColorHigh(data.cHigh);
+                if (data.cLow) setColorLow(data.cLow);
+                if (data.fontSize !== undefined) setLabelFontSize(data.fontSize);
+                if (data.bType) setBgType(data.bType);
+                if (data.bColor) setBgColor(data.bColor);
+                if (data.bImg !== undefined) setBgImage(data.bImg);
+                if (data.activeRowId !== undefined) setHoveredRowId(data.activeRowId);
+                if (data.modeVal) setMode(data.modeVal);
+              }
+            }
+          }, (err) => console.warn("Firestore snapshot notice:", err));
+        }
+      } catch (e) {
+        console.warn("Firebase setup notice:", e);
+      }
+    };
+
+    initFirebase();
+
+    return () => {
+      isMounted = false;
+      if (unsubscribe) unsubscribe();
+    };
+  }, [appId, roomId, isDisplayWindow]);
+
+  useEffect(() => {
     const syncPayload = {
       type: 'SYNC_STATE',
       lines: linesData,
@@ -410,69 +504,44 @@ export default function App() {
       bColor: bgColor,
       bImg: bgImage,
       activeRowId: hoveredRowId,
-      modeVal: mode
+      modeVal: mode,
+      updatedAt: Date.now()
     };
 
     safeSetLocalStorage('thai_tone_live_sync_data', JSON.stringify(syncPayload));
-
+    
+    const channel = safeCreateChannel('thai_tone_sync_channel');
     if (channel) {
       try {
         channel.postMessage(syncPayload);
       } catch (e) {}
-
-      const handleMessage = (event) => {
-        if (event.data && event.data.type === 'REQUEST_SYNC') {
-          try {
-            channel.postMessage(syncPayload);
-          } catch (err) {}
-        }
-      };
-
-      channel.addEventListener('message', handleMessage);
-
-      if (secondWindowRef.current && !secondWindowRef.current.closed) {
-        try {
-          secondWindowRef.current.postMessage(syncPayload, '*');
-        } catch (e) {}
-      }
-
-      return () => {
-        channel.removeEventListener('message', handleMessage);
-        channel.close();
-      };
     }
-  }, [isDisplayWindow, linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, labelFontSize, bgType, bgColor, bgImage, hoveredRowId, mode]);
+
+    if (secondWindowRef.current && !secondWindowRef.current.closed) {
+      try {
+        secondWindowRef.current.postMessage(syncPayload, '*');
+      } catch (e) {}
+    }
+
+    // Cloud Firestore Write
+    if (!isDisplayWindow && typeof window !== 'undefined' && window.firebase && window.firebase.apps.length) {
+      try {
+        const db = window.firebase.firestore();
+        db.collection('artifacts').doc(appId).collection('public').doc('data').collection('sync_rooms').doc(roomId)
+          .set(syncPayload, { merge: true })
+          .catch((err) => console.warn("Firestore write notice:", err));
+      } catch (e) {}
+    }
+
+    return () => {
+      if (channel) channel.close();
+    };
+  }, [isDisplayWindow, linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, labelFontSize, bgType, bgColor, bgImage, hoveredRowId, mode, roomId, appId]);
 
   useEffect(() => {
     if (!isDisplayWindow) return;
 
-    const applySyncData = (data) => {
-      if (!data) return;
-      const { lines, info, text, cText, cMid, cHigh, cLow, fontSize, bType, bColor, bImg, activeRowId, modeVal } = data;
-      if (Array.isArray(lines) && lines.length > 0) setLinesData(lines);
-      if (info && info.desc) setAnalysisInfo(info);
-      if (text !== undefined) setInputText(text);
-      if (cText) setCircleTextColor(cText);
-      if (cMid) setColorMid(cMid);
-      if (cHigh) setColorHigh(cHigh);
-      if (cLow) setColorLow(cLow);
-      if (fontSize !== undefined) setLabelFontSize(fontSize);
-      if (bType) setBgType(bType);
-      if (bColor) setBgColor(bColor);
-      if (bImg !== undefined) setBgImage(bImg);
-      if (activeRowId !== undefined) setHoveredRowId(activeRowId);
-      if (modeVal) setMode(modeVal);
-    };
-
-    const savedState = safeGetLocalStorage('thai_tone_live_sync_data', null);
-    if (savedState) {
-      try {
-        applySyncData(JSON.parse(savedState));
-      } catch (e) {}
-    }
-
     const channel = safeCreateChannel('thai_tone_sync_channel');
-
     if (channel) {
       const handleChannelMessage = (event) => {
         if (!event.data) return;
@@ -481,42 +550,26 @@ export default function App() {
           return;
         }
         if (event.data.type === 'SYNC_STATE') {
-          applySyncData(event.data);
+          const { lines, info, text, cText, cMid, cHigh, cLow, fontSize, bType, bColor, bImg, activeRowId, modeVal } = event.data;
+          if (Array.isArray(lines) && lines.length > 0) setLinesData(lines);
+          if (info && info.desc) setAnalysisInfo(info);
+          if (text !== undefined) setInputText(text);
+          if (cText) setCircleTextColor(cText);
+          if (cMid) setColorMid(cMid);
+          if (cHigh) setColorHigh(cHigh);
+          if (cLow) setColorLow(cLow);
+          if (fontSize !== undefined) setLabelFontSize(fontSize);
+          if (bType) setBgType(bType);
+          if (bColor) setBgColor(bColor);
+          if (bImg !== undefined) setBgImage(bImg);
+          if (activeRowId !== undefined) setHoveredRowId(activeRowId);
+          if (modeVal) setMode(modeVal);
         }
       };
-
       channel.addEventListener('message', handleChannelMessage);
       channel.postMessage({ type: 'REQUEST_SYNC' });
+      return () => channel.close();
     }
-
-    const handleWindowMessage = (event) => {
-      if (event.data && event.data.type === 'SYNC_STATE') {
-        applySyncData(event.data);
-      }
-    };
-
-    window.addEventListener('message', handleWindowMessage);
-
-    const handleStorageChange = (e) => {
-      if (e.key === 'thai_tone_live_sync_data' && e.newValue) {
-        try {
-          applySyncData(JSON.parse(e.newValue));
-        } catch (err) {}
-      }
-      if (e.key === 'thai_tone_toggle_fs_signal') {
-        toggleFullscreen();
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-
-    return () => {
-      if (channel) {
-        channel.close();
-      }
-      window.removeEventListener('message', handleWindowMessage);
-      window.removeEventListener('storage', handleStorageChange);
-    };
   }, [isDisplayWindow]);
 
   useEffect(() => {
@@ -528,23 +581,31 @@ export default function App() {
 
   const getDisplayUrl = () => {
     try {
+      if (typeof window === 'undefined') return '';
       const currentUrl = window.location.href;
-      if (currentUrl.includes('blob:')) {
+      if (currentUrl.includes('blob:') || currentUrl.includes('usercontent.goog')) {
         return currentUrl;
       }
       const baseUrl = currentUrl.split('?')[0];
-      return `${baseUrl}?view=display`;
+      return `${baseUrl}?view=display&room=${roomId}`;
     } catch (e) {
       return '';
     }
   };
 
+  const isSandboxEnv = () => {
+    try {
+      if (typeof window === 'undefined') return false;
+      return window.location.href.includes('usercontent.goog') || window.location.href.includes('blob:');
+    } catch (e) {
+      return false;
+    }
+  };
+
   const handleOpenDualMonitor = () => {
     try {
-      const currentUrl = window.location.href;
-      
-      if (!currentUrl.includes('blob:')) {
-        const targetUrl = getDisplayUrl();
+      const targetUrl = getDisplayUrl();
+      if (!window.location.href.includes('blob:') && !window.location.href.includes('usercontent.goog')) {
         secondWindowRef.current = window.open(
           targetUrl,
           'ThaiToneDisplayWindow',
@@ -561,7 +622,6 @@ export default function App() {
 
       if (newWin) {
         secondWindowRef.current = newWin;
-        
         newWin.document.write(`
           <!DOCTYPE html>
           <html lang="th">
@@ -570,17 +630,10 @@ export default function App() {
             <title>กระดานผันวรรณยุกต์ - จอที่ 2</title>
             <style>
               body { margin: 0; padding: 0; overflow: hidden; font-family: 'Sarabun', sans-serif; background-color: ${bgColor}; }
-              .board { width: 90vw; height: 85vh; margin: 5vh auto; background: rgba(255,255,255,0.95); border-radius: 20px; padding: 30px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #cbd5e1; }
+              .board { width: 96vw; height: 92vh; margin: 4vh auto; background: rgba(255,255,255,0.95); border-radius: 20px; padding: 24px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #cbd5e1; }
               .title { text-align: center; color: #ea580c; font-size: 32px; font-weight: bold; margin: 0; }
               .subtitle { text-align: center; color: #ea580c; font-size: 20px; margin-top: 4px; }
               .info { text-align: center; background: #f0f9ff; color: #0369a1; padding: 8px 16px; border-radius: 10px; font-size: 15px; font-weight: bold; margin: 10px auto; max-width: 800px; border: 1px solid #bae6fd; }
-              .lines-container { display: flex; flex-direction: column; justify-content: space-around; flex: 1; margin-top: 10px; }
-              .line-row { display: grid; grid-template-columns: 220px 1fr 120px; align-items: center; }
-              .line-label { text-align: right; padding-right: 20px; font-size: 22px; font-weight: bold; }
-              .line-track { position: relative; display: flex; align-items: center; height: 40px; }
-              .line-bar { width: 100%; height: 3px; background-color: #94a3b8; }
-              .circle-note { position: absolute; transform: translateX(-50%); min-width: 52px; height: 52px; border-radius: 50%; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 22px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-              .right-tag { text-align: center; font-weight: bold; font-size: 18px; }
             </style>
           </head>
           <body>
@@ -590,45 +643,7 @@ export default function App() {
                 <div class="subtitle">และการผันวรรณยุกต์</div>
                 <div id="info-box" class="info">📌 กำลังรอข้อมูลจากจอหลัก...</div>
               </div>
-              <div id="lines-box" class="lines-container"></div>
             </div>
-            <script>
-              const channel = new BroadcastChannel('thai_tone_sync_channel');
-              function render(data) {
-                if(!data) return;
-                document.body.style.backgroundColor = data.bColor || '${bgColor}';
-                document.getElementById('info-box').innerText = '📌 คำว่า "' + (data.text || '') + '" — ' + (data.info?.desc || '');
-                const box = document.getElementById('lines-box');
-                box.innerHTML = '';
-                const rightLabels = { 5: 'เสียงสูง', 3: 'เสียงกลาง', 1: 'เสียงต่ำ' };
-                const rightColors = { 5: '#ef4444', 3: '#22c55e', 1: '#007bff' };
-
-                (data.lines || []).forEach(item => {
-                  const row = document.createElement('div');
-                  row.className = 'line-row';
-                  let itemColor = item.color || '#22c55e';
-                  if (item.isMulti && item.multi && item.multi.length > 0) itemColor = item.multi[0].color;
-                  
-                  let circleHtml = '';
-                  if (item.show && item.word && !item.isMulti) {
-                    circleHtml = '<div class="circle-note" style="left:' + item.leftPos + '; background-color:' + item.color + '; color:' + (data.cText||'#fff') + ';">' + item.word + '</div>';
-                  } else if (item.show && item.isMulti) {
-                    let circles = (item.multi || []).map(c => '<div class="circle-note" style="position:relative; left:0; transform:none; background-color:' + c.color + '; color:' + (data.cText||'#fff') + ';">' + c.text + '</div>').join('<span style="font-weight:bold; font-size:20px; color:#94a3b8; margin:0 4px;">/</span>');
-                    circleHtml = '<div style="position:absolute; left:' + item.leftPos + '; transform:translateX(-50%); display:flex; align-items:center;">' + circles + '</div>';
-                  }
-
-                  row.innerHTML = 
-                    '<div class="line-label" style="color:' + (item.show ? itemColor : '#94a3b8') + ';">' + item.tone + ' [' + item.mark + ']</div>' +
-                    '<div class="line-track"><div class="line-bar"></div>' + circleHtml + '</div>' +
-                    '<div class="right-tag" style="color:' + (rightColors[item.id] || '#94a3b8') + ';">' + (rightLabels[item.id] || '') + '</div>';
-                  box.appendChild(row);
-                });
-              }
-
-              channel.onmessage = (e) => { if(e.data && e.data.type === 'SYNC_STATE') render(e.data); };
-              window.onmessage = (e) => { if(e.data && e.data.type === 'SYNC_STATE') render(e.data); };
-              channel.postMessage({ type: 'REQUEST_SYNC' });
-            </script>
           </body>
           </html>
         `);
@@ -639,35 +654,18 @@ export default function App() {
     }
   };
 
-  const handleToggleDisplayFullscreen = () => {
-    const channel = safeCreateChannel('thai_tone_sync_channel');
-    if (channel) {
-      try {
-        channel.postMessage({ type: 'TOGGLE_FULLSCREEN' });
-      } catch (e) {}
-      channel.close();
-    }
-    safeSetLocalStorage('thai_tone_toggle_fs_signal', Date.now().toString());
-  };
-
   const toggleFullscreen = () => {
     try {
       if (!document.fullscreenElement) {
         if (document.documentElement.requestFullscreen) {
-          document.documentElement.requestFullscreen().catch(() => {
-            setShowFsNotice(true);
-            setTimeout(() => setShowFsNotice(false), 3500);
-          });
+          document.documentElement.requestFullscreen().catch(() => {});
         }
       } else {
         if (document.exitFullscreen) {
           document.exitFullscreen().catch(() => {});
         }
       }
-    } catch (err) {
-      setShowFsNotice(true);
-      setTimeout(() => setShowFsNotice(false), 3500);
-    }
+    } catch (err) {}
   };
 
   const handleSaveApiKey = () => {
@@ -687,29 +685,6 @@ export default function App() {
     const cons = extractInitialConsonantOnly(inputText);
     const newWord = `${vowelObj.front}${cons}${vowelObj.rear}`;
     setInputText(newWord);
-  };
-
-  const handleBluetoothConnect = async () => {
-    if (!navigator.bluetooth) {
-      setBtStatusMsg('❌ เบราว์เซอร์นี้ยังไม่รองรับ Web Bluetooth API');
-      return;
-    }
-    try {
-      setBtStatusMsg('🔍 กำลังค้นหาอุปกรณ์บลูทูธ...');
-      const device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: ['generic_access']
-      });
-      setBtDeviceName(device.name || 'อุปกรณ์บลูทูธที่เชื่อมต่อ');
-      setBtConnected(true);
-      setBtStatusMsg('✅ เชื่อมต่อบลูทูธสำเร็จ!');
-    } catch (err) {
-      if (err.name !== 'NotFoundError') {
-        setBtStatusMsg('⚠️ การเชื่อมต่อถูกยกเลิกหรือล้มเหลว');
-      } else {
-        setBtStatusMsg('');
-      }
-    }
   };
 
   const handleCopyDisplayUrl = () => {
@@ -818,100 +793,72 @@ export default function App() {
 
   if (isDisplayWindow) {
     const circleRatio = labelFontSize / 20;
-    const circleSize = `clamp(${Math.round(42 * circleRatio)}px, ${(4.2 * circleRatio).toFixed(2)}vw, ${Math.round(64 * circleRatio)}px)`;
-    const circleFontSize = `clamp(${Math.round(16 * circleRatio)}px, ${(1.8 * circleRatio).toFixed(2)}vw, ${Math.round(26 * circleRatio)}px)`;
-    const labelSize = `clamp(${Math.round(14 * circleRatio)}px, ${(0.08 * labelFontSize).toFixed(2)}vw, ${Math.round(26 * circleRatio)}px)`;
+    const circleSize = `clamp(${Math.round(40 * circleRatio)}px, ${(4.0 * circleRatio).toFixed(2)}vw, ${Math.round(62 * circleRatio)}px)`;
+    const circleFontSize = `clamp(${Math.round(15 * circleRatio)}px, ${(1.7 * circleRatio).toFixed(2)}vw, ${Math.round(25 * circleRatio)}px)`;
+    const labelSize = `clamp(${Math.round(13 * circleRatio)}px, ${(0.07 * labelFontSize).toFixed(2)}vw, ${Math.round(24 * circleRatio)}px)`;
 
     return (
       <div 
         onDoubleClick={toggleFullscreen}
-        onClick={() => {
-          if (showFsNotice) {
-            toggleFullscreen();
-            setShowFsNotice(false);
-          }
-        }}
-        title="ดับเบิ้ลคลิกเพื่อสลับโหมดเต็มจอ"
         style={{ 
-          height: '100vh', 
+          height: '100dvh', 
           width: '100vw', 
+          maxWidth: '100%',
           display: 'flex', 
           alignItems: 'center', 
           justifyContent: 'center', 
           boxSizing: 'border-box', 
-          padding: '0', 
+          padding: 'clamp(8px, 1.5vw, 20px)', 
           margin: '0', 
           fontFamily: "'Sarabun', sans-serif", 
           overflow: 'hidden', 
           position: 'fixed', 
           top: 0, 
           left: 0,
-          cursor: 'pointer',
           ...getContainerBgStyle()
         }}
       >
-        {showFsNotice && (
-          <div style={{
-            position: 'absolute',
-            top: '20px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            backgroundColor: 'rgba(15, 23, 42, 0.92)',
-            color: '#ffffff',
-            padding: '10px 22px',
-            borderRadius: '30px',
-            fontSize: '15px',
-            fontWeight: 'bold',
-            zIndex: 9999,
-            boxShadow: '0 10px 25px rgba(0,0,0,0.3)',
-            pointerEvents: 'none',
-            border: '1px solid #38bdf8',
-            backdropFilter: 'blur(8px)'
-          }}>
-            ⛶ คลิก 1 ครั้งตรงไหนก็ได้บนจอนี้เพื่อสลับเต็มจอ
-          </div>
-        )}
-
         <div 
           style={{ 
-            width: 'clamp(320px, 70vw, 1200px)', 
-            height: 'clamp(320px, 70vh, 850px)', 
-            maxHeight: '88vh',
-            maxWidth: '92vw',
+            width: '100%', 
+            maxWidth: '100%',
+            height: '100%', 
+            maxHeight: '100%',
             backgroundColor: 'rgba(255, 255, 255, 0.96)', 
-            borderRadius: 'clamp(16px, 2vw, 28px)', 
-            padding: 'clamp(16px, 2.2vw, 32px) clamp(20px, 3vw, 48px)', 
-            boxShadow: '0 15px 40px rgba(0,0,0,0.12)', 
+            borderRadius: 'clamp(12px, 1.8vw, 24px)', 
+            padding: 'clamp(12px, 2vw, 28px) clamp(16px, 2.5vw, 40px)', 
+            boxShadow: '0 10px 30px rgba(0,0,0,0.12)', 
             display: 'flex', 
             flexDirection: 'column', 
             justifyContent: 'space-between', 
             boxSizing: 'border-box', 
             border: '1px solid #cbd5e1', 
-            backdropFilter: 'blur(8px)' 
+            backdropFilter: 'blur(8px)',
+            overflow: 'hidden'
           }}
         >
-          <div style={{ textAlign: 'center' }}>
-            <h2 style={{ margin: '0 0 2px 0', color: '#ea580c', fontSize: 'clamp(22px, 2.4vw, 34px)', fontWeight: 'bold' }}>
+          <div style={{ textAlign: 'center', flexShrink: 0 }}>
+            <h2 style={{ margin: '0 0 2px 0', color: '#ea580c', fontSize: 'clamp(20px, 2.2vw, 32px)', fontWeight: 'bold' }}>
               ไตรยางศ์ หรือ อักษร 3 หมู่
             </h2>
-            <div style={{ color: '#ea580c', fontSize: 'clamp(15px, 1.5vw, 22px)', fontWeight: '600', marginBottom: '10px' }}>
+            <div style={{ color: '#ea580c', fontSize: 'clamp(14px, 1.4vw, 20px)', fontWeight: '600', marginBottom: '8px' }}>
               และการผันวรรณยุกต์
             </div>
 
             {analysisInfo.desc && (
-              <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: 'clamp(6px, 1vh, 10px) clamp(12px, 1.5vw, 20px)', borderRadius: '12px', margin: '0 auto 10px auto', maxWidth: '850px', textAlign: 'center', fontSize: 'clamp(12px, 1.1vw, 16px)', color: '#0369a1', fontWeight: 'bold' }}>
-                📌 ผลวิเคราะห์หลักภาษา: <span style={{ color: '#0284c7' }}>"{inputText}"</span> เป็น <span style={{ backgroundColor: '#e0f2fe', padding: '2px 8px', borderRadius: '4px' }}>{analysisInfo.type} ({analysisInfo.vowelLen})</span> — {analysisInfo.desc}
+              <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: 'clamp(4px, 0.8vh, 8px) clamp(10px, 1.2vw, 16px)', borderRadius: '10px', margin: '0 auto 8px auto', maxWidth: '850px', textAlign: 'center', fontSize: 'clamp(11px, 1vw, 15px)', color: '#0369a1', fontWeight: 'bold' }}>
+                📌 ผลวิเคราะห์หลักภาษา: <span style={{ color: '#0284c7' }}>"{inputText}"</span> เป็น <span style={{ backgroundColor: '#e0f2fe', padding: '2px 6px', borderRadius: '4px' }}>{analysisInfo.type} ({analysisInfo.vowelLen})</span> — {analysisInfo.desc}
               </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'clamp(150px, 20vw, 250px) 1fr clamp(80px, 10vw, 140px)', color: '#0284c7', fontWeight: 'bold', fontSize: 'clamp(12px, 1.1vw, 16px)', margin: '0 0 -2px 0' }}>
-              <div style={{ textAlign: 'right', paddingRight: '20px', color: '#0284c7', fontWeight: 'bold' }}>รูปวรรณยุกต์</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'clamp(120px, 18vw, 220px) 1fr clamp(70px, 10vw, 120px)', color: '#0284c7', fontWeight: 'bold', fontSize: 'clamp(11px, 1vw, 15px)', margin: '0 0 -2px 0' }}>
+              <div style={{ textAlign: 'right', paddingRight: '16px', color: '#0284c7', fontWeight: 'bold' }}>รูปวรรณยุกต์</div>
               <div></div>
               <div></div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', flex: 1, padding: '4px 0' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', justifySpace: 'space-around', flex: 1, padding: '4px 0', overflow: 'hidden' }}>
             {linesData.map((item, idx) => {
               let rowHeaderColor = '#94a3b8';
               if (item.show) {
@@ -923,25 +870,26 @@ export default function App() {
               return (
                 <div 
                   key={idx} 
-                  style={{ display: 'grid', gridTemplateColumns: 'clamp(150px, 20vw, 250px) 1fr clamp(80px, 10vw, 140px)', alignItems: 'center' }}
+                  style={{ display: 'grid', gridTemplateColumns: 'clamp(120px, 18vw, 220px) 1fr clamp(70px, 10vw, 120px)', alignItems: 'center' }}
                   onMouseEnter={() => setHoveredRowId(item.id)}
                   onMouseLeave={() => setHoveredRowId(null)}
                 >
                   <div 
                     style={{ 
                       textAlign: 'right', 
-                      paddingRight: '20px', 
+                      paddingRight: '16px', 
                       fontSize: labelSize, 
                       color: rowHeaderColor, 
                       fontWeight: 'bold',
                       transition: 'all 0.15s ease',
-                      transform: isHovered ? 'scale(1.08)' : 'scale(1)'
+                      transform: isHovered ? 'scale(1.05)' : 'scale(1)',
+                      whiteSpace: 'nowrap'
                     }}
                   >
-                    {item.tone} <span style={{ fontSize: '0.9em', marginLeft: '4px' }}>[ {item.mark} ]</span>
+                    {item.tone} <span style={{ fontSize: '0.9em', marginLeft: '2px' }}>[ {item.mark} ]</span>
                   </div>
 
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: 'clamp(28px, 4vh, 60px)' }}>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: 'clamp(24px, 3.5vh, 52px)' }}>
                     <div style={{ width: '100%', height: '3px', backgroundColor: '#94a3b8' }}></div>
 
                     {!item.isMulti && item.show && item.word && (
@@ -949,31 +897,29 @@ export default function App() {
                         style={{
                           position: 'absolute',
                           left: item.leftPos,
-                          transform: `translateX(-50%) ${isHovered ? 'scale(1.22)' : 'scale(1)'}`,
+                          transform: `translateX(-50%) ${isHovered ? 'scale(1.18)' : 'scale(1)'}`,
                           backgroundColor: item.color,
                           color: circleTextColor,
                           minWidth: circleSize,
                           height: circleSize,
-                          padding: '0 10px',
+                          padding: '0 8px',
                           borderRadius: '50%',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           fontWeight: 'bold',
                           fontSize: circleFontSize,
-                          boxShadow: isHovered ? '0 8px 20px rgba(0,0,0,0.35)' : '0 5px 14px rgba(0,0,0,0.22)',
-                          cursor: 'pointer',
-                          transition: 'all 0.15s ease',
-                          filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                          transition: 'all 0.15s ease'
                         }}
                       >
                         <svg
                           style={{
                             position: 'absolute',
-                            top: `-${Math.round(20 * circleRatio)}px`,
+                            top: `-${Math.round(18 * circleRatio)}px`,
                             left: `calc(100% - ${Math.round(3 * circleRatio)}px)`,
-                            width: `${Math.round(20 * circleRatio)}px`,
-                            height: `${Math.round(44 * circleRatio)}px`,
+                            width: `${Math.round(18 * circleRatio)}px`,
+                            height: `${Math.round(40 * circleRatio)}px`,
                             pointerEvents: 'none',
                             overflow: 'visible',
                             color: item.color
@@ -988,7 +934,7 @@ export default function App() {
                     )}
 
                     {item.isMulti && item.show && (
-                      <div style={{ position: 'absolute', left: item.leftPos, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ position: 'absolute', left: item.leftPos, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         {item.multi.map((circle, i) => (
                           <React.Fragment key={i}>
                             {i > 0 && <span style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: circleFontSize }}>/</span>}
@@ -998,27 +944,24 @@ export default function App() {
                                 color: circleTextColor,
                                 minWidth: circleSize,
                                 height: circleSize,
-                                padding: '0 10px',
+                                padding: '0 8px',
                                 borderRadius: '50%',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 fontWeight: 'bold',
                                 fontSize: circleFontSize,
-                                boxShadow: isHovered ? '0 8px 20px rgba(0,0,0,0.35)' : '0 5px 14px rgba(0,0,0,0.22)',
-                                cursor: 'pointer',
-                                transition: 'all 0.15s ease',
-                                transform: isHovered ? 'scale(1.22)' : 'scale(1)',
-                                filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                                transition: 'all 0.15s ease'
                               }}
                             >
                               <svg
                                 style={{
                                   position: 'absolute',
-                                  top: `-${Math.round(20 * circleRatio)}px`,
+                                  top: `-${Math.round(18 * circleRatio)}px`,
                                   left: `calc(100% - ${Math.round(3 * circleRatio)}px)`,
-                                  width: `${Math.round(20 * circleRatio)}px`,
-                                  height: `${Math.round(44 * circleRatio)}px`,
+                                  width: `${Math.round(18 * circleRatio)}px`,
+                                  height: `${Math.round(40 * circleRatio)}px`,
                                   pointerEvents: 'none',
                                   overflow: 'visible',
                                   color: circle.color
@@ -1036,7 +979,7 @@ export default function App() {
                     )}
                   </div>
 
-                  <div style={{ textAlign: 'center', color: fixedRight ? fixedRight.color : '#94a3b8', fontWeight: 'bold', fontSize: 'clamp(13px, 1.3vw, 21px)' }}>
+                  <div style={{ textAlign: 'center', color: fixedRight ? fixedRight.color : '#94a3b8', fontWeight: 'bold', fontSize: 'clamp(12px, 1.2vw, 19px)' }}>
                     {fixedRight ? fixedRight.text : ''}
                   </div>
 
@@ -1046,19 +989,19 @@ export default function App() {
           </div>
 
         </div>
-
       </div>
     );
   }
 
   const effectiveQrUrl = customWifiUrl.trim() || getDisplayUrl();
-  const qrImageSrc = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(effectiveQrUrl)}`;
+  const qrImageSrc = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(effectiveQrUrl)}`;
 
   return (
     <div style={{ 
       height: '100vh', 
       maxHeight: '100vh', 
       width: '100vw', 
+      maxWidth: '100%',
       overflow: 'hidden', 
       display: 'flex', 
       flexDirection: 'column', 
@@ -1067,38 +1010,40 @@ export default function App() {
       ...getContainerBgStyle() 
     }}>
       
-      {/* 1. Header Top Bar */}
+      {/* 1. Header Bar */}
       <div style={{ 
         backgroundColor: 'rgba(255, 255, 255, 0.96)', 
         borderBottom: '1px solid #cbd5e1', 
-        padding: '8px 18px', 
+        padding: '8px 16px', 
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center', 
         flexShrink: 0,
         boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-        zIndex: 20
+        zIndex: 20,
+        maxWidth: '100vw',
+        overflowX: 'hidden'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#ea580c', display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <h1 style={{ margin: 0, fontSize: '17px', fontWeight: 'bold', color: '#ea580c', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span>🇹🇭</span> สื่อสอนไตรยางศ์และการผันวรรณยุกต์
           </h1>
-          <span style={{ fontSize: '12px', padding: '2px 8px', borderRadius: '12px', backgroundColor: '#e0f2fe', color: '#0369a1', fontWeight: 'bold' }}>
-            คำปัจจุบัน: {inputText}
+          <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '12px', backgroundColor: '#e0f2fe', color: '#0369a1', fontWeight: 'bold' }}>
+            คำ: {inputText} | รหัสห้อง: {roomId}
           </span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{ display: 'flex', backgroundColor: '#f1f5f9', padding: '3px', borderRadius: '8px' }}>
+          <div style={{ display: 'flex', backgroundColor: '#f1f5f9', padding: '2px', borderRadius: '8px' }}>
             <button 
               onClick={() => setViewLayout('split')}
-              style={{ padding: '5px 10px', borderRadius: '6px', border: 'none', backgroundColor: viewLayout === 'split' ? '#0284c7' : 'transparent', color: viewLayout === 'split' ? '#fff' : '#64748b', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}
+              style={{ padding: '4px 8px', borderRadius: '6px', border: 'none', backgroundColor: viewLayout === 'split' ? '#0284c7' : 'transparent', color: viewLayout === 'split' ? '#fff' : '#64748b', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}
             >
               แบ่ง 2 ฝั่ง
             </button>
             <button 
               onClick={() => setViewLayout('standard')}
-              style={{ padding: '5px 10px', borderRadius: '6px', border: 'none', backgroundColor: viewLayout === 'standard' ? '#0284c7' : 'transparent', color: viewLayout === 'standard' ? '#fff' : '#64748b', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}
+              style={{ padding: '4px 8px', borderRadius: '6px', border: 'none', backgroundColor: viewLayout === 'standard' ? '#0284c7' : 'transparent', color: viewLayout === 'standard' ? '#fff' : '#64748b', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}
             >
               จอกระดานเต็ม
             </button>
@@ -1110,19 +1055,18 @@ export default function App() {
               backgroundColor: '#8b5cf6', 
               color: '#ffffff', 
               border: 'none', 
-              padding: '6px 14px', 
+              padding: '6px 12px', 
               borderRadius: '8px', 
               fontWeight: 'bold', 
-              fontSize: '13px', 
+              fontSize: '12px', 
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              boxShadow: '0 2px 6px rgba(139,92,246,0.3)',
-              transition: 'all 0.2s ease'
+              gap: '4px',
+              boxShadow: '0 2px 6px rgba(139,92,246,0.3)'
             }}
           >
-            📡 เชื่อมต่อจอที่ 2 (WiFi/BT/Web)
+            📡 เชื่อมต่อจอที่ 2
           </button>
 
           <button 
@@ -1131,85 +1075,72 @@ export default function App() {
               backgroundColor: '#16a34a', 
               color: '#ffffff', 
               border: 'none', 
-              padding: '6px 14px', 
+              padding: '6px 12px', 
               borderRadius: '8px', 
               fontWeight: 'bold', 
-              fontSize: '13px', 
+              fontSize: '12px', 
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              gap: '4px',
               boxShadow: '0 2px 6px rgba(22,163,74,0.3)'
             }}
           >
             🚀 แยกหน้าต่างจอที่ 2
           </button>
-
-          <button 
-            onClick={handleToggleDisplayFullscreen}
-            style={{ 
-              backgroundColor: '#0284c7', 
-              color: '#ffffff', 
-              border: 'none', 
-              padding: '6px 12px', 
-              borderRadius: '8px', 
-              fontWeight: 'bold', 
-              fontSize: '13px', 
-              cursor: 'pointer'
-            }}
-          >
-            ⛶ เต็มจอ จอที่ 2
-          </button>
         </div>
       </div>
 
+      {/* Main Container */}
       <div style={{ 
         flex: 1, 
         overflow: 'hidden', 
         display: 'grid', 
-        gridTemplateColumns: viewLayout === 'split' ? '1fr 410px' : '1fr', 
-        gap: '14px', 
-        padding: '12px 16px',
-        boxSizing: 'border-box'
+        gridTemplateColumns: viewLayout === 'split' ? '1fr 380px' : '1fr', 
+        gap: '12px', 
+        padding: '10px 14px',
+        boxSizing: 'border-box',
+        maxWidth: '100vw'
       }}>
         
-        {/* 1. กระดานบรรทัด 5 เส้น */}
+        {/* Left Board Container */}
         <div style={{ 
           backgroundColor: 'rgba(255, 255, 255, 0.96)', 
           borderRadius: '16px', 
-          padding: '20px 28px', 
+          padding: '16px 24px', 
           boxShadow: '0 4px 20px rgba(0,0,0,0.06)', 
           display: 'flex', 
           flexDirection: 'column', 
           justifyContent: 'space-between',
           height: '100%',
           boxSizing: 'border-box',
-          border: '1px solid #e2e8f0'
+          border: '1px solid #e2e8f0',
+          overflow: 'hidden'
         }}>
           
-          <div style={{ textAlign: 'center', marginBottom: '8px' }}>
-            <h2 style={{ margin: '0 0 2px 0', color: '#ea580c', fontSize: '24px', fontWeight: 'bold' }}>
+          <div style={{ textAlign: 'center', marginBottom: '6px' }}>
+            <h2 style={{ margin: '0 0 2px 0', color: '#ea580c', fontSize: '22px', fontWeight: 'bold' }}>
               ไตรยางศ์ หรือ อักษร 3 หมู่
             </h2>
-            <div style={{ color: '#ea580c', fontSize: '15px', fontWeight: '600' }}>
+            <div style={{ color: '#ea580c', fontSize: '14px', fontWeight: '600' }}>
               และการผันวรรณยุกต์
             </div>
 
             {analysisInfo.desc && (
-              <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '6px 14px', borderRadius: '10px', margin: '8px auto 0 auto', maxWidth: '780px', textAlign: 'center', fontSize: '13px', color: '#0369a1', fontWeight: 'bold' }}>
-                📌 ผลวิเคราะห์หลักภาษา: <span style={{ color: '#0284c7' }}>"{inputText}"</span> เป็น <span style={{ backgroundColor: '#e0f2fe', padding: '2px 8px', borderRadius: '4px' }}>{analysisInfo.type} ({analysisInfo.vowelLen})</span> — {analysisInfo.desc}
+              <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '5px 12px', borderRadius: '10px', margin: '6px auto 0 auto', maxWidth: '750px', textAlign: 'center', fontSize: '12px', color: '#0369a1', fontWeight: 'bold' }}>
+                📌 ผลวิเคราะห์หลักภาษา: <span style={{ color: '#0284c7' }}>"{inputText}"</span> เป็น <span style={{ backgroundColor: '#e0f2fe', padding: '2px 6px', borderRadius: '4px' }}>{analysisInfo.type} ({analysisInfo.vowelLen})</span> — {analysisInfo.desc}
               </div>
             )}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr 100px', color: '#0284c7', fontWeight: 'bold', fontSize: '13px', marginBottom: '2px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '160px 1fr 90px', color: '#0284c7', fontWeight: 'bold', fontSize: '12px', marginBottom: '2px' }}>
             <div style={{ textAlign: 'right', paddingRight: '16px', color: '#0284c7', fontWeight: 'bold' }}>รูปวรรณยุกต์</div>
             <div></div>
             <div></div>
           </div>
 
-          {/* 5 บรรทัด */}
-          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', flex: 1, padding: '4px 0' }}>
+          {/* 5 Lines Board */}
+          <div style={{ display: 'flex', flexDirection: 'column', justifySpace: 'space-around', flex: 1, padding: '2px 0' }}>
             {linesData.map((item, idx) => {
               let rowHeaderColor = '#94a3b8';
               if (item.show) {
@@ -1221,7 +1152,7 @@ export default function App() {
               return (
                 <div 
                   key={idx} 
-                  style={{ display: 'grid', gridTemplateColumns: '180px 1fr 100px', alignItems: 'center' }}
+                  style={{ display: 'grid', gridTemplateColumns: '160px 1fr 90px', alignItems: 'center' }}
                   onMouseEnter={() => setHoveredRowId(item.id)}
                   onMouseLeave={() => setHoveredRowId(null)}
                 >
@@ -1229,17 +1160,17 @@ export default function App() {
                     style={{ 
                       textAlign: 'right', 
                       paddingRight: '16px', 
-                      fontSize: '15px', 
+                      fontSize: '14px', 
                       color: rowHeaderColor, 
                       fontWeight: 'bold', 
                       transition: 'all 0.15s ease',
-                      transform: isHovered ? 'scale(1.08)' : 'scale(1)'
+                      transform: isHovered ? 'scale(1.05)' : 'scale(1)'
                     }}
                   >
-                    {item.tone} <span style={{ fontSize: '15px', marginLeft: '4px', letterSpacing: '1px' }}>[ {item.mark} ]</span>
+                    {item.tone} <span style={{ fontSize: '14px', marginLeft: '2px' }}>[ {item.mark} ]</span>
                   </div>
 
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '28px' }}>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '26px' }}>
                     <div style={{ width: '100%', height: '2px', backgroundColor: '#94a3b8' }}></div>
 
                     {!item.isMulti && item.show && item.word && (
@@ -1247,31 +1178,30 @@ export default function App() {
                         style={{
                           position: 'absolute',
                           left: item.leftPos,
-                          transform: `translateX(-50%) ${isHovered ? 'scale(1.22)' : 'scale(1)'}`,
+                          transform: `translateX(-50%) ${isHovered ? 'scale(1.18)' : 'scale(1)'}`,
                           backgroundColor: item.color,
                           color: circleTextColor,
-                          minWidth: '42px',
-                          height: '42px',
-                          padding: '0 8px',
-                          borderRadius: '21px',
+                          minWidth: '38px',
+                          height: '38px',
+                          padding: '0 6px',
+                          borderRadius: '19px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           fontWeight: 'bold',
-                          fontSize: '17px',
-                          boxShadow: isHovered ? '0 6px 16px rgba(0,0,0,0.3)' : '0 3px 8px rgba(0,0,0,0.25)',
+                          fontSize: '15px',
+                          boxShadow: '0 3px 8px rgba(0,0,0,0.2)',
                           cursor: 'pointer',
-                          transition: 'all 0.15s ease',
-                          filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
+                          transition: 'all 0.15s ease'
                         }}
                       >
                         <svg
                           style={{
                             position: 'absolute',
-                            top: '-18px',
+                            top: '-16px',
                             left: 'calc(100% - 3px)',
-                            width: '18px',
-                            height: '40px',
+                            width: '16px',
+                            height: '36px',
                             pointerEvents: 'none',
                             overflow: 'visible',
                             color: item.color
@@ -1286,37 +1216,35 @@ export default function App() {
                     )}
 
                     {item.isMulti && item.show && (
-                      <div style={{ position: 'absolute', left: item.leftPos, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ position: 'absolute', left: item.leftPos, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '6px' }}>
                         {item.multi.map((circle, i) => (
                           <React.Fragment key={i}>
-                            {i > 0 && <span style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '18px' }}>/</span>}
+                            {i > 0 && <span style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '16px' }}>/</span>}
                             <div 
                               style={{
                                 backgroundColor: circle.color,
                                 color: circleTextColor,
-                                minWidth: '42px',
-                                height: '42px',
-                                padding: '0 8px',
-                                borderRadius: '21px',
+                                minWidth: '38px',
+                                height: '38px',
+                                padding: '0 6px',
+                                borderRadius: '19px',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 fontWeight: 'bold',
-                                fontSize: '17px',
-                                boxShadow: isHovered ? '0 6px 16px rgba(0,0,0,0.3)' : '0 3px 8px rgba(0,0,0,0.25)',
+                                fontSize: '15px',
+                                boxShadow: '0 3px 8px rgba(0,0,0,0.2)',
                                 cursor: 'pointer',
-                                transition: 'all 0.15s ease',
-                                transform: isHovered ? 'scale(1.22)' : 'scale(1)',
-                                filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
+                                transition: 'all 0.15s ease'
                               }}
                             >
                               <svg
                                 style={{
                                   position: 'absolute',
-                                  top: '-18px',
+                                  top: '-16px',
                                   left: 'calc(100% - 3px)',
-                                  width: '18px',
-                                  height: '40px',
+                                  width: '16px',
+                                  height: '36px',
                                   pointerEvents: 'none',
                                   overflow: 'visible',
                                   color: circle.color
@@ -1334,7 +1262,7 @@ export default function App() {
                     )}
                   </div>
 
-                  <div style={{ textAlign: 'center', color: fixedRight ? fixedRight.color : '#94a3b8', fontWeight: 'bold', fontSize: '14px' }}>
+                  <div style={{ textAlign: 'center', color: fixedRight ? fixedRight.color : '#94a3b8', fontWeight: 'bold', fontSize: '13px' }}>
                     {fixedRight ? fixedRight.text : ''}
                   </div>
                 </div>
@@ -1344,48 +1272,50 @@ export default function App() {
 
         </div>
 
-        {/* 2. แผงควบคุมขวามือ */}
-        {}
+        {/* Right Side Controls Panel */}
         {viewLayout === 'split' && (
           <div 
             style={{ 
               backgroundColor: '#ffffff', 
               borderRadius: '16px', 
-              padding: '16px', 
+              padding: '14px', 
               boxShadow: '0 4px 14px rgba(0,0,0,0.06)', 
               border: '1px solid #e2e8f0', 
               display: 'flex', 
               flexDirection: 'column', 
-              gap: '14px',
+              gap: '12px',
               height: '100%',
               overflowY: 'auto',
               boxSizing: 'border-box'
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#1f2937' }}>⚙️ แผงควบคุมการผัน</h3>
+              <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', color: '#1f2937' }}>⚙️ แผงควบคุมการผัน</h3>
+              <span style={{ fontSize: '10px', color: cloudConnected ? '#16a34a' : '#d97706', fontWeight: 'bold' }}>
+                {cloudConnected ? '🟢 ซิงค์เรียลไทม์' : '🟡 ซิงค์ในเครื่อง'}
+              </span>
             </div>
 
-            {/* 1. ตัวเลือกการผันวรรณยุกต์ */}
-            <div style={{ backgroundColor: '#f8fafc', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-              <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#1f2937', marginBottom: '8px' }}>✨ ตัวเลือกการผันวรรณยุกต์</div>
+            {/* Conjugation Options */}
+            <div style={{ backgroundColor: '#f8fafc', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#1f2937', marginBottom: '6px' }}>✨ ตัวเลือกการผันวรรณยุกต์</div>
               
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px', fontSize: '12px', color: '#334155' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px', fontSize: '11px', color: '#334155' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
                   <input type="radio" name="mode" checked={mode === 'full5'} onChange={() => setMode('full5')} />
                   ผันครบทั้ง 5 บรรทัด (อักษรคู่ / ห นำ)
                 </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
                   <input type="radio" name="mode" checked={mode === 'highOnly'} onChange={() => setMode('highOnly')} />
                   เฉพาะเสียงสูง (เอก, โท, จัตวา)
                 </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
                   <input type="radio" name="mode" checked={mode === 'lowOnly'} onChange={() => setMode('lowOnly')} />
                   เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)
                 </label>
               </div>
 
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                 <input 
                   type="text" 
                   value={inputText} 
@@ -1394,20 +1324,18 @@ export default function App() {
                     validateInput(e.target.value);
                   }}
                   onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
-                  placeholder="พิมพ์ 1 คำ เช่น กอ, เมา, กวาง" 
+                  placeholder="พิมพ์ 1 คำ เช่น กอ, เมา" 
                   style={{ 
                     flex: 1, 
-                    padding: '8px 12px', 
-                    borderRadius: '8px', 
+                    padding: '6px 10px', 
+                    borderRadius: '6px', 
                     border: inputError ? '2px solid #ef4444' : '1px solid #cbd5e1', 
-                    fontSize: '15px',
+                    fontSize: '13px',
                     backgroundColor: '#f1f5f9',
                     color: '#0f172a',
-                    fontWeight: '600',
-                    boxSizing: 'border-box'
+                    fontWeight: '600'
                   }}
                 />
-                
                 <button 
                   onClick={handleGenerate}
                   disabled={loading}
@@ -1415,34 +1343,34 @@ export default function App() {
                     backgroundColor: '#0284c7', 
                     color: '#ffffff', 
                     border: 'none', 
-                    padding: '8px 14px', 
-                    borderRadius: '8px', 
+                    padding: '6px 12px', 
+                    borderRadius: '6px', 
                     fontWeight: 'bold', 
                     cursor: 'pointer', 
-                    fontSize: '13px',
+                    fontSize: '12px',
                     whiteSpace: 'nowrap'
                   }}
                 >
                   {loading ? '...' : 'ผันคำ'}
                 </button>
               </div>
-              {inputError && <div style={{ color: '#ef4444', fontSize: '11px', marginTop: '6px', fontWeight: 'bold' }}>{inputError}</div>}
+              {inputError && <div style={{ color: '#ef4444', fontSize: '10px', marginTop: '4px', fontWeight: 'bold' }}>{inputError}</div>}
             </div>
 
-            {/* 2. เลือกพยัญชนะด่วน */}
+            {/* Quick Consonants */}
             <div>
-              <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', marginBottom: '6px' }}>⌨️ เลือกพยัญชนะด่วน (๔๔ ตัว):</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(11, 1fr)', gap: '4px' }}>
+              <div style={{ fontSize: '11px', color: '#64748b', fontWeight: 'bold', marginBottom: '4px' }}>⌨️ เลือกพยัญชนะด่วน (๔๔ ตัว):</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(11, 1fr)', gap: '3px' }}>
                 {quickConsonants.map((c) => (
                   <button 
                     key={c}
                     onClick={() => handleQuickConsonantClick(c)}
                     style={{ 
-                      height: '32px',
-                      borderRadius: '6px', 
+                      height: '28px',
+                      borderRadius: '4px', 
                       border: '1px solid #cbd5e1', 
                       backgroundColor: '#ffffff', 
-                      fontSize: '14px', 
+                      fontSize: '13px', 
                       fontWeight: 'bold', 
                       cursor: 'pointer',
                       display: 'flex',
@@ -1458,27 +1386,24 @@ export default function App() {
               </div>
             </div>
 
-            {/* 3. เลือกสระด่วน */}
+            {/* Quick Vowels */}
             <div>
-              <div style={{ fontSize: '12px', color: '#166534', fontWeight: 'bold', marginBottom: '6px' }}>🟢 สระเสียงยาว (คำเป็น):</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '8px' }}>
+              <div style={{ fontSize: '11px', color: '#166534', fontWeight: 'bold', marginBottom: '4px' }}>🟢 สระเสียงยาว (คำเป็น):</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px', marginBottom: '6px' }}>
                 {longVowels.map((v) => (
                   <button 
                     key={v.label}
                     onClick={() => handleQuickVowelClick(v)}
                     style={{ 
-                      height: '32px',
-                      padding: '0 8px', 
-                      borderRadius: '6px', 
+                      height: '28px',
+                      padding: '0 6px', 
+                      borderRadius: '4px', 
                       border: '1px solid #bbf7d0', 
                       backgroundColor: '#f0fdf4', 
                       color: '#15803d', 
-                      fontSize: '14px', 
+                      fontSize: '12px', 
                       fontWeight: 'bold', 
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
+                      cursor: 'pointer'
                     }}
                   >
                     {v.label}
@@ -1486,25 +1411,22 @@ export default function App() {
                 ))}
               </div>
 
-              <div style={{ fontSize: '12px', color: '#991b1b', fontWeight: 'bold', marginBottom: '6px' }}>🔴 สระเสียงสั้น (คำตาย):</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+              <div style={{ fontSize: '11px', color: '#991b1b', fontWeight: 'bold', marginBottom: '4px' }}>🔴 สระเสียงสั้น (คำตาย):</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
                 {shortVowels.map((v) => (
                   <button 
                     key={v.label}
                     onClick={() => handleQuickVowelClick(v)}
                     style={{ 
-                      height: '32px',
-                      padding: '0 8px', 
-                      borderRadius: '6px', 
+                      height: '28px',
+                      padding: '0 6px', 
+                      borderRadius: '4px', 
                       border: '1px solid #fecaca', 
                       backgroundColor: '#fef2f2', 
                       color: '#b91c1c', 
-                      fontSize: '14px', 
+                      fontSize: '12px', 
                       fontWeight: 'bold', 
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
+                      cursor: 'pointer'
                     }}
                   >
                     {v.label}
@@ -1513,91 +1435,32 @@ export default function App() {
               </div>
             </div>
 
-            <hr style={{ border: 'none', borderTop: '1px solid #f1f5f9', margin: '2px 0' }} />
-
-            {/* 4. สีประจำหมู่ */}
+            {/* Colors and Styles */}
             <div>
-              <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563', marginBottom: '6px' }}>🎨 ตั้งค่าสีประจำหมู่ และสีตัวอักษร</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
-                <label style={{ height: '32px', backgroundColor: colorMid, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
+              <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#4b5563', marginBottom: '4px' }}>🎨 ตั้งค่าสีประจำหมู่</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '4px' }}>
+                <label style={{ height: '28px', backgroundColor: colorMid, borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
                   อักษรกลาง
                   <input type="color" value={colorMid} onChange={(e) => setColorMid(e.target.value)} style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }} />
                 </label>
-                <label style={{ height: '32px', backgroundColor: colorHigh, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
+                <label style={{ height: '28px', backgroundColor: colorHigh, borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
                   อักษรสูง
                   <input type="color" value={colorHigh} onChange={(e) => setColorHigh(e.target.value)} style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }} />
                 </label>
-                <label style={{ height: '32px', backgroundColor: colorLow, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
+                <label style={{ height: '28px', backgroundColor: colorLow, borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}>
                   อักษรต่ำ
                   <input type="color" value={colorLow} onChange={(e) => setColorLow(e.target.value)} style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }} />
                 </label>
-                <label style={{ height: '32px', backgroundColor: '#334155', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: circleTextColor, fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', border: '1px solid #cbd5e1' }}>
+                <label style={{ height: '28px', backgroundColor: '#334155', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: circleTextColor, fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', border: '1px solid #cbd5e1' }}>
                   สีตัวอักษร
                   <input type="color" value={circleTextColor} onChange={(e) => setCircleTextColor(e.target.value)} style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }} />
                 </label>
               </div>
             </div>
 
-            {/* 5. พื้นหลัง */}
-            <div style={{ backgroundColor: '#f8fafc', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#1e293b', marginBottom: '6px' }}>🖼️ พื้นหลังหน้าจอภาพ</div>
-              
-              <div style={{ display: 'flex', gap: '4px', marginBottom: '6px', flexWrap: 'wrap' }}>
-                {[
-                  { label: 'เทา', code: '#e2e8f0' },
-                  { label: 'สว่าง', code: '#f1f5f9' },
-                  { label: 'ฟ้าอ่อน', code: '#e0f2fe' },
-                  { label: 'มินต์', code: '#dcfce7' },
-                  { label: 'เข้ม', code: '#334155' }
-                ].map((colorItem) => (
-                  <button
-                    key={colorItem.code}
-                    onClick={() => { setBgColor(colorItem.code); setBgType('color'); }}
-                    style={{
-                      backgroundColor: colorItem.code,
-                      border: bgColor === colorItem.code && bgType === 'color' ? '2px solid #0284c7' : '1px solid #cbd5e1',
-                      padding: '3px 6px',
-                      borderRadius: '4px',
-                      fontSize: '11px',
-                      fontWeight: 'bold',
-                      color: colorItem.code === '#334155' ? '#fff' : '#1e293b',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {colorItem.label}
-                  </button>
-                ))}
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <label style={{ backgroundColor: '#0284c7', color: '#fff', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', display: 'inline-block' }}>
-                  📁 อัปโหลดภาพพื้นหลัง
-                  <input type="file" accept="image/*" onChange={(e) => {
-                    const file = e.target.files[0];
-                    if (file) {
-                      const reader = new FileReader();
-                      reader.onloadend = () => {
-                        setBgImage(reader.result);
-                        setBgType('image');
-                      };
-                      reader.readAsDataURL(file);
-                    }
-                  }} style={{ display: 'none' }} />
-                </label>
-                {bgType === 'image' && (
-                  <button 
-                    onClick={() => { setBgType('color'); setBgImage(''); }}
-                    style={{ backgroundColor: '#ef4444', color: '#fff', border: 'none', padding: '4px 6px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
-                  >
-                    ยกเลิกรูปภาพ
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* 6. Slider */}
+            {/* Font Size Slider */}
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 'bold', color: '#4b5563', marginBottom: '2px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: 'bold', color: '#4b5563', marginBottom: '2px' }}>
                 <span>📐 ขนาดตัวอักษร จอที่ 2:</span>
                 <span style={{ color: '#0284c7' }}>{labelFontSize}px</span>
               </div>
@@ -1611,8 +1474,8 @@ export default function App() {
               />
             </div>
 
-            {/* 7. Gemini API Key */}
-            <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '8px' }}>
+            {/* Gemini API Key Settings */}
+            <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '6px' }}>
               <button 
                 onClick={() => setShowApiInput(!showApiInput)}
                 style={{ 
@@ -1620,9 +1483,9 @@ export default function App() {
                   backgroundColor: customApiKey ? '#e0f2fe' : '#fef3c7', 
                   color: customApiKey ? '#0369a1' : '#b45309', 
                   border: customApiKey ? '1px solid #7dd3fc' : '1px solid #fde68a', 
-                  padding: '6px 10px', 
+                  padding: '5px 8px', 
                   borderRadius: '6px', 
-                  fontSize: '12px', 
+                  fontSize: '11px', 
                   cursor: 'pointer', 
                   fontWeight: 'bold' 
                 }}
@@ -1631,8 +1494,7 @@ export default function App() {
               </button>
 
               {showApiInput && (
-                <div style={{ marginTop: '6px', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '6px', border: '1px dashed #94a3b8' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569', marginBottom: '4px' }}>🔑 กรอก Gemini API Key:</div>
+                <div style={{ marginTop: '4px', padding: '6px', backgroundColor: '#f8fafc', borderRadius: '6px', border: '1px dashed #94a3b8' }}>
                   <div style={{ display: 'flex', gap: '4px' }}>
                     <input 
                       type="password" 
@@ -1640,16 +1502,16 @@ export default function App() {
                       value={tempApiKey} 
                       onChange={(e) => setTempApiKey(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleSaveApiKey()}
-                      style={{ flex: 1, padding: '4px 6px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '11px' }}
+                      style={{ flex: 1, padding: '4px 6px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '10px' }}
                     />
                     <button 
                       onClick={handleSaveApiKey}
-                      style={{ backgroundColor: '#10b981', color: '#ffffff', border: 'none', padding: '0 8px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '11px' }}
+                      style={{ backgroundColor: '#10b981', color: '#ffffff', border: 'none', padding: '0 6px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '10px' }}
                     >
                       บันทึก
                     </button>
                   </div>
-                  {apiSaveStatus && <div style={{ color: '#059669', fontSize: '10px', marginTop: '4px', fontWeight: 'bold' }}>✓ {apiSaveStatus}</div>}
+                  {apiSaveStatus && <div style={{ color: '#059669', fontSize: '9px', marginTop: '2px', fontWeight: 'bold' }}>✓ {apiSaveStatus}</div>}
                 </div>
               )}
             </div>
@@ -1659,7 +1521,6 @@ export default function App() {
 
       </div>
 
-      {/* 3. Modal การเชื่อมต่อจอที่ 2 (WiFi/Bluetooth/Web Browser) */}
       {}
       {showConnectModal && (
         <div style={{
@@ -1678,7 +1539,7 @@ export default function App() {
         }}>
           <div style={{
             width: '100%',
-            maxWidth: '560px',
+            maxWidth: '540px',
             backgroundColor: '#ffffff',
             borderRadius: '20px',
             boxShadow: '0 20px 40px rgba(0,0,0,0.25)',
@@ -1688,19 +1549,19 @@ export default function App() {
             border: '1px solid #cbd5e1'
           }}>
             <div style={{
-              padding: '16px 20px',
+              padding: '14px 18px',
               backgroundColor: '#f8fafc',
               borderBottom: '1px solid #e2e8f0',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center'
             }}>
-              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span>📡</span> ตั้งค่าการเชื่อมต่อจอที่ 2
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span>📡</span> ตั้งค่าการเชื่อมต่อจอที่ 2 (ห้อง: {roomId})
               </h3>
               <button 
                 onClick={() => setShowConnectModal(false)}
-                style={{ background: 'none', border: 'none', fontSize: '20px', color: '#64748b', cursor: 'pointer', fontWeight: 'bold' }}
+                style={{ background: 'none', border: 'none', fontSize: '18px', color: '#64748b', cursor: 'pointer', fontWeight: 'bold' }}
               >
                 ✕
               </button>
@@ -1711,82 +1572,57 @@ export default function App() {
                 onClick={() => setActiveConnectTab('wifi')}
                 style={{
                   flex: 1,
-                  padding: '12px 8px',
+                  padding: '10px 6px',
                   border: 'none',
                   backgroundColor: activeConnectTab === 'wifi' ? '#ffffff' : 'transparent',
                   color: activeConnectTab === 'wifi' ? '#0284c7' : '#64748b',
                   fontWeight: 'bold',
-                  fontSize: '13px',
+                  fontSize: '12px',
                   cursor: 'pointer',
                   borderBottom: activeConnectTab === 'wifi' ? '2px solid #0284c7' : 'none'
                 }}
               >
-                📶 WiFi / QR Code
+                📶 สแกน QR Code (แท็บเล็ต/สมาร์ตโฟน)
               </button>
               <button
                 onClick={() => setActiveConnectTab('browser')}
                 style={{
                   flex: 1,
-                  padding: '12px 8px',
+                  padding: '10px 6px',
                   border: 'none',
                   backgroundColor: activeConnectTab === 'browser' ? '#ffffff' : 'transparent',
                   color: activeConnectTab === 'browser' ? '#0284c7' : '#64748b',
                   fontWeight: 'bold',
-                  fontSize: '13px',
+                  fontSize: '12px',
                   cursor: 'pointer',
                   borderBottom: activeConnectTab === 'browser' ? '2px solid #0284c7' : 'none'
                 }}
               >
-                🌐 เบราว์เซอร์/คู่จอ
-              </button>
-              <button
-                onClick={() => setActiveConnectTab('bluetooth')}
-                style={{
-                  flex: 1,
-                  padding: '12px 8px',
-                  border: 'none',
-                  backgroundColor: activeConnectTab === 'bluetooth' ? '#ffffff' : 'transparent',
-                  color: activeConnectTab === 'bluetooth' ? '#0284c7' : '#64748b',
-                  fontWeight: 'bold',
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                  borderBottom: activeConnectTab === 'bluetooth' ? '2px solid #0284c7' : 'none'
-                }}
-              >
-                ᛒ บลูทูธ (Bluetooth)
+                🌐 เปิดจอที่ 2 บนคอมพิวเตอร์
               </button>
             </div>
 
-            <div style={{ padding: '20px', flex: 1, overflowY: 'auto' }}>
+            <div style={{ padding: '16px', flex: 1, overflowY: 'auto' }}>
               {activeConnectTab === 'wifi' && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '12px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '10px' }}>
                   
-                  {/* กล่องคำอธิบายสาเหตุและแนวทางแก้ไขสำหรับ Blob URL */}
-                  {window.location.href.includes('blob:') ? (
-                    <div style={{ backgroundColor: '#fffbe3', border: '1px solid #fde68a', padding: '12px 14px', borderRadius: '12px', textAlign: 'left', fontSize: '13px', color: '#92400e', width: '100%', boxSizing: 'border-box' }}>
-                      <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span>⚠️</span> สแกนด้วยแท็บเล็ตเครื่องอื่นไม่ได้เพราะอะไร?
-                      </div>
-                      <div>
-                        ขณะนี้แอปพลิเคชันรันอยู่ในโหมด <strong>"ตัวอย่างพรีวิว (Blob URL)"</strong> ซึ่งเป็นที่อยู่ชั่วคราวใน RAM ของคอมพิวเตอร์เครื่องนี้ แท็บเล็ตเครื่องอื่นจึงไม่สามารถเปิดลิงก์ Blob จากภายนอกได้
-                      </div>
-                      <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #fcd34d', fontWeight: 'bold', color: '#b45309' }}>
-                        👉 <strong>วิธีใช้งานแนะนำ:</strong> ให้ใช้คอมพิวเตอร์เครื่องนี้ต่อสาย HDMI/ไร้สาย ออกจอทีวีหรือโปรเจกเตอร์ แล้วกดปุ่ม <strong>"🚀 เปิดหน้าต่างจอที่ 2 บัดนี้"</strong> (ในแท็บเบราว์เซอร์) ได้ทันทีครับ
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: '13px', color: '#1e293b', fontWeight: 'bold' }}>
-                      📲 สแกน QR Code ด้วยแท็บเล็ต สมาร์ททีวี หรือมือถือในวง Wi-Fi เดียวกัน
+                  {isSandboxEnv() && (
+                    <div style={{ backgroundColor: '#fffbebfb', border: '1px solid #fde68a', borderRadius: '8px', padding: '8px 12px', textAlign: 'left', fontSize: '11px', color: '#b45309', width: '100%', boxSizing: 'border-box' }}>
+                      💡 <strong>คำแนะนำโหมดพรีวิว (Gemini Canvas):</strong><br />
+                      URL ปัจจุบันเป็นแอดเดรสชั่วคราวชั่วคราว หากสแกน QR Code แล้วขึ้น 404 ให้วาง <strong>URL ของเว็บที่คุณนำไปขึ้นโฮสติ้งจริง (เช่น *.pages.dev)</strong> ลงในช่องด้านล่าง แล้วสแกนใหม่ได้ทันทีครับ
                     </div>
                   )}
 
-                  {/* แสดงภาพ QR Code จริงที่ผ่านมาตรฐานการสแกนกล้อง */}
+                  <div style={{ fontSize: '12px', color: '#1e293b', fontWeight: 'bold' }}>
+                    📲 สแกน QR Code เพื่อเปิดกระดานผันคำบนแท็บเล็ต (เชื่อมต่อได้ไม่จำกัดจำนวนเครื่อง)
+                  </div>
+
                   <div style={{ 
                     backgroundColor: '#ffffff', 
-                    padding: '12px', 
-                    borderRadius: '16px', 
+                    padding: '10px', 
+                    borderRadius: '12px', 
                     border: '2px solid #0284c7', 
-                    boxShadow: '0 8px 20px rgba(2,132,199,0.15)',
+                    boxShadow: '0 6px 16px rgba(2,132,199,0.15)',
                     display: 'inline-flex',
                     flexDirection: 'column',
                     alignItems: 'center'
@@ -1794,159 +1630,76 @@ export default function App() {
                     <img 
                       src={qrImageSrc} 
                       alt="QR Code สำหรับสแกนเข้าจอที่ 2" 
-                      style={{ width: '180px', height: '180px', display: 'block', borderRadius: '8px' }}
+                      style={{ width: '190px', height: '190px', display: 'block', borderRadius: '6px' }}
                     />
-                    <div style={{ fontSize: '11px', color: '#0369a1', marginTop: '6px', fontWeight: 'bold' }}>
-                      ✓ รหัส QR Code สำหรับเชื่อมต่อ
+                    <div style={{ fontSize: '11px', color: '#0369a1', marginTop: '4px', fontWeight: 'bold' }}>
+                      ✓ คิวอาร์โค้ดประจำห้องเรียน {roomId}
                     </div>
                   </div>
 
-                  {/* ช่องป้อน URL / IP Address วง Wi-Fi ส่วนตัว */}
-                  <div style={{ width: '100%', backgroundColor: '#f8fafc', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', textAlign: 'left', boxSizing: 'border-box' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>
-                      🌐 กำหนด IP/URL เว็บไซต์จริงสำหรับสแกน (ถ้ามี):
+                  <div style={{ width: '100%', backgroundColor: '#f8fafc', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', textAlign: 'left', boxSizing: 'border-box' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#334155', marginBottom: '2px' }}>
+                      🔗 กำหนด URL เว็บไซต์จริง / IP วง LAN สำหรับสแกน:
                     </div>
-                    <input 
-                      type="text" 
-                      placeholder="เช่น http://192.168.1.50:3000 หรือ https://your-school-site.com" 
-                      value={customWifiUrl}
-                      onChange={(e) => setCustomWifiUrl(e.target.value)}
-                      style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', boxSizing: 'border-box' }}
-                    />
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      <input 
+                        type="text" 
+                        value={customWifiUrl}
+                        onChange={(e) => setCustomWifiUrl(e.target.value)}
+                        placeholder={getDisplayUrl()} 
+                        style={{ flex: 1, padding: '6px 8px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '11px', backgroundColor: '#fff' }}
+                      />
+                      <button 
+                        onClick={handleCopyDisplayUrl}
+                        style={{ backgroundColor: copysuccess ? '#16a34a' : '#0284c7', color: '#fff', border: 'none', padding: '0 10px', borderRadius: '4px', fontWeight: 'bold', fontSize: '11px', cursor: 'pointer' }}
+                      >
+                        {copysuccess ? 'คัดลอกแล้ว' : 'คัดลอก'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
 
               {activeConnectTab === 'browser' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '12px 14px', borderRadius: '10px', fontSize: '13px', color: '#0369a1' }}>
-                    💡 <strong>การส่งภาพออกจอที่ 2 ผ่าน Web Browser:</strong>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '10px 12px', borderRadius: '8px', fontSize: '12px', color: '#0369a1' }}>
+                    💡 <strong>ส่งภาพออกจอที่ 2 บนคอมพิวเตอร์เครื่องเดียวกัน:</strong>
                     <br />
-                    ระบบรองรับการเปิดหน้าต่างจอที่ 2 ทั้งในโหมดปกติและโหมด Blob Preview เรียลไทม์
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <button
-                      onClick={() => {
-                        handleOpenDualMonitor();
-                        setShowConnectModal(false);
-                      }}
-                      style={{
-                        flex: 1,
-                        backgroundColor: '#16a34a',
-                        color: '#fff',
-                        border: 'none',
-                        padding: '12px',
-                        borderRadius: '10px',
-                        fontWeight: 'bold',
-                        fontSize: '14px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '8px'
-                      }}
-                    >
-                      🚀 เปิดหน้าต่างจอที่ 2 บัดนี้
-                    </button>
-                  </div>
-
-                  <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
-                    <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '6px' }}>
-                      🔗 ลิงก์สำหรับเปิดหน้าจอที่ 2 บนเบราว์เซอร์อื่น:
-                    </div>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <input 
-                        type="text" 
-                        readOnly 
-                        value={effectiveQrUrl} 
-                        style={{ flex: 1, padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', backgroundColor: '#f8fafc', color: '#334155' }}
-                      />
-                      <button 
-                        onClick={handleCopyDisplayUrl}
-                        style={{ backgroundColor: copysuccess ? '#16a34a' : '#0284c7', color: '#fff', border: 'none', padding: '0 14px', borderRadius: '6px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}
-                      >
-                        {copysuccess ? '✓ คัดลอกแล้ว' : 'คัดลอก'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {activeConnectTab === 'bluetooth' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', padding: '12px 14px', borderRadius: '10px' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e293b', marginBottom: '4px' }}>
-                      ᛒ การเชื่อมต่อรีโมทไร้สาย / สวิตช์บลูทูธ (Bluetooth Remote / Presenter)
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#64748b' }}>
-                      จับคู่กับรีโมทนำเสนอผลงาน หรือ อุปกรณ์บลูทูธภายนอกเพื่อควบคุมเปลี่ยนคำผันวรรณยุกต์
-                    </div>
+                    กดปุ่มเปิดหน้าต่างจอที่ 2 แล้วลากไปยังจอมอนิเตอร์/โปรเจกเตอร์ได้ทันที
                   </div>
 
                   <button
-                    onClick={handleBluetoothConnect}
+                    onClick={() => {
+                      handleOpenDualMonitor();
+                      setShowConnectModal(false);
+                    }}
                     style={{
-                      backgroundColor: btConnected ? '#16a34a' : '#8b5cf6',
-                      color: '#ffffff',
+                      backgroundColor: '#16a34a',
+                      color: '#fff',
                       border: 'none',
-                      padding: '12px',
-                      borderRadius: '10px',
+                      padding: '10px',
+                      borderRadius: '8px',
                       fontWeight: 'bold',
-                      fontSize: '14px',
+                      fontSize: '13px',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '8px',
-                      boxShadow: '0 4px 12px rgba(139,92,246,0.25)'
+                      gap: '6px'
                     }}
                   >
-                    <span>ᛒ</span> {btConnected ? `เชื่อมต่อแล้ว: ${btDeviceName}` : 'ค้นหาและจับคู่อุปกรณ์บลูทูธ'}
+                    🚀 เปิดหน้าต่างจอที่ 2 บัดนี้
                   </button>
-
-                  {btStatusMsg && (
-                    <div style={{ fontSize: '12px', textAlign: 'center', fontWeight: 'bold', color: btConnected ? '#16a34a' : '#dc2626' }}>
-                      {btStatusMsg}
-                    </div>
-                  )}
-
-                  <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', marginBottom: '6px' }}>
-                      🎮 ปุ่มทดสอบการส่งสัญญาณรีโมทบลูทูธ:
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
-                      <button 
-                        onClick={() => handleQuickConsonantClick('ก')}
-                        style={{ padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#f1f5f9', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
-                      >
-                        ◄ คำก่อนหน้า
-                      </button>
-                      <button 
-                        onClick={handleToggleDisplayFullscreen}
-                        style={{ padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#f1f5f9', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
-                      >
-                        ⛶ สลับเต็มจอ
-                      </button>
-                      <button 
-                        onClick={() => handleQuickConsonantClick('ข')}
-                        style={{ padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#f1f5f9', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
-                      >
-                        คำถัดไป ►
-                      </button>
-                    </div>
-                  </div>
                 </div>
               )}
-
             </div>
 
-            <div style={{ padding: '12px 20px', backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0', textAlign: 'right' }}>
+            <div style={{ padding: '10px 16px', backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0', textAlign: 'right' }}>
               <button
                 onClick={() => setShowConnectModal(false)}
-                style={{ backgroundColor: '#475569', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: '8px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' }}
+                style={{ backgroundColor: '#475569', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: '6px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}
               >
-                ปิดหน้าต่าง
+                ปิด
               </button>
             </div>
 
