@@ -1,21 +1,52 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
-// ตัวแปร API Key สำรองสำหรับเรียก Gemini API
 const apiKey = "";
 
+// ฟังก์ชันสำหรับอ่านและเขียน LocalStorage อย่างปลอดภัย
+const safeGetLocalStorage = (key, defaultValue = '') => {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return localStorage.getItem(key) || defaultValue;
+    }
+  } catch (e) {
+    console.warn(`LocalStorage read blocked for key "${key}":`, e);
+  }
+  return defaultValue;
+};
+
+const safeSetLocalStorage = (key, value) => {
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      localStorage.setItem(key, value);
+    }
+  } catch (e) {
+    console.warn(`LocalStorage write blocked for key "${key}":`, e);
+  }
+};
+
+const safeCreateChannel = (channelName) => {
+  try {
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      return new BroadcastChannel(channelName);
+    }
+  } catch (e) {
+    console.warn('BroadcastChannel blocked or unsupported:', e);
+  }
+  return null;
+};
+
 export default function App() {
-  // บันทึกและดึง Custom API Key (ถ้ามี) จาก LocalStorage
-  const [customApiKey, setCustomApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
+  const [customApiKey, setCustomApiKey] = useState(() => safeGetLocalStorage('gemini_api_key', ''));
   const [tempApiKey, setTempApiKey] = useState(customApiKey);
   const [showApiInput, setShowApiInput] = useState(false);
   const [apiSaveStatus, setApiSaveStatus] = useState('');
 
-  // ตรวจสอบโหมด Display จอที่ 2 (?view=display)
+  // โหมด Display จอที่ 2 (?view=display)
   const [isDisplayWindow, setIsDisplayWindow] = useState(false);
 
-  // โหมดผันและมุมมองหน้าจอ (ตั้งค่าเริ่มต้นคำว่า "กอ")
+  // ตั้งค่าเริ่มต้นการผันคำ
   const [mode, setMode] = useState('full5'); // 'full5' | 'highOnly' | 'lowOnly'
-  const [viewLayout, setViewLayout] = useState('split'); // 'standard' | 'split' | 'present'
+  const [viewLayout, setViewLayout] = useState('split'); // 'standard' | 'split'
   const [inputText, setInputText] = useState('กอ');
   const [inputError, setInputError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -24,24 +55,34 @@ export default function App() {
   const [colorMid, setColorMid] = useState('#22c55e');    // กลาง (เขียว)
   const [colorHigh, setColorHigh] = useState('#ef4444');   // สูง (แดง)
   const [colorLow, setColorLow] = useState('#007bff');    // ต่ำ (น้ำเงิน)
-  const [circleTextColor, setCircleTextColor] = useState('#ffffff'); // สีตัวอักษรในวงกลม
-  const [labelFontSize, setLabelFontSize] = useState(20); // ขนาดตัวหนังสือหน้าเส้น (px)
+  const [circleTextColor, setCircleTextColor] = useState('#ffffff');
+  const [labelFontSize, setLabelFontSize] = useState(20);
 
-  // การตั้งค่าพื้นหลัง (Color หรือ Image Upload)
-  const [bgType, setBgType] = useState('color'); // 'color' | 'image'
+  // การตั้งค่าพื้นหลัง
+  const [bgType, setBgType] = useState('color');
   const [bgColor, setBgColor] = useState('#e2e8f0');
   const [bgImage, setBgImage] = useState('');
 
-  // สถานะ Hover และการแจ้งเตือนเต็มจอ
+  // สถานะ Hover และแจ้งเตือน
   const [hoveredRowId, setHoveredRowId] = useState(null);
   const [showFsNotice, setShowFsNotice] = useState(false);
 
-  // หมวดหมู่อักษร 3 หมู่
+  // สถานะการเชื่อมต่อ
+  const [showConnectModal, setShowConnectModal] = useState(false);
+  const [activeConnectTab, setActiveConnectTab] = useState('wifi');
+  const [btConnected, setBtConnected] = useState(false);
+  const [btDeviceName, setBtDeviceName] = useState('');
+  const [btStatusMsg, setBtStatusMsg] = useState('');
+  const [copysuccess, setCopySuccess] = useState(false);
+  const [customWifiUrl, setCustomWifiUrl] = useState('');
+
+  // อ้างอิงหน้าต่าง Pop-up ที่เปิดออกไป
+  const secondWindowRef = useRef(null);
+
   const midConsonants = ['ก', 'จ', 'ด', 'ต', 'บ', 'ป', 'อ', 'ฎ', 'ฏ'];
   const highConsonants = ['ข', 'ฃ', 'ฉ', 'ฐ', 'ถ', 'ผ', 'ฝ', 'ศ', 'ษ', 'ส', 'ห'];
   const lowSingleConsonants = ['ง', 'ญ', 'น', 'ย', 'ณ', 'ร', 'ว', 'ม', 'ฬ', 'ล'];
 
-  // รายการพยัญชนะไทยครบ 44 ตัว เรียงตามลำดับ ก-ฮ
   const quickConsonants = [
     'ก', 'ข', 'ฃ', 'ค', 'ฅ', 'ฆ', 'ง', 'จ', 'ฉ', 'ช', 
     'ซ', 'ฌ', 'ญ', 'ฎ', 'ฏ', 'ฐ', 'ฑ', 'ฒ', 'ณ', 'ด', 
@@ -50,14 +91,12 @@ export default function App() {
     'ห', 'ฬ', 'อ', 'ฮ'
   ];
 
-  // รายการคำควบกล้ำไทย
   const thaiClusters = [
     'กร', 'กล', 'กว', 'ขร', 'ขล', 'ขว', 'คร', 'คล', 'คว', 'ตร', 'ตล', 
     'ปร', 'ปล', 'พร', 'พล', 'ฟร', 'ฟล', 'หง', 'หญ', 'หน', 'หม', 'หย', 
     'หร', 'หล', 'หว', 'ทร', 'ศร', 'สร', 'จร', 'ซร'
   ];
 
-  // สระเรียงลำดับมาตรฐานการท่องจำ (ใช้ ◌ วงกลมไข่ปลา แทน - เพื่อให้แสดงผลบนมือถือได้อย่างถูกต้องโดยไม่เป็นรูปสี่เหลี่ยม [X])
   const longVowels = [
     { label: '◌า', front: '', rear: 'า' },
     { label: '◌ี', front: '', rear: 'ี' },
@@ -101,29 +140,50 @@ export default function App() {
     'ฟ': 'ฝ', 'ฝ': 'ฟ', 'ฮ': 'ห', 'ห': 'ฮ'
   };
 
+  const extractInitialConsonantOnly = (word) => {
+    if (!word) return 'ก';
+    let workStr = word.trim();
+    
+    if (['เ', 'แ', 'โ', 'ใ', 'ไ'].includes(workStr[0])) {
+      workStr = workStr.slice(1);
+    }
+
+    for (let cluster of thaiClusters) {
+      if (workStr.startsWith(cluster)) {
+        return cluster;
+      }
+    }
+
+    if (workStr.length > 0) {
+      return workStr[0];
+    }
+    return 'ก';
+  };
+
   const parseThaiWord = (word) => {
     if (!word) return { initial: '', frontVowel: '', aboveBelowVowel: '', rest: '', toneMark: '' };
     
     let workStr = word.trim();
     let frontVowel = '';
     
-    // 1. แยกสระหน้า (เ, แ, โ, ใ, ไ)
     if (['เ', 'แ', 'โ', 'ใ', 'ไ'].includes(workStr[0])) {
       frontVowel = workStr[0];
       workStr = workStr.slice(1);
     }
 
-    // 2. แยกพยัญชนะต้น (รองรับคำควบกล้ำ)
     let initial = '';
-    if (workStr.length >= 2 && thaiClusters.includes(workStr.slice(0, 2))) {
-      initial = workStr.slice(0, 2);
-      workStr = workStr.slice(2);
-    } else if (workStr.length > 0) {
+    for (let cluster of thaiClusters) {
+      if (workStr.startsWith(cluster)) {
+        initial = cluster;
+        workStr = workStr.slice(cluster.length);
+        break;
+      }
+    }
+    if (!initial && workStr.length > 0) {
       initial = workStr[0];
       workStr = workStr.slice(1);
     }
 
-    // 3. แยกสระบน/สระล่าง สัญลักษณ์วรรณยุกต์เดิม และส่วนสระหลัง/ตัวสะกด
     const aboveBelowVowelChars = ['ิ', 'ี', 'ึ', 'ื', 'ุ', 'ู', 'ั', '็', 'ํ'];
     const toneChars = ['่', '้', '๊', '๋'];
 
@@ -144,7 +204,6 @@ export default function App() {
     return { initial, frontVowel, aboveBelowVowel, rest, toneMark };
   };
 
-  // ประกอบคำโดยวางวรรณยุกต์เหนือสระบน/ล่าง ตาม Thai Unicode Canonical Order
   const buildWord = (frontVowel, initial, aboveBelowVowel, tone, rest) => {
     return `${frontVowel}${initial}${aboveBelowVowel}${tone}${rest}`;
   };
@@ -236,7 +295,6 @@ export default function App() {
     const info = analyzeSyllable(word, currentMode);
     const { initial, frontVowel, aboveBelowVowel, rest, isDead, isShort, primaryConsonant } = info;
 
-    // อักษรกลาง
     if (midConsonants.includes(primaryConsonant)) {
       if (currentMode === 'highOnly') {
         return [
@@ -265,7 +323,6 @@ export default function App() {
       }
     }
 
-    // คู่เสียงสูง-ต่ำ
     let highConsonant = '';
     let lowConsonant = '';
 
@@ -322,19 +379,22 @@ export default function App() {
   const [linesData, setLinesData] = useState(() => calculateTones('กอ', 'full5', '#22c55e', '#ef4444', '#007bff'));
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('view') === 'display') {
-      setIsDisplayWindow(true);
-      document.body.style.margin = '0';
-      document.body.style.overflow = 'hidden';
-      document.documentElement.style.overflow = 'hidden';
+    try {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('view') === 'display') {
+          setIsDisplayWindow(true);
+        }
+      }
+    } catch (e) {
+      console.warn('URL parsing notice:', e);
     }
   }, []);
 
   useEffect(() => {
-    if (isDisplayWindow) return; // Master screen only
+    if (isDisplayWindow) return;
 
-    const channel = new BroadcastChannel('thai_tone_sync_channel');
+    const channel = safeCreateChannel('thai_tone_sync_channel');
 
     const syncPayload = {
       type: 'SYNC_STATE',
@@ -353,30 +413,38 @@ export default function App() {
       modeVal: mode
     };
 
-    try {
-      localStorage.setItem('thai_tone_live_sync_data', JSON.stringify(syncPayload));
-    } catch (e) {
-      console.error("Failed to save sync payload to localStorage", e);
-    }
+    safeSetLocalStorage('thai_tone_live_sync_data', JSON.stringify(syncPayload));
 
-    channel.postMessage(syncPayload);
-
-    const handleMessage = (event) => {
-      if (event.data && event.data.type === 'REQUEST_SYNC') {
+    if (channel) {
+      try {
         channel.postMessage(syncPayload);
+      } catch (e) {}
+
+      const handleMessage = (event) => {
+        if (event.data && event.data.type === 'REQUEST_SYNC') {
+          try {
+            channel.postMessage(syncPayload);
+          } catch (err) {}
+        }
+      };
+
+      channel.addEventListener('message', handleMessage);
+
+      if (secondWindowRef.current && !secondWindowRef.current.closed) {
+        try {
+          secondWindowRef.current.postMessage(syncPayload, '*');
+        } catch (e) {}
       }
-    };
 
-    channel.addEventListener('message', handleMessage);
-
-    return () => {
-      channel.removeEventListener('message', handleMessage);
-      channel.close();
-    };
+      return () => {
+        channel.removeEventListener('message', handleMessage);
+        channel.close();
+      };
+    }
   }, [isDisplayWindow, linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, labelFontSize, bgType, bgColor, bgImage, hoveredRowId, mode]);
 
   useEffect(() => {
-    if (!isDisplayWindow) return; // Display screen only
+    if (!isDisplayWindow) return;
 
     const applySyncData = (data) => {
       if (!data) return;
@@ -396,39 +464,44 @@ export default function App() {
       if (modeVal) setMode(modeVal);
     };
 
-    try {
-      const savedState = localStorage.getItem('thai_tone_live_sync_data');
-      if (savedState) {
+    const savedState = safeGetLocalStorage('thai_tone_live_sync_data', null);
+    if (savedState) {
+      try {
         applySyncData(JSON.parse(savedState));
-      }
-    } catch (e) {
-      console.error("Failed to read initial sync state", e);
+      } catch (e) {}
     }
 
-    const channel = new BroadcastChannel('thai_tone_sync_channel');
+    const channel = safeCreateChannel('thai_tone_sync_channel');
 
-    const handleChannelMessage = (event) => {
-      if (!event.data) return;
-      
-      if (event.data.type === 'TOGGLE_FULLSCREEN') {
-        toggleFullscreen();
-        return;
-      }
+    if (channel) {
+      const handleChannelMessage = (event) => {
+        if (!event.data) return;
+        if (event.data.type === 'TOGGLE_FULLSCREEN') {
+          toggleFullscreen();
+          return;
+        }
+        if (event.data.type === 'SYNC_STATE') {
+          applySyncData(event.data);
+        }
+      };
 
-      if (event.data.type === 'SYNC_STATE') {
+      channel.addEventListener('message', handleChannelMessage);
+      channel.postMessage({ type: 'REQUEST_SYNC' });
+    }
+
+    const handleWindowMessage = (event) => {
+      if (event.data && event.data.type === 'SYNC_STATE') {
         applySyncData(event.data);
       }
     };
 
-    channel.addEventListener('message', handleChannelMessage);
+    window.addEventListener('message', handleWindowMessage);
 
     const handleStorageChange = (e) => {
       if (e.key === 'thai_tone_live_sync_data' && e.newValue) {
         try {
           applySyncData(JSON.parse(e.newValue));
-        } catch (err) {
-          console.error("Failed to parse storage sync data", err);
-        }
+        } catch (err) {}
       }
       if (e.key === 'thai_tone_toggle_fs_signal') {
         toggleFullscreen();
@@ -437,12 +510,12 @@ export default function App() {
 
     window.addEventListener('storage', handleStorageChange);
 
-    channel.postMessage({ type: 'REQUEST_SYNC' });
-
     return () => {
-      channel.removeEventListener('message', handleChannelMessage);
+      if (channel) {
+        channel.close();
+      }
+      window.removeEventListener('message', handleWindowMessage);
       window.removeEventListener('storage', handleStorageChange);
-      channel.close();
     };
   }, [isDisplayWindow]);
 
@@ -453,54 +526,152 @@ export default function App() {
     }
   }, [inputText, mode, colorMid, colorHigh, colorLow, isDisplayWindow]);
 
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setBgImage(reader.result);
-        setBgType('image');
-      };
-      reader.readAsDataURL(file);
+  const getDisplayUrl = () => {
+    try {
+      const currentUrl = window.location.href;
+      if (currentUrl.includes('blob:')) {
+        return currentUrl;
+      }
+      const baseUrl = currentUrl.split('?')[0];
+      return `${baseUrl}?view=display`;
+    } catch (e) {
+      return '';
     }
   };
 
   const handleOpenDualMonitor = () => {
-    const currentUrl = window.location.href.split('?')[0];
-    window.open(
-      `${currentUrl}?view=display`,
-      'ThaiToneDisplayWindow',
-      'width=1200,height=800,resizable=yes,scrollbars=yes,status=yes'
-    );
+    try {
+      const currentUrl = window.location.href;
+      
+      if (!currentUrl.includes('blob:')) {
+        const targetUrl = getDisplayUrl();
+        secondWindowRef.current = window.open(
+          targetUrl,
+          'ThaiToneDisplayWindow',
+          'width=1200,height=800,resizable=yes,scrollbars=yes,status=yes'
+        );
+        return;
+      }
+
+      const newWin = window.open(
+        '',
+        'ThaiToneDisplayWindow',
+        'width=1200,height=800,resizable=yes,scrollbars=yes,status=yes'
+      );
+
+      if (newWin) {
+        secondWindowRef.current = newWin;
+        
+        newWin.document.write(`
+          <!DOCTYPE html>
+          <html lang="th">
+          <head>
+            <meta charset="UTF-8">
+            <title>กระดานผันวรรณยุกต์ - จอที่ 2</title>
+            <style>
+              body { margin: 0; padding: 0; overflow: hidden; font-family: 'Sarabun', sans-serif; background-color: ${bgColor}; }
+              .board { width: 90vw; height: 85vh; margin: 5vh auto; background: rgba(255,255,255,0.95); border-radius: 20px; padding: 30px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; border: 1px solid #cbd5e1; }
+              .title { text-align: center; color: #ea580c; font-size: 32px; font-weight: bold; margin: 0; }
+              .subtitle { text-align: center; color: #ea580c; font-size: 20px; margin-top: 4px; }
+              .info { text-align: center; background: #f0f9ff; color: #0369a1; padding: 8px 16px; border-radius: 10px; font-size: 15px; font-weight: bold; margin: 10px auto; max-width: 800px; border: 1px solid #bae6fd; }
+              .lines-container { display: flex; flex-direction: column; justify-content: space-around; flex: 1; margin-top: 10px; }
+              .line-row { display: grid; grid-template-columns: 220px 1fr 120px; align-items: center; }
+              .line-label { text-align: right; padding-right: 20px; font-size: 22px; font-weight: bold; }
+              .line-track { position: relative; display: flex; align-items: center; height: 40px; }
+              .line-bar { width: 100%; height: 3px; background-color: #94a3b8; }
+              .circle-note { position: absolute; transform: translateX(-50%); min-width: 52px; height: 52px; border-radius: 50%; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 22px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+              .right-tag { text-align: center; font-weight: bold; font-size: 18px; }
+            </style>
+          </head>
+          <body>
+            <div id="root-display" class="board">
+              <div>
+                <h1 class="title">ไตรยางศ์ หรือ อักษร 3 หมู่</h1>
+                <div class="subtitle">และการผันวรรณยุกต์</div>
+                <div id="info-box" class="info">📌 กำลังรอข้อมูลจากจอหลัก...</div>
+              </div>
+              <div id="lines-box" class="lines-container"></div>
+            </div>
+            <script>
+              const channel = new BroadcastChannel('thai_tone_sync_channel');
+              function render(data) {
+                if(!data) return;
+                document.body.style.backgroundColor = data.bColor || '${bgColor}';
+                document.getElementById('info-box').innerText = '📌 คำว่า "' + (data.text || '') + '" — ' + (data.info?.desc || '');
+                const box = document.getElementById('lines-box');
+                box.innerHTML = '';
+                const rightLabels = { 5: 'เสียงสูง', 3: 'เสียงกลาง', 1: 'เสียงต่ำ' };
+                const rightColors = { 5: '#ef4444', 3: '#22c55e', 1: '#007bff' };
+
+                (data.lines || []).forEach(item => {
+                  const row = document.createElement('div');
+                  row.className = 'line-row';
+                  let itemColor = item.color || '#22c55e';
+                  if (item.isMulti && item.multi && item.multi.length > 0) itemColor = item.multi[0].color;
+                  
+                  let circleHtml = '';
+                  if (item.show && item.word && !item.isMulti) {
+                    circleHtml = '<div class="circle-note" style="left:' + item.leftPos + '; background-color:' + item.color + '; color:' + (data.cText||'#fff') + ';">' + item.word + '</div>';
+                  } else if (item.show && item.isMulti) {
+                    let circles = (item.multi || []).map(c => '<div class="circle-note" style="position:relative; left:0; transform:none; background-color:' + c.color + '; color:' + (data.cText||'#fff') + ';">' + c.text + '</div>').join('<span style="font-weight:bold; font-size:20px; color:#94a3b8; margin:0 4px;">/</span>');
+                    circleHtml = '<div style="position:absolute; left:' + item.leftPos + '; transform:translateX(-50%); display:flex; align-items:center;">' + circles + '</div>';
+                  }
+
+                  row.innerHTML = 
+                    '<div class="line-label" style="color:' + (item.show ? itemColor : '#94a3b8') + ';">' + item.tone + ' [' + item.mark + ']</div>' +
+                    '<div class="line-track"><div class="line-bar"></div>' + circleHtml + '</div>' +
+                    '<div class="right-tag" style="color:' + (rightColors[item.id] || '#94a3b8') + ';">' + (rightLabels[item.id] || '') + '</div>';
+                  box.appendChild(row);
+                });
+              }
+
+              channel.onmessage = (e) => { if(e.data && e.data.type === 'SYNC_STATE') render(e.data); };
+              window.onmessage = (e) => { if(e.data && e.data.type === 'SYNC_STATE') render(e.data); };
+              channel.postMessage({ type: 'REQUEST_SYNC' });
+            </script>
+          </body>
+          </html>
+        `);
+        newWin.document.close();
+      }
+    } catch (e) {
+      console.warn('Pop-up window blocked:', e);
+    }
   };
 
   const handleToggleDisplayFullscreen = () => {
-    const channel = new BroadcastChannel('thai_tone_sync_channel');
-    channel.postMessage({ type: 'TOGGLE_FULLSCREEN' });
-    try {
-      localStorage.setItem('thai_tone_toggle_fs_signal', Date.now().toString());
-    } catch (e) {}
-    channel.close();
+    const channel = safeCreateChannel('thai_tone_sync_channel');
+    if (channel) {
+      try {
+        channel.postMessage({ type: 'TOGGLE_FULLSCREEN' });
+      } catch (e) {}
+      channel.close();
+    }
+    safeSetLocalStorage('thai_tone_toggle_fs_signal', Date.now().toString());
   };
 
   const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch((err) => {
-        console.log("Fullscreen request failed:", err);
-        setShowFsNotice(true);
-        setTimeout(() => setShowFsNotice(false), 3500);
-      });
-    } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen().catch((err) => {
-          console.log("Exit fullscreen failed:", err);
-        });
+    try {
+      if (!document.fullscreenElement) {
+        if (document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen().catch(() => {
+            setShowFsNotice(true);
+            setTimeout(() => setShowFsNotice(false), 3500);
+          });
+        }
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        }
       }
+    } catch (err) {
+      setShowFsNotice(true);
+      setTimeout(() => setShowFsNotice(false), 3500);
     }
   };
 
   const handleSaveApiKey = () => {
-    localStorage.setItem('gemini_api_key', tempApiKey.trim());
+    safeSetLocalStorage('gemini_api_key', tempApiKey.trim());
     setCustomApiKey(tempApiKey.trim());
     setApiSaveStatus('บันทึก API Key เรียบร้อยแล้ว!');
     setTimeout(() => setApiSaveStatus(''), 3000);
@@ -513,10 +684,50 @@ export default function App() {
   };
 
   const handleQuickVowelClick = (vowelObj) => {
-    const { initial } = parseThaiWord(inputText);
-    const cons = initial || 'ก';
+    const cons = extractInitialConsonantOnly(inputText);
     const newWord = `${vowelObj.front}${cons}${vowelObj.rear}`;
     setInputText(newWord);
+  };
+
+  const handleBluetoothConnect = async () => {
+    if (!navigator.bluetooth) {
+      setBtStatusMsg('❌ เบราว์เซอร์นี้ยังไม่รองรับ Web Bluetooth API');
+      return;
+    }
+    try {
+      setBtStatusMsg('🔍 กำลังค้นหาอุปกรณ์บลูทูธ...');
+      const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ['generic_access']
+      });
+      setBtDeviceName(device.name || 'อุปกรณ์บลูทูธที่เชื่อมต่อ');
+      setBtConnected(true);
+      setBtStatusMsg('✅ เชื่อมต่อบลูทูธสำเร็จ!');
+    } catch (err) {
+      if (err.name !== 'NotFoundError') {
+        setBtStatusMsg('⚠️ การเชื่อมต่อถูกยกเลิกหรือล้มเหลว');
+      } else {
+        setBtStatusMsg('');
+      }
+    }
+  };
+
+  const handleCopyDisplayUrl = () => {
+    const url = customWifiUrl.trim() || getDisplayUrl();
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url);
+      } else {
+        const el = document.createElement('textarea');
+        el.value = url;
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+      }
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2500);
+    } catch (e) {}
   };
 
   const handleGenerate = async () => {
@@ -756,7 +967,6 @@ export default function App() {
                           filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
                         }}
                       >
-                        {/* หางตัวโน้ตดนตรี (เขบ็ตชั้นเดียว) */}
                         <svg
                           style={{
                             position: 'absolute',
@@ -841,559 +1051,909 @@ export default function App() {
     );
   }
 
+  const effectiveQrUrl = customWifiUrl.trim() || getDisplayUrl();
+  const qrImageSrc = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(effectiveQrUrl)}`;
+
   return (
-    <div style={{ minHeight: '100vh', padding: '24px 15px', fontFamily: "'Sarabun', sans-serif", transition: 'all 0.3s ease', ...getContainerBgStyle() }}>
-      <div style={{ maxWidth: viewLayout === 'split' ? '1280px' : '920px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        
-        {/* แถบมุมมองและปุ่มเปิด/สลับเต็มจอมอนิเตอร์ที่ 2 */}
-        <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '14px', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 10px rgba(0,0,0,0.06)', flexWrap: 'wrap', gap: '12px', border: '1px solid #e2e8f0', backdropFilter: 'blur(6px)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontWeight: 'bold', fontSize: '15px', color: '#1e293b' }}>🖥️ มุมมอง:</span>
-            <button 
-              onClick={() => setViewLayout('standard')}
-              style={{ padding: '7px 12px', borderRadius: '8px', border: 'none', backgroundColor: viewLayout === 'standard' ? '#0284c7' : '#f1f5f9', color: viewLayout === 'standard' ? '#fff' : '#475569', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' }}
-            >
-              ชิดเดียว
-            </button>
-            <button 
-              onClick={() => setViewLayout('split')}
-              style={{ padding: '7px 12px', borderRadius: '8px', border: 'none', backgroundColor: viewLayout === 'split' ? '#0284c7' : '#f1f5f9', color: viewLayout === 'split' ? '#fff' : '#475569', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' }}
-            >
-              แบ่ง 2 จอ
-            </button>
-            <button 
-              onClick={() => setViewLayout('present')}
-              style={{ padding: '7px 12px', borderRadius: '8px', border: 'none', backgroundColor: viewLayout === 'present' ? '#0284c7' : '#f1f5f9', color: viewLayout === 'present' ? '#fff' : '#475569', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' }}
-            >
-              โหมดพรีวิว
-            </button>
-          </div>
-
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <button 
-              onClick={handleToggleDisplayFullscreen}
-              style={{ 
-                backgroundColor: '#0284c7', 
-                color: '#ffffff', 
-                border: 'none', 
-                padding: '9px 16px', 
-                borderRadius: '8px', 
-                fontWeight: 'bold', 
-                fontSize: '14px', 
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                boxShadow: '0 4px 10px rgba(2,132,199,0.25)',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#0369a1'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#0284c7'}
-            >
-              ⛶ สลับเต็มจอ จอที่ 2
-            </button>
-
-            <button 
-              onClick={handleOpenDualMonitor}
-              style={{ 
-                backgroundColor: '#16a34a', 
-                color: '#ffffff', 
-                border: 'none', 
-                padding: '9px 18px', 
-                borderRadius: '8px', 
-                fontWeight: 'bold', 
-                fontSize: '14px', 
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                boxShadow: '0 4px 10px rgba(22,163,74,0.3)',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#15803d'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#16a34a'}
-            >
-              🚀 เปิดกระดานแยกขึ้นมอนิเตอร์ที่ 2
-            </button>
-          </div>
+    <div style={{ 
+      height: '100vh', 
+      maxHeight: '100vh', 
+      width: '100vw', 
+      overflow: 'hidden', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      fontFamily: "'Sarabun', sans-serif", 
+      boxSizing: 'border-box',
+      ...getContainerBgStyle() 
+    }}>
+      
+      {/* 1. Header Top Bar */}
+      <div style={{ 
+        backgroundColor: 'rgba(255, 255, 255, 0.96)', 
+        borderBottom: '1px solid #cbd5e1', 
+        padding: '8px 18px', 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        flexShrink: 0,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+        zIndex: 20
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <h1 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#ea580c', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span>🇹🇭</span> สื่อสอนไตรยางศ์และการผันวรรณยุกต์
+          </h1>
+          <span style={{ fontSize: '12px', padding: '2px 8px', borderRadius: '12px', backgroundColor: '#e0f2fe', color: '#0369a1', fontWeight: 'bold' }}>
+            คำปัจจุบัน: {inputText}
+          </span>
         </div>
 
-        {/* โครงสร้าง layout: การแสดงผลขยับมาอยู่ซ้ายมือ (1fr) และ แผงควบคุมอยู่ขวามือ (410px) */}
-        <div style={{ display: 'grid', gridTemplateColumns: viewLayout === 'split' ? '1fr 410px' : '1fr', gap: '20px', alignItems: 'start' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', backgroundColor: '#f1f5f9', padding: '3px', borderRadius: '8px' }}>
+            <button 
+              onClick={() => setViewLayout('split')}
+              style={{ padding: '5px 10px', borderRadius: '6px', border: 'none', backgroundColor: viewLayout === 'split' ? '#0284c7' : 'transparent', color: viewLayout === 'split' ? '#fff' : '#64748b', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}
+            >
+              แบ่ง 2 ฝั่ง
+            </button>
+            <button 
+              onClick={() => setViewLayout('standard')}
+              style={{ padding: '5px 10px', borderRadius: '6px', border: 'none', backgroundColor: viewLayout === 'standard' ? '#0284c7' : 'transparent', color: viewLayout === 'standard' ? '#fff' : '#64748b', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}
+            >
+              จอกระดานเต็ม
+            </button>
+          </div>
+
+          <button 
+            onClick={() => setShowConnectModal(true)}
+            style={{ 
+              backgroundColor: '#8b5cf6', 
+              color: '#ffffff', 
+              border: 'none', 
+              padding: '6px 14px', 
+              borderRadius: '8px', 
+              fontWeight: 'bold', 
+              fontSize: '13px', 
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 2px 6px rgba(139,92,246,0.3)',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            📡 เชื่อมต่อจอที่ 2 (WiFi/BT/Web)
+          </button>
+
+          <button 
+            onClick={handleOpenDualMonitor}
+            style={{ 
+              backgroundColor: '#16a34a', 
+              color: '#ffffff', 
+              border: 'none', 
+              padding: '6px 14px', 
+              borderRadius: '8px', 
+              fontWeight: 'bold', 
+              fontSize: '13px', 
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              boxShadow: '0 2px 6px rgba(22,163,74,0.3)'
+            }}
+          >
+            🚀 แยกหน้าต่างจอที่ 2
+          </button>
+
+          <button 
+            onClick={handleToggleDisplayFullscreen}
+            style={{ 
+              backgroundColor: '#0284c7', 
+              color: '#ffffff', 
+              border: 'none', 
+              padding: '6px 12px', 
+              borderRadius: '8px', 
+              fontWeight: 'bold', 
+              fontSize: '13px', 
+              cursor: 'pointer'
+            }}
+          >
+            ⛶ เต็มจอ จอที่ 2
+          </button>
+        </div>
+      </div>
+
+      <div style={{ 
+        flex: 1, 
+        overflow: 'hidden', 
+        display: 'grid', 
+        gridTemplateColumns: viewLayout === 'split' ? '1fr 410px' : '1fr', 
+        gap: '14px', 
+        padding: '12px 16px',
+        boxSizing: 'border-box'
+      }}>
+        
+        {/* 1. กระดานบรรทัด 5 เส้น */}
+        <div style={{ 
+          backgroundColor: 'rgba(255, 255, 255, 0.96)', 
+          borderRadius: '16px', 
+          padding: '20px 28px', 
+          boxShadow: '0 4px 20px rgba(0,0,0,0.06)', 
+          display: 'flex', 
+          flexDirection: 'column', 
+          justifyContent: 'space-between',
+          height: '100%',
+          boxSizing: 'border-box',
+          border: '1px solid #e2e8f0'
+        }}>
           
-          {/* 1. กระดานบรรทัด 5 เส้น แสดงผล (ซ้ายมือ) */}
-          <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '16px', padding: viewLayout === 'present' ? '40px 50px' : '35px 25px', boxShadow: '0 4px 20px rgba(0,0,0,0.08)', backdropFilter: 'blur(6px)' }}>
-            
-            <div style={{ textAlign: 'center', margin: '0 0 20px 0' }}>
-              <h2 style={{ margin: '0 0 2px 0', color: '#ea580c', fontSize: '28px', fontWeight: 'bold' }}>
-                ไตรยางศ์ หรือ อักษร 3 หมู่
-              </h2>
-              <div style={{ color: '#ea580c', fontSize: '18px', fontWeight: '600' }}>
-                และการผันวรรณยุกต์
-              </div>
+          <div style={{ textAlign: 'center', marginBottom: '8px' }}>
+            <h2 style={{ margin: '0 0 2px 0', color: '#ea580c', fontSize: '24px', fontWeight: 'bold' }}>
+              ไตรยางศ์ หรือ อักษร 3 หมู่
+            </h2>
+            <div style={{ color: '#ea580c', fontSize: '15px', fontWeight: '600' }}>
+              และการผันวรรณยุกต์
             </div>
 
             {analysisInfo.desc && (
-              <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '10px 16px', borderRadius: '10px', marginBottom: '25px', textAlign: 'center', fontSize: '14px', color: '#0369a1', fontWeight: 'bold' }}>
+              <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '6px 14px', borderRadius: '10px', margin: '8px auto 0 auto', maxWidth: '780px', textAlign: 'center', fontSize: '13px', color: '#0369a1', fontWeight: 'bold' }}>
                 📌 ผลวิเคราะห์หลักภาษา: <span style={{ color: '#0284c7' }}>"{inputText}"</span> เป็น <span style={{ backgroundColor: '#e0f2fe', padding: '2px 8px', borderRadius: '4px' }}>{analysisInfo.type} ({analysisInfo.vowelLen})</span> — {analysisInfo.desc}
               </div>
             )}
+          </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr 110px', color: '#0284c7', fontWeight: 'bold', fontSize: '14px', marginBottom: '4px' }}>
-              <div style={{ textAlign: 'right', paddingRight: '20px', color: '#0284c7', fontWeight: 'bold' }}>รูปวรรณยุกต์</div>
-              <div></div>
-              <div></div>
-            </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr 100px', color: '#0284c7', fontWeight: 'bold', fontSize: '13px', marginBottom: '2px' }}>
+            <div style={{ textAlign: 'right', paddingRight: '16px', color: '#0284c7', fontWeight: 'bold' }}>รูปวรรณยุกต์</div>
+            <div></div>
+            <div></div>
+          </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '34px' }}>
-              {linesData.map((item, idx) => {
-                let rowHeaderColor = '#94a3b8';
-                if (item.show) {
-                  rowHeaderColor = item.isMulti ? item.multi[0]?.color : item.color;
-                }
-                const fixedRight = fixedRightLabels[item.id];
-                const isHovered = hoveredRowId === item.id;
+          {/* 5 บรรทัด */}
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', flex: 1, padding: '4px 0' }}>
+            {linesData.map((item, idx) => {
+              let rowHeaderColor = '#94a3b8';
+              if (item.show) {
+                rowHeaderColor = item.isMulti ? item.multi[0]?.color : item.color;
+              }
+              const fixedRight = fixedRightLabels[item.id];
+              const isHovered = hoveredRowId === item.id;
 
-                return (
+              return (
+                <div 
+                  key={idx} 
+                  style={{ display: 'grid', gridTemplateColumns: '180px 1fr 100px', alignItems: 'center' }}
+                  onMouseEnter={() => setHoveredRowId(item.id)}
+                  onMouseLeave={() => setHoveredRowId(null)}
+                >
                   <div 
-                    key={idx} 
-                    style={{ display: 'grid', gridTemplateColumns: '220px 1fr 110px', alignItems: 'center' }}
-                    onMouseEnter={() => setHoveredRowId(item.id)}
-                    onMouseLeave={() => setHoveredRowId(null)}
+                    style={{ 
+                      textAlign: 'right', 
+                      paddingRight: '16px', 
+                      fontSize: '15px', 
+                      color: rowHeaderColor, 
+                      fontWeight: 'bold', 
+                      transition: 'all 0.15s ease',
+                      transform: isHovered ? 'scale(1.08)' : 'scale(1)'
+                    }}
                   >
-                    <div 
-                      style={{ 
-                        textAlign: 'right', 
-                        paddingRight: '20px', 
-                        fontSize: `${isHovered ? 19 : 17}px`, 
-                        color: rowHeaderColor, 
-                        fontWeight: 'bold', 
-                        transition: 'all 0.15s ease',
-                        transform: isHovered ? 'scale(1.08)' : 'scale(1)'
-                      }}
-                    >
-                      {item.tone} <span style={{ fontSize: `${isHovered ? 19 : 17}px`, marginLeft: '4px', letterSpacing: '1px' }}>[ {item.mark} ]</span>
-                    </div>
+                    {item.tone} <span style={{ fontSize: '15px', marginLeft: '4px', letterSpacing: '1px' }}>[ {item.mark} ]</span>
+                  </div>
 
-                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '30px' }}>
-                      <div style={{ width: '100%', height: '2px', backgroundColor: '#94a3b8' }}></div>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '28px' }}>
+                    <div style={{ width: '100%', height: '2px', backgroundColor: '#94a3b8' }}></div>
 
-                      {!item.isMulti && item.show && item.word && (
-                        <div 
+                    {!item.isMulti && item.show && item.word && (
+                      <div 
+                        style={{
+                          position: 'absolute',
+                          left: item.leftPos,
+                          transform: `translateX(-50%) ${isHovered ? 'scale(1.22)' : 'scale(1)'}`,
+                          backgroundColor: item.color,
+                          color: circleTextColor,
+                          minWidth: '42px',
+                          height: '42px',
+                          padding: '0 8px',
+                          borderRadius: '21px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontWeight: 'bold',
+                          fontSize: '17px',
+                          boxShadow: isHovered ? '0 6px 16px rgba(0,0,0,0.3)' : '0 3px 8px rgba(0,0,0,0.25)',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                          filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
+                        }}
+                      >
+                        <svg
                           style={{
                             position: 'absolute',
-                            left: item.leftPos,
-                            transform: `translateX(-50%) ${isHovered ? 'scale(1.22)' : 'scale(1)'}`,
-                            backgroundColor: item.color,
-                            color: circleTextColor,
-                            minWidth: '46px',
-                            height: '46px',
-                            padding: '0 10px',
-                            borderRadius: '23px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontWeight: 'bold',
-                            fontSize: '18px',
-                            boxShadow: isHovered ? '0 6px 16px rgba(0,0,0,0.3)' : '0 3px 8px rgba(0,0,0,0.25)',
-                            cursor: 'pointer',
-                            transition: 'all 0.15s ease',
-                            filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
+                            top: '-18px',
+                            left: 'calc(100% - 3px)',
+                            width: '18px',
+                            height: '40px',
+                            pointerEvents: 'none',
+                            overflow: 'visible',
+                            color: item.color
                           }}
+                          viewBox="0 0 20 44"
                         >
-                          <svg
-                            style={{
-                              position: 'absolute',
-                              top: '-20px',
-                              left: 'calc(100% - 3px)',
-                              width: '20px',
-                              height: '44px',
-                              pointerEvents: 'none',
-                              overflow: 'visible',
-                              color: item.color
-                            }}
-                            viewBox="0 0 20 44"
-                          >
-                            <path d="M 2 44 L 2 2" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" />
-                            <path d="M 2 2 C 9 8, 17 15, 13 24 C 9 17, 5 11, 2 7 Z" fill="currentColor" />
-                          </svg>
-                          {item.word}
-                        </div>
-                      )}
+                          <path d="M 2 44 L 2 2" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" />
+                          <path d="M 2 2 C 9 8, 17 15, 13 24 C 9 17, 5 11, 2 7 Z" fill="currentColor" />
+                        </svg>
+                        {item.word}
+                      </div>
+                    )}
 
-                      {item.isMulti && item.show && (
-                        <div style={{ position: 'absolute', left: item.leftPos, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          {item.multi.map((circle, i) => (
-                            <React.Fragment key={i}>
-                              {i > 0 && <span style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '20px' }}>/</span>}
-                              <div 
+                    {item.isMulti && item.show && (
+                      <div style={{ position: 'absolute', left: item.leftPos, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {item.multi.map((circle, i) => (
+                          <React.Fragment key={i}>
+                            {i > 0 && <span style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '18px' }}>/</span>}
+                            <div 
+                              style={{
+                                backgroundColor: circle.color,
+                                color: circleTextColor,
+                                minWidth: '42px',
+                                height: '42px',
+                                padding: '0 8px',
+                                borderRadius: '21px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontWeight: 'bold',
+                                fontSize: '17px',
+                                boxShadow: isHovered ? '0 6px 16px rgba(0,0,0,0.3)' : '0 3px 8px rgba(0,0,0,0.25)',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                                transform: isHovered ? 'scale(1.22)' : 'scale(1)',
+                                filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
+                              }}
+                            >
+                              <svg
                                 style={{
-                                  backgroundColor: circle.color,
-                                  color: circleTextColor,
-                                  minWidth: '46px',
-                                  height: '46px',
-                                  padding: '0 10px',
-                                  borderRadius: '23px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontWeight: 'bold',
-                                  fontSize: '18px',
-                                  boxShadow: isHovered ? '0 6px 16px rgba(0,0,0,0.3)' : '0 3px 8px rgba(0,0,0,0.25)',
-                                  cursor: 'pointer',
-                                  transition: 'all 0.15s ease',
-                                  transform: isHovered ? 'scale(1.22)' : 'scale(1)',
-                                  filter: isHovered ? 'brightness(1.15)' : 'brightness(1)'
+                                  position: 'absolute',
+                                  top: '-18px',
+                                  left: 'calc(100% - 3px)',
+                                  width: '18px',
+                                  height: '40px',
+                                  pointerEvents: 'none',
+                                  overflow: 'visible',
+                                  color: circle.color
                                 }}
+                                viewBox="0 0 20 44"
                               >
-                                <svg
-                                  style={{
-                                    position: 'absolute',
-                                    top: '-20px',
-                                    left: 'calc(100% - 3px)',
-                                    width: '20px',
-                                    height: '44px',
-                                    pointerEvents: 'none',
-                                    overflow: 'visible',
-                                    color: circle.color
-                                  }}
-                                  viewBox="0 0 20 44"
-                                >
-                                  <path d="M 2 44 L 2 2" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" />
-                                  <path d="M 2 2 C 9 8, 17 15, 13 24 C 9 17, 5 11, 2 7 Z" fill="currentColor" />
-                                </svg>
-                                {circle.text}
-                              </div>
-                            </React.Fragment>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div style={{ textAlign: 'center', color: fixedRight ? fixedRight.color : '#94a3b8', fontWeight: 'bold', fontSize: '16px' }}>
-                      {fixedRight ? fixedRight.text : ''}
-                    </div>
+                                <path d="M 2 44 L 2 2" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" />
+                                <path d="M 2 2 C 9 8, 17 15, 13 24 C 9 17, 5 11, 2 7 Z" fill="currentColor" />
+                              </svg>
+                              {circle.text}
+                            </div>
+                          </React.Fragment>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                );
-              })}
+
+                  <div style={{ textAlign: 'center', color: fixedRight ? fixedRight.color : '#94a3b8', fontWeight: 'bold', fontSize: '14px' }}>
+                    {fixedRight ? fixedRight.text : ''}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+        </div>
+
+        {/* 2. แผงควบคุมขวามือ */}
+        {}
+        {viewLayout === 'split' && (
+          <div 
+            style={{ 
+              backgroundColor: '#ffffff', 
+              borderRadius: '16px', 
+              padding: '16px', 
+              boxShadow: '0 4px 14px rgba(0,0,0,0.06)', 
+              border: '1px solid #e2e8f0', 
+              display: 'flex', 
+              flexDirection: 'column', 
+              gap: '14px',
+              height: '100%',
+              overflowY: 'auto',
+              boxSizing: 'border-box'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: '#1f2937' }}>⚙️ แผงควบคุมการผัน</h3>
+            </div>
+
+            {/* 1. ตัวเลือกการผันวรรณยุกต์ */}
+            <div style={{ backgroundColor: '#f8fafc', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+              <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#1f2937', marginBottom: '8px' }}>✨ ตัวเลือกการผันวรรณยุกต์</div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '10px', fontSize: '12px', color: '#334155' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                  <input type="radio" name="mode" checked={mode === 'full5'} onChange={() => setMode('full5')} />
+                  ผันครบทั้ง 5 บรรทัด (อักษรคู่ / ห นำ)
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                  <input type="radio" name="mode" checked={mode === 'highOnly'} onChange={() => setMode('highOnly')} />
+                  เฉพาะเสียงสูง (เอก, โท, จัตวา)
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                  <input type="radio" name="mode" checked={mode === 'lowOnly'} onChange={() => setMode('lowOnly')} />
+                  เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)
+                </label>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input 
+                  type="text" 
+                  value={inputText} 
+                  onChange={(e) => {
+                    setInputText(e.target.value);
+                    validateInput(e.target.value);
+                  }}
+                  onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
+                  placeholder="พิมพ์ 1 คำ เช่น กอ, เมา, กวาง" 
+                  style={{ 
+                    flex: 1, 
+                    padding: '8px 12px', 
+                    borderRadius: '8px', 
+                    border: inputError ? '2px solid #ef4444' : '1px solid #cbd5e1', 
+                    fontSize: '15px',
+                    backgroundColor: '#f1f5f9',
+                    color: '#0f172a',
+                    fontWeight: '600',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                
+                <button 
+                  onClick={handleGenerate}
+                  disabled={loading}
+                  style={{ 
+                    backgroundColor: '#0284c7', 
+                    color: '#ffffff', 
+                    border: 'none', 
+                    padding: '8px 14px', 
+                    borderRadius: '8px', 
+                    fontWeight: 'bold', 
+                    cursor: 'pointer', 
+                    fontSize: '13px',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {loading ? '...' : 'ผันคำ'}
+                </button>
+              </div>
+              {inputError && <div style={{ color: '#ef4444', fontSize: '11px', marginTop: '6px', fontWeight: 'bold' }}>{inputError}</div>}
+            </div>
+
+            {/* 2. เลือกพยัญชนะด่วน */}
+            <div>
+              <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', marginBottom: '6px' }}>⌨️ เลือกพยัญชนะด่วน (๔๔ ตัว):</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(11, 1fr)', gap: '4px' }}>
+                {quickConsonants.map((c) => (
+                  <button 
+                    key={c}
+                    onClick={() => handleQuickConsonantClick(c)}
+                    style={{ 
+                      height: '32px',
+                      borderRadius: '6px', 
+                      border: '1px solid #cbd5e1', 
+                      backgroundColor: '#ffffff', 
+                      fontSize: '14px', 
+                      fontWeight: 'bold', 
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: midConsonants.includes(c) ? colorMid : highConsonants.includes(c) ? colorHigh : colorLow,
+                      padding: 0
+                    }}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 3. เลือกสระด่วน */}
+            <div>
+              <div style={{ fontSize: '12px', color: '#166534', fontWeight: 'bold', marginBottom: '6px' }}>🟢 สระเสียงยาว (คำเป็น):</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '8px' }}>
+                {longVowels.map((v) => (
+                  <button 
+                    key={v.label}
+                    onClick={() => handleQuickVowelClick(v)}
+                    style={{ 
+                      height: '32px',
+                      padding: '0 8px', 
+                      borderRadius: '6px', 
+                      border: '1px solid #bbf7d0', 
+                      backgroundColor: '#f0fdf4', 
+                      color: '#15803d', 
+                      fontSize: '14px', 
+                      fontWeight: 'bold', 
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ fontSize: '12px', color: '#991b1b', fontWeight: 'bold', marginBottom: '6px' }}>🔴 สระเสียงสั้น (คำตาย):</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                {shortVowels.map((v) => (
+                  <button 
+                    key={v.label}
+                    onClick={() => handleQuickVowelClick(v)}
+                    style={{ 
+                      height: '32px',
+                      padding: '0 8px', 
+                      borderRadius: '6px', 
+                      border: '1px solid #fecaca', 
+                      backgroundColor: '#fef2f2', 
+                      color: '#b91c1c', 
+                      fontSize: '14px', 
+                      fontWeight: 'bold', 
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    {v.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <hr style={{ border: 'none', borderTop: '1px solid #f1f5f9', margin: '2px 0' }} />
+
+            {/* 4. สีประจำหมู่ */}
+            <div>
+              <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#4b5563', marginBottom: '6px' }}>🎨 ตั้งค่าสีประจำหมู่ และสีตัวอักษร</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
+                <label style={{ height: '32px', backgroundColor: colorMid, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
+                  อักษรกลาง
+                  <input type="color" value={colorMid} onChange={(e) => setColorMid(e.target.value)} style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }} />
+                </label>
+                <label style={{ height: '32px', backgroundColor: colorHigh, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
+                  อักษรสูง
+                  <input type="color" value={colorHigh} onChange={(e) => setColorHigh(e.target.value)} style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }} />
+                </label>
+                <label style={{ height: '32px', backgroundColor: colorLow, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
+                  อักษรต่ำ
+                  <input type="color" value={colorLow} onChange={(e) => setColorLow(e.target.value)} style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }} />
+                </label>
+                <label style={{ height: '32px', backgroundColor: '#334155', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: circleTextColor, fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', border: '1px solid #cbd5e1' }}>
+                  สีตัวอักษร
+                  <input type="color" value={circleTextColor} onChange={(e) => setCircleTextColor(e.target.value)} style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }} />
+                </label>
+              </div>
+            </div>
+
+            {/* 5. พื้นหลัง */}
+            <div style={{ backgroundColor: '#f8fafc', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#1e293b', marginBottom: '6px' }}>🖼️ พื้นหลังหน้าจอภาพ</div>
+              
+              <div style={{ display: 'flex', gap: '4px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                {[
+                  { label: 'เทา', code: '#e2e8f0' },
+                  { label: 'สว่าง', code: '#f1f5f9' },
+                  { label: 'ฟ้าอ่อน', code: '#e0f2fe' },
+                  { label: 'มินต์', code: '#dcfce7' },
+                  { label: 'เข้ม', code: '#334155' }
+                ].map((colorItem) => (
+                  <button
+                    key={colorItem.code}
+                    onClick={() => { setBgColor(colorItem.code); setBgType('color'); }}
+                    style={{
+                      backgroundColor: colorItem.code,
+                      border: bgColor === colorItem.code && bgType === 'color' ? '2px solid #0284c7' : '1px solid #cbd5e1',
+                      padding: '3px 6px',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      fontWeight: 'bold',
+                      color: colorItem.code === '#334155' ? '#fff' : '#1e293b',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {colorItem.label}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <label style={{ backgroundColor: '#0284c7', color: '#fff', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', display: 'inline-block' }}>
+                  📁 อัปโหลดภาพพื้นหลัง
+                  <input type="file" accept="image/*" onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        setBgImage(reader.result);
+                        setBgType('image');
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }} style={{ display: 'none' }} />
+                </label>
+                {bgType === 'image' && (
+                  <button 
+                    onClick={() => { setBgType('color'); setBgImage(''); }}
+                    style={{ backgroundColor: '#ef4444', color: '#fff', border: 'none', padding: '4px 6px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
+                  >
+                    ยกเลิกรูปภาพ
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 6. Slider */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 'bold', color: '#4b5563', marginBottom: '2px' }}>
+                <span>📐 ขนาดตัวอักษร จอที่ 2:</span>
+                <span style={{ color: '#0284c7' }}>{labelFontSize}px</span>
+              </div>
+              <input 
+                type="range" 
+                min="16" 
+                max="32" 
+                value={labelFontSize} 
+                onChange={(e) => setLabelFontSize(Number(e.target.value))}
+                style={{ width: '100%', cursor: 'pointer' }}
+              />
+            </div>
+
+            {/* 7. Gemini API Key */}
+            <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '8px' }}>
+              <button 
+                onClick={() => setShowApiInput(!showApiInput)}
+                style={{ 
+                  width: '100%',
+                  backgroundColor: customApiKey ? '#e0f2fe' : '#fef3c7', 
+                  color: customApiKey ? '#0369a1' : '#b45309', 
+                  border: customApiKey ? '1px solid #7dd3fc' : '1px solid #fde68a', 
+                  padding: '6px 10px', 
+                  borderRadius: '6px', 
+                  fontSize: '12px', 
+                  cursor: 'pointer', 
+                  fontWeight: 'bold' 
+                }}
+              >
+                🔑 {customApiKey ? 'ตั้งค่า Gemini API Key' : 'เชื่อมต่อ AI (API Key)'}
+              </button>
+
+              {showApiInput && (
+                <div style={{ marginTop: '6px', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '6px', border: '1px dashed #94a3b8' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569', marginBottom: '4px' }}>🔑 กรอก Gemini API Key:</div>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <input 
+                      type="password" 
+                      placeholder="วาง API Key..." 
+                      value={tempApiKey} 
+                      onChange={(e) => setTempApiKey(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSaveApiKey()}
+                      style={{ flex: 1, padding: '4px 6px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '11px' }}
+                    />
+                    <button 
+                      onClick={handleSaveApiKey}
+                      style={{ backgroundColor: '#10b981', color: '#ffffff', border: 'none', padding: '0 8px', borderRadius: '4px', fontWeight: 'bold', cursor: 'pointer', fontSize: '11px' }}
+                    >
+                      บันทึก
+                    </button>
+                  </div>
+                  {apiSaveStatus && <div style={{ color: '#059669', fontSize: '10px', marginTop: '4px', fontWeight: 'bold' }}>✓ {apiSaveStatus}</div>}
+                </div>
+              )}
             </div>
 
           </div>
+        )}
 
-          {/* 2. แผงควบคุมพร้อมแถบเลื่อน Scrollbar (ขวามือ) */}
-          {viewLayout !== 'present' && (
-            <div 
-              style={{ 
-                backgroundColor: '#ffffff', 
-                borderRadius: '14px', 
-                padding: '20px', 
-                boxShadow: '0 4px 14px rgba(0,0,0,0.06)', 
-                border: '1px solid #e5e7eb', 
-                display: 'flex', 
-                flexDirection: 'column', 
-                gap: '16px',
-                maxHeight: viewLayout === 'split' ? 'calc(100vh - 100px)' : 'none',
-                overflowY: viewLayout === 'split' ? 'auto' : 'visible',
-                position: viewLayout === 'split' ? 'sticky' : 'static',
-                top: '20px'
-              }}
-            >
-              
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#1f2937' }}>⚙️ แผงควบคุม</h3>
-              </div>
+      </div>
 
-              {/* 1. ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ */}
-              <div style={{ backgroundColor: '#f8fafc', padding: '14px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#1f2937', marginBottom: '8px' }}>✨ ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ</div>
-                
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px', fontSize: '13px', color: '#334155' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-                    <input type="radio" name="mode" checked={mode === 'full5'} onChange={() => setMode('full5')} />
-                    ผันครบทั้ง 5 บรรทัด (อักษรคู่ / ห นำ)
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-                    <input type="radio" name="mode" checked={mode === 'highOnly'} onChange={() => setMode('highOnly')} />
-                    เฉพาะเสียงสูง (เอก, โท, จัตวา)
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-                    <input type="radio" name="mode" checked={mode === 'lowOnly'} onChange={() => setMode('lowOnly')} />
-                    เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)
-                  </label>
-                </div>
+      {/* 3. Modal การเชื่อมต่อจอที่ 2 (WiFi/Bluetooth/Web Browser) */}
+      {}
+      {showConnectModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(15, 23, 42, 0.65)',
+          backdropFilter: 'blur(4px)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '16px'
+        }}>
+          <div style={{
+            width: '100%',
+            maxWidth: '560px',
+            backgroundColor: '#ffffff',
+            borderRadius: '20px',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.25)',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            border: '1px solid #cbd5e1'
+          }}>
+            <div style={{
+              padding: '16px 20px',
+              backgroundColor: '#f8fafc',
+              borderBottom: '1px solid #e2e8f0',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 'bold', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>📡</span> ตั้งค่าการเชื่อมต่อจอที่ 2
+              </h3>
+              <button 
+                onClick={() => setShowConnectModal(false)}
+                style={{ background: 'none', border: 'none', fontSize: '20px', color: '#64748b', cursor: 'pointer', fontWeight: 'bold' }}
+              >
+                ✕
+              </button>
+            </div>
 
-                {/* กล่องรับข้อความและปุ่มผันคำอยู่ในบรรทัดเดียวกัน */}
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <input 
-                    type="text" 
-                    value={inputText} 
-                    onChange={(e) => {
-                      setInputText(e.target.value);
-                      validateInput(e.target.value);
-                    }}
-                    onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
-                    placeholder="พิมพ์ 1 คำ เช่น กอ, เมา, กวาง" 
-                    style={{ 
-                      flex: 1, 
-                      padding: '8px 12px', 
-                      borderRadius: '8px', 
-                      border: inputError ? '2px solid #ef4444' : '1px solid #cbd5e1', 
-                      fontSize: '15px',
-                      backgroundColor: '#f1f5f9',
-                      color: '#0f172a',
-                      fontWeight: '600',
-                      boxSizing: 'border-box'
-                    }}
-                  />
+            <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', backgroundColor: '#f1f5f9' }}>
+              <button
+                onClick={() => setActiveConnectTab('wifi')}
+                style={{
+                  flex: 1,
+                  padding: '12px 8px',
+                  border: 'none',
+                  backgroundColor: activeConnectTab === 'wifi' ? '#ffffff' : 'transparent',
+                  color: activeConnectTab === 'wifi' ? '#0284c7' : '#64748b',
+                  fontWeight: 'bold',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  borderBottom: activeConnectTab === 'wifi' ? '2px solid #0284c7' : 'none'
+                }}
+              >
+                📶 WiFi / QR Code
+              </button>
+              <button
+                onClick={() => setActiveConnectTab('browser')}
+                style={{
+                  flex: 1,
+                  padding: '12px 8px',
+                  border: 'none',
+                  backgroundColor: activeConnectTab === 'browser' ? '#ffffff' : 'transparent',
+                  color: activeConnectTab === 'browser' ? '#0284c7' : '#64748b',
+                  fontWeight: 'bold',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  borderBottom: activeConnectTab === 'browser' ? '2px solid #0284c7' : 'none'
+                }}
+              >
+                🌐 เบราว์เซอร์/คู่จอ
+              </button>
+              <button
+                onClick={() => setActiveConnectTab('bluetooth')}
+                style={{
+                  flex: 1,
+                  padding: '12px 8px',
+                  border: 'none',
+                  backgroundColor: activeConnectTab === 'bluetooth' ? '#ffffff' : 'transparent',
+                  color: activeConnectTab === 'bluetooth' ? '#0284c7' : '#64748b',
+                  fontWeight: 'bold',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  borderBottom: activeConnectTab === 'bluetooth' ? '2px solid #0284c7' : 'none'
+                }}
+              >
+                ᛒ บลูทูธ (Bluetooth)
+              </button>
+            </div>
+
+            <div style={{ padding: '20px', flex: 1, overflowY: 'auto' }}>
+              {activeConnectTab === 'wifi' && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '12px' }}>
                   
-                  <button 
-                    onClick={handleGenerate}
-                    disabled={loading}
-                    style={{ 
-                      backgroundColor: '#0284c7', 
-                      color: '#ffffff', 
-                      border: 'none', 
-                      padding: '8px 16px', 
-                      borderRadius: '8px', 
-                      fontWeight: 'bold', 
-                      cursor: 'pointer', 
-                      fontSize: '14px',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    {loading ? '...' : 'ผันคำ'}
-                  </button>
-                </div>
-                {inputError && <div style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px', fontWeight: 'bold' }}>{inputError}</div>}
-              </div>
+                  {/* กล่องคำอธิบายสาเหตุและแนวทางแก้ไขสำหรับ Blob URL */}
+                  {window.location.href.includes('blob:') ? (
+                    <div style={{ backgroundColor: '#fffbe3', border: '1px solid #fde68a', padding: '12px 14px', borderRadius: '12px', textAlign: 'left', fontSize: '13px', color: '#92400e', width: '100%', boxSizing: 'border-box' }}>
+                      <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span>⚠️</span> สแกนด้วยแท็บเล็ตเครื่องอื่นไม่ได้เพราะอะไร?
+                      </div>
+                      <div>
+                        ขณะนี้แอปพลิเคชันรันอยู่ในโหมด <strong>"ตัวอย่างพรีวิว (Blob URL)"</strong> ซึ่งเป็นที่อยู่ชั่วคราวใน RAM ของคอมพิวเตอร์เครื่องนี้ แท็บเล็ตเครื่องอื่นจึงไม่สามารถเปิดลิงก์ Blob จากภายนอกได้
+                      </div>
+                      <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #fcd34d', fontWeight: 'bold', color: '#b45309' }}>
+                        👉 <strong>วิธีใช้งานแนะนำ:</strong> ให้ใช้คอมพิวเตอร์เครื่องนี้ต่อสาย HDMI/ไร้สาย ออกจอทีวีหรือโปรเจกเตอร์ แล้วกดปุ่ม <strong>"🚀 เปิดหน้าต่างจอที่ 2 บัดนี้"</strong> (ในแท็บเบราว์เซอร์) ได้ทันทีครับ
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '13px', color: '#1e293b', fontWeight: 'bold' }}>
+                      📲 สแกน QR Code ด้วยแท็บเล็ต สมาร์ททีวี หรือมือถือในวง Wi-Fi เดียวกัน
+                    </div>
+                  )}
 
-              {/* 2. เลือกพยัญชนะด่วน (แสดงครบ 44 ตัว เรียง 11 ตัวต่อแถว ทั้งหมด 4 แถว) */}
-              <div>
-                <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 'bold', marginBottom: '6px' }}>⌨️ เลือกพยัญชนะด่วน (๔๔ ตัว):</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(11, 1fr)', gap: '5px' }}>
-                  {quickConsonants.map((c) => (
-                    <button 
-                      key={c}
-                      onClick={() => handleQuickConsonantClick(c)}
-                      style={{ 
-                        height: '36px',
-                        borderRadius: '6px', 
-                        border: '1px solid #cbd5e1', 
-                        backgroundColor: '#ffffff', 
-                        fontSize: '15px', 
-                        fontWeight: 'bold', 
+                  {/* แสดงภาพ QR Code จริงที่ผ่านมาตรฐานการสแกนกล้อง */}
+                  <div style={{ 
+                    backgroundColor: '#ffffff', 
+                    padding: '12px', 
+                    borderRadius: '16px', 
+                    border: '2px solid #0284c7', 
+                    boxShadow: '0 8px 20px rgba(2,132,199,0.15)',
+                    display: 'inline-flex',
+                    flexDirection: 'column',
+                    alignItems: 'center'
+                  }}>
+                    <img 
+                      src={qrImageSrc} 
+                      alt="QR Code สำหรับสแกนเข้าจอที่ 2" 
+                      style={{ width: '180px', height: '180px', display: 'block', borderRadius: '8px' }}
+                    />
+                    <div style={{ fontSize: '11px', color: '#0369a1', marginTop: '6px', fontWeight: 'bold' }}>
+                      ✓ รหัส QR Code สำหรับเชื่อมต่อ
+                    </div>
+                  </div>
+
+                  {/* ช่องป้อน URL / IP Address วง Wi-Fi ส่วนตัว */}
+                  <div style={{ width: '100%', backgroundColor: '#f8fafc', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', textAlign: 'left', boxSizing: 'border-box' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#334155', marginBottom: '4px' }}>
+                      🌐 กำหนด IP/URL เว็บไซต์จริงสำหรับสแกน (ถ้ามี):
+                    </div>
+                    <input 
+                      type="text" 
+                      placeholder="เช่น http://192.168.1.50:3000 หรือ https://your-school-site.com" 
+                      value={customWifiUrl}
+                      onChange={(e) => setCustomWifiUrl(e.target.value)}
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {activeConnectTab === 'browser' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '12px 14px', borderRadius: '10px', fontSize: '13px', color: '#0369a1' }}>
+                    💡 <strong>การส่งภาพออกจอที่ 2 ผ่าน Web Browser:</strong>
+                    <br />
+                    ระบบรองรับการเปิดหน้าต่างจอที่ 2 ทั้งในโหมดปกติและโหมด Blob Preview เรียลไทม์
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button
+                      onClick={() => {
+                        handleOpenDualMonitor();
+                        setShowConnectModal(false);
+                      }}
+                      style={{
+                        flex: 1,
+                        backgroundColor: '#16a34a',
+                        color: '#fff',
+                        border: 'none',
+                        padding: '12px',
+                        borderRadius: '10px',
+                        fontWeight: 'bold',
+                        fontSize: '14px',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        color: midConsonants.includes(c) ? colorMid : highConsonants.includes(c) ? colorHigh : colorLow,
-                        padding: 0
+                        gap: '8px'
                       }}
                     >
-                      {c}
+                      🚀 เปิดหน้าต่างจอที่ 2 บัดนี้
                     </button>
-                  ))}
-                </div>
-              </div>
+                  </div>
 
-              {/* 3. เลือกสระด่วน สระเสียงยาว/สระเสียงสั้น */}
-              <div>
-                <div style={{ fontSize: '12px', color: '#166534', fontWeight: 'bold', marginBottom: '6px' }}>🟢 สระเสียงยาว (คำเป็น):</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', marginBottom: '10px' }}>
-                  {longVowels.map((v) => (
-                    <button 
-                      key={v.label}
-                      onClick={() => handleQuickVowelClick(v)}
-                      style={{ 
-                        height: '36px',
-                        padding: '0 10px', 
-                        borderRadius: '6px', 
-                        border: '1px solid #bbf7d0', 
-                        backgroundColor: '#f0fdf4', 
-                        color: '#15803d', 
-                        fontSize: '15px', 
-                        fontWeight: 'bold', 
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                    >
-                      {v.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div style={{ fontSize: '12px', color: '#991b1b', fontWeight: 'bold', marginBottom: '6px' }}>🔴 สระเสียงสั้น (คำตาย):</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
-                  {shortVowels.map((v) => (
-                    <button 
-                      key={v.label}
-                      onClick={() => handleQuickVowelClick(v)}
-                      style={{ 
-                        height: '36px',
-                        padding: '0 10px', 
-                        borderRadius: '6px', 
-                        border: '1px solid #fecaca', 
-                        backgroundColor: '#fef2f2', 
-                        color: '#b91c1c', 
-                        fontSize: '15px', 
-                        fontWeight: 'bold', 
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                    >
-                      {v.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <hr style={{ border: 'none', borderTop: '1px solid #f1f5f9', margin: '4px 0' }} />
-
-              {/* 4. การตั้งค่าสีประจำหมู่ */}
-              <div>
-                <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#4b5563', marginBottom: '8px' }}>🎨 ตั้งค่าสีประจำหมู่ และสีตัวอักษร</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
-                  <label style={{ height: '34px', backgroundColor: colorMid, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
-                    อักษรกลาง
-                    <input type="color" value={colorMid} onChange={(e) => setColorMid(e.target.value)} style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }} />
-                  </label>
-                  <label style={{ height: '34px', backgroundColor: colorHigh, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
-                    อักษรสูง
-                    <input type="color" value={colorHigh} onChange={(e) => setColorHigh(e.target.value)} style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }} />
-                  </label>
-                  <label style={{ height: '34px', backgroundColor: colorLow, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
-                    อักษรต่ำ
-                    <input type="color" value={colorLow} onChange={(e) => setColorLow(e.target.value)} style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }} />
-                  </label>
-                  <label style={{ height: '34px', backgroundColor: '#334155', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: circleTextColor, fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', border: '1px solid #cbd5e1' }}>
-                    สีตัวอักษร
-                    <input type="color" value={circleTextColor} onChange={(e) => setCircleTextColor(e.target.value)} style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }} />
-                  </label>
-                </div>
-              </div>
-
-              {/* 5. เลือกสีหรือรูปภาพพื้นหลัง */}
-              <div style={{ backgroundColor: '#f8fafc', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e293b', marginBottom: '8px' }}>🖼️ เลือกสีหรือรูปภาพพื้นหลังจอภาพ</div>
-                
-                <div style={{ display: 'flex', gap: '6px', marginBottom: '8px', flexWrap: 'wrap' }}>
-                  {[
-                    { label: 'เทา', code: '#e2e8f0' },
-                    { label: 'สว่าง', code: '#f1f5f9' },
-                    { label: 'ฟ้าอ่อน', code: '#e0f2fe' },
-                    { label: 'มินต์', code: '#dcfce7' },
-                    { label: 'ส้มอ่อน', code: '#fef3c7' },
-                    { label: 'เข้ม', code: '#334155' }
-                  ].map((colorItem) => (
-                    <button
-                      key={colorItem.code}
-                      onClick={() => { setBgColor(colorItem.code); setBgType('color'); }}
-                      style={{
-                        backgroundColor: colorItem.code,
-                        border: bgColor === colorItem.code && bgType === 'color' ? '2px solid #0284c7' : '1px solid #cbd5e1',
-                        padding: '4px 8px',
-                        borderRadius: '6px',
-                        fontSize: '11px',
-                        fontWeight: 'bold',
-                        color: colorItem.code === '#334155' ? '#fff' : '#1e293b',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {colorItem.label}
-                    </button>
-                  ))}
-                  
-                  <label style={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    เลือกสีเอง
-                    <input type="color" value={bgColor} onChange={(e) => { setBgColor(e.target.value); setBgType('color'); }} style={{ opacity: 0, width: 0, height: 0, position: 'absolute' }} />
-                  </label>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <label style={{ backgroundColor: '#0284c7', color: '#fff', padding: '5px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer', display: 'inline-block' }}>
-                    📁 อัปโหลดรูปภาพพื้นหลัง
-                    <input type="file" accept="image/*" onChange={handleImageUpload} style={{ display: 'none' }} />
-                  </label>
-                  {bgType === 'image' && (
-                    <button 
-                      onClick={() => { setBgType('color'); setBgImage(''); }}
-                      style={{ backgroundColor: '#ef4444', color: '#fff', border: 'none', padding: '5px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
-                    >
-                      ยกเลิกรูปภาพ
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* 6. Slider ขนาดตัวหนังสือและวงกลม */}
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', fontWeight: 'bold', color: '#4b5563', marginBottom: '4px' }}>
-                  <span>📐 ขนาดตัวหนังสือและวงกลม (จอที่ 2):</span>
-                  <span style={{ color: '#0284c7' }}>{labelFontSize}px</span>
-                </div>
-                <input 
-                  type="range" 
-                  min="16" 
-                  max="32" 
-                  value={labelFontSize} 
-                  onChange={(e) => setLabelFontSize(Number(e.target.value))}
-                  style={{ width: '100%', cursor: 'pointer' }}
-                />
-              </div>
-
-              {/* 7. เชื่อมต่อ Gemini API Key */}
-              <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
-                <button 
-                  onClick={() => setShowApiInput(!showApiInput)}
-                  style={{ 
-                    width: '100%',
-                    backgroundColor: customApiKey ? '#e0f2fe' : '#fef3c7', 
-                    color: customApiKey ? '#0369a1' : '#b45309', 
-                    border: customApiKey ? '1px solid #7dd3fc' : '1px solid #fde68a', 
-                    padding: '8px 12px', 
-                    borderRadius: '8px', 
-                    fontSize: '13px', 
-                    cursor: 'pointer', 
-                    fontWeight: 'bold' 
-                  }}
-                >
-                  🔑 {customApiKey ? 'เปลี่ยน Gemini API Key' : 'เชื่อมต่อ AI (API Key)'}
-                </button>
-
-                {showApiInput && (
-                  <div style={{ marginTop: '8px', padding: '10px', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px dashed #94a3b8' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#475569', marginBottom: '6px' }}>🔑 เชื่อมต่อ Gemini API Key ส่วนตัว:</div>
+                  <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569', marginBottom: '6px' }}>
+                      🔗 ลิงก์สำหรับเปิดหน้าจอที่ 2 บนเบราว์เซอร์อื่น:
+                    </div>
                     <div style={{ display: 'flex', gap: '6px' }}>
                       <input 
-                        type="password" 
-                        placeholder="วาง Gemini API Key..." 
-                        value={tempApiKey} 
-                        onChange={(e) => setTempApiKey(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && handleSaveApiKey()}
-                        style={{ flex: 1, padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }}
+                        type="text" 
+                        readOnly 
+                        value={effectiveQrUrl} 
+                        style={{ flex: 1, padding: '8px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px', backgroundColor: '#f8fafc', color: '#334155' }}
                       />
                       <button 
-                        onClick={handleSaveApiKey}
-                        style={{ backgroundColor: '#10b981', color: '#ffffff', border: 'none', padding: '0 12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}
+                        onClick={handleCopyDisplayUrl}
+                        style={{ backgroundColor: copysuccess ? '#16a34a' : '#0284c7', color: '#fff', border: 'none', padding: '0 14px', borderRadius: '6px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}
                       >
-                        บันทึก
+                        {copysuccess ? '✓ คัดลอกแล้ว' : 'คัดลอก'}
                       </button>
                     </div>
-                    {apiSaveStatus && <div style={{ color: '#059669', fontSize: '11px', marginTop: '4px', fontWeight: 'bold' }}>✓ {apiSaveStatus}</div>}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+
+              {activeConnectTab === 'bluetooth' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div style={{ backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', padding: '12px 14px', borderRadius: '10px' }}>
+                    <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#1e293b', marginBottom: '4px' }}>
+                      ᛒ การเชื่อมต่อรีโมทไร้สาย / สวิตช์บลูทูธ (Bluetooth Remote / Presenter)
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b' }}>
+                      จับคู่กับรีโมทนำเสนอผลงาน หรือ อุปกรณ์บลูทูธภายนอกเพื่อควบคุมเปลี่ยนคำผันวรรณยุกต์
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleBluetoothConnect}
+                    style={{
+                      backgroundColor: btConnected ? '#16a34a' : '#8b5cf6',
+                      color: '#ffffff',
+                      border: 'none',
+                      padding: '12px',
+                      borderRadius: '10px',
+                      fontWeight: 'bold',
+                      fontSize: '14px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      boxShadow: '0 4px 12px rgba(139,92,246,0.25)'
+                    }}
+                  >
+                    <span>ᛒ</span> {btConnected ? `เชื่อมต่อแล้ว: ${btDeviceName}` : 'ค้นหาและจับคู่อุปกรณ์บลูทูธ'}
+                  </button>
+
+                  {btStatusMsg && (
+                    <div style={{ fontSize: '12px', textAlign: 'center', fontWeight: 'bold', color: btConnected ? '#16a34a' : '#dc2626' }}>
+                      {btStatusMsg}
+                    </div>
+                  )}
+
+                  <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: '10px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#64748b', marginBottom: '6px' }}>
+                      🎮 ปุ่มทดสอบการส่งสัญญาณรีโมทบลูทูธ:
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
+                      <button 
+                        onClick={() => handleQuickConsonantClick('ก')}
+                        style={{ padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#f1f5f9', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
+                      >
+                        ◄ คำก่อนหน้า
+                      </button>
+                      <button 
+                        onClick={handleToggleDisplayFullscreen}
+                        style={{ padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#f1f5f9', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
+                      >
+                        ⛶ สลับเต็มจอ
+                      </button>
+                      <button 
+                        onClick={() => handleQuickConsonantClick('ข')}
+                        style={{ padding: '8px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#f1f5f9', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
+                      >
+                        คำถัดไป ►
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
             </div>
-          )}
 
+            <div style={{ padding: '12px 20px', backgroundColor: '#f8fafc', borderTop: '1px solid #e2e8f0', textAlign: 'right' }}>
+              <button
+                onClick={() => setShowConnectModal(false)}
+                style={{ backgroundColor: '#475569', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: '8px', fontWeight: 'bold', fontSize: '13px', cursor: 'pointer' }}
+              >
+                ปิดหน้าต่าง
+              </button>
+            </div>
+
+          </div>
         </div>
+      )}
 
-      </div>
     </div>
   );
 }
