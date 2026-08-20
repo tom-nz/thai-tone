@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-// Safely load Firebase Compat SDKs to avoid Babel / CommonJS "require" errors
+// Safely load Firebase Compat SDKs if environment supports it
 const loadFirebaseSDK = () => {
   if (typeof window === 'undefined') return Promise.reject('No window');
   if (window.firebase) return Promise.resolve(window.firebase);
@@ -103,6 +103,7 @@ export default function App() {
   // สถานะ Hover, การซิงค์ และป็อปอัป
   const [hoveredRowId, setHoveredRowId] = useState(null);
   const [cloudConnected, setCloudConnected] = useState(false);
+  const [lastSyncedTime, setLastSyncedTime] = useState('');
 
   // สถานะการเชื่อมต่อ
   const [showConnectModal, setShowConnectModal] = useState(false);
@@ -426,7 +427,6 @@ export default function App() {
     }
   }, []);
 
-  // 1. Firebase Cloud Sync setup
   useEffect(() => {
     let unsubscribe = null;
     let isMounted = true;
@@ -473,6 +473,7 @@ export default function App() {
                 if (data.bImg !== undefined) setBgImage(data.bImg);
                 if (data.activeRowId !== undefined) setHoveredRowId(data.activeRowId);
                 if (data.modeVal) setMode(data.modeVal);
+                setLastSyncedTime(new Date().toLocaleTimeString('th-TH'));
               }
             }
           }, (err) => console.warn("Firestore snapshot notice:", err));
@@ -490,36 +491,39 @@ export default function App() {
     };
   }, [appId, roomId, isDisplayWindow]);
 
-  // 2. ntfy.sh SSE Receiver for Display Window (Tablet / Smart TV)
   useEffect(() => {
     if (!isDisplayWindow) return;
 
     let es = null;
     const topic = `thai_tone_sync_room_${roomId}`;
     
+    const applyIncomingData = (data) => {
+      if (!data || data.type !== 'SYNC_STATE') return;
+      if (Array.isArray(data.lines) && data.lines.length > 0) setLinesData(data.lines);
+      if (data.info && data.info.desc) setAnalysisInfo(data.info);
+      if (data.text !== undefined) setInputText(data.text);
+      if (data.cText) setCircleTextColor(data.cText);
+      if (data.cMid) setColorMid(data.cMid);
+      if (data.cHigh) setColorHigh(data.cHigh);
+      if (data.cLow) setColorLow(data.cLow);
+      if (data.fontSize !== undefined) setLabelFontSize(data.fontSize);
+      if (data.bType) setBgType(data.bType);
+      if (data.bColor) setBgColor(data.bColor);
+      if (data.bImg !== undefined) setBgImage(data.bImg);
+      if (data.activeRowId !== undefined) setHoveredRowId(data.activeRowId);
+      if (data.modeVal) setMode(data.modeVal);
+      setCloudConnected(true);
+      setLastSyncedTime(new Date().toLocaleTimeString('th-TH'));
+    };
+
+    // Primary: SSE Realtime Stream
     try {
       es = new EventSource(`https://ntfy.sh/${topic}/json`);
       es.onmessage = (event) => {
         try {
           const raw = JSON.parse(event.data);
           if (raw && raw.message) {
-            const data = JSON.parse(raw.message);
-            if (data && data.type === 'SYNC_STATE') {
-              if (Array.isArray(data.lines) && data.lines.length > 0) setLinesData(data.lines);
-              if (data.info && data.info.desc) setAnalysisInfo(data.info);
-              if (data.text !== undefined) setInputText(data.text);
-              if (data.cText) setCircleTextColor(data.cText);
-              if (data.cMid) setColorMid(data.cMid);
-              if (data.cHigh) setColorHigh(data.cHigh);
-              if (data.cLow) setColorLow(data.cLow);
-              if (data.fontSize !== undefined) setLabelFontSize(data.fontSize);
-              if (data.bType) setBgType(data.bType);
-              if (data.bColor) setBgColor(data.bColor);
-              if (data.bImg !== undefined) setBgImage(data.bImg);
-              if (data.activeRowId !== undefined) setHoveredRowId(data.activeRowId);
-              if (data.modeVal) setMode(data.modeVal);
-              setCloudConnected(true);
-            }
+            applyIncomingData(JSON.parse(raw.message));
           }
         } catch (err) {}
       };
@@ -527,12 +531,31 @@ export default function App() {
       console.warn("ntfy.sh SSE error:", e);
     }
 
+    // Secondary GUARANTEED Fallback: Active Short-Polling every 1.5 seconds
+    // Prevents mobile/tablet Chrome from suspending background SSE sockets!
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`https://ntfy.sh/${topic}/json?poll=1&since=3s`);
+        if (res.ok) {
+          const text = await res.text();
+          const lines = text.trim().split('\n');
+          for (let line of lines) {
+            if (!line) continue;
+            const parsed = JSON.parse(line);
+            if (parsed && parsed.message) {
+              applyIncomingData(JSON.parse(parsed.message));
+            }
+          }
+        }
+      } catch (err) {}
+    }, 1500);
+
     return () => {
       if (es) es.close();
+      clearInterval(pollInterval);
     };
   }, [isDisplayWindow, roomId]);
 
-  // 3. Main Controller Sync Dispatcher
   useEffect(() => {
     if (isDisplayWindow) return;
 
@@ -560,7 +583,7 @@ export default function App() {
 
     safeSetLocalStorage('thai_tone_live_sync_data', strPayload);
     
-    // BroadcastChannel local sync
+    // Local BroadcastChannel sync
     const channel = safeCreateChannel('thai_tone_sync_channel');
     if (channel) {
       try {
@@ -575,7 +598,7 @@ export default function App() {
       } catch (e) {}
     }
 
-    // Universal HTTP SSE Cloud Pub/Sub Sync to Tablet
+    // High-speed HTTP Pub/Sub Sync to Tablet
     try {
       fetch(`https://ntfy.sh/thai_tone_sync_room_${roomId}`, {
         method: 'POST',
@@ -584,7 +607,7 @@ export default function App() {
       }).catch(() => {});
     } catch (e) {}
 
-    // Cloud Firestore Write (if configured)
+    // Cloud Firestore Sync (if loaded)
     if (typeof window !== 'undefined' && window.firebase && window.firebase.apps && window.firebase.apps.length) {
       try {
         const db = window.firebase.firestore();
@@ -599,7 +622,6 @@ export default function App() {
     };
   }, [isDisplayWindow, linesData, analysisInfo, inputText, circleTextColor, colorMid, colorHigh, colorLow, labelFontSize, bgType, bgColor, bgImage, hoveredRowId, mode, roomId, appId]);
 
-  // 4. Local BroadcastChannel receiver
   useEffect(() => {
     if (!isDisplayWindow) return;
 
@@ -901,9 +923,16 @@ export default function App() {
         >
           {/* Header */}
           <div style={{ textAlign: 'center', flexShrink: 0, marginBottom: '4px' }}>
-            <h2 style={{ margin: '0 0 2px 0', color: '#ea580c', fontSize: 'clamp(20px, 2.2vw, 32px)', fontWeight: 'bold' }}>
-              ไตรยางศ์ หรือ อักษร 3 หมู่
-            </h2>
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+              <h2 style={{ margin: '0 0 2px 0', color: '#ea580c', fontSize: 'clamp(20px, 2.2vw, 32px)', fontWeight: 'bold' }}>
+                ไตรยางศ์ หรือ อักษร 3 หมู่
+              </h2>
+              {lastSyncedTime && (
+                <span style={{ fontSize: '10px', backgroundColor: '#dcfce7', color: '#166534', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold' }}>
+                  🟢 ซิงค์เรียลไทม์ ({lastSyncedTime})
+                </span>
+              )}
+            </div>
             <div style={{ color: '#ea580c', fontSize: 'clamp(14px, 1.4vw, 20px)', fontWeight: '600', marginBottom: '8px' }}>
               และการผันวรรณยุกต์
             </div>
@@ -921,7 +950,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* Proportional 5-Line Staff Container */}
+          {/* Proportional 5-Line Staff Container for Tablet */}
           <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1, padding: '8px 0', overflow: 'hidden' }}>
             {linesData.map((item, idx) => {
               let rowHeaderColor = '#94a3b8';
@@ -999,7 +1028,17 @@ export default function App() {
                     )}
 
                     {item.isMulti && item.show && (
-                      <div style={{ position: 'absolute', left: item.leftPos, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div 
+                        style={{ 
+                          position: 'absolute', 
+                          left: item.leftPos, 
+                          transform: `translateX(-50%) ${isHovered ? 'scale(1.18)' : 'scale(1)'}`,
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: '6px',
+                          transition: 'all 0.15s ease' 
+                        }}
+                      >
                         {item.multi.map((circle, i) => (
                           <React.Fragment key={i}>
                             {i > 0 && <span style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: circleFontSize }}>/</span>}
@@ -1168,32 +1207,33 @@ export default function App() {
         maxWidth: '100vw'
       }}>
         
-        {/* Left Board Container */}
+        {/* Left Board Container (COMPACTED PROPORTIONAL HEIGHT FOR LAPTOP MAIN SCREEN) */}
         <div style={{ 
           backgroundColor: 'rgba(255, 255, 255, 0.96)', 
           borderRadius: '16px', 
-          padding: '16px 24px', 
+          padding: '14px 20px', 
           boxShadow: '0 4px 20px rgba(0,0,0,0.06)', 
           display: 'flex', 
           flexDirection: 'column', 
           justifyContent: 'space-between',
           height: '100%',
+          maxHeight: '100%',
           boxSizing: 'border-box',
           border: '1px solid #e2e8f0',
           overflow: 'hidden'
         }}>
           
-          <div style={{ textAlign: 'center', marginBottom: '6px', flexShrink: 0 }}>
-            <h2 style={{ margin: '0 0 2px 0', color: '#ea580c', fontSize: '22px', fontWeight: 'bold' }}>
+          <div style={{ textAlign: 'center', marginBottom: '4px', flexShrink: 0 }}>
+            <h2 style={{ margin: '0 0 2px 0', color: '#ea580c', fontSize: '20px', fontWeight: 'bold' }}>
               ไตรยางศ์ หรือ อักษร 3 หมู่
             </h2>
-            <div style={{ color: '#ea580c', fontSize: '14px', fontWeight: '600' }}>
+            <div style={{ color: '#ea580c', fontSize: '13px', fontWeight: '600' }}>
               และการผันวรรณยุกต์
             </div>
 
             {analysisInfo.desc && (
-              <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '5px 12px', borderRadius: '10px', margin: '6px auto 0 auto', maxWidth: '750px', textAlign: 'center', fontSize: '12px', color: '#0369a1', fontWeight: 'bold' }}>
-                📌 ผลวิเคราะห์หลักภาษา: <span style={{ color: '#0284c7' }}>"{inputText}"</span> เป็น <span style={{ backgroundColor: '#e0f2fe', padding: '2px 6px', borderRadius: '4px' }}>{analysisInfo.type} ({analysisInfo.vowelLen})</span> — {analysisInfo.desc}
+              <div style={{ backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', padding: '4px 10px', borderRadius: '8px', margin: '4px auto 0 auto', maxWidth: '750px', textAlign: 'center', fontSize: '11.5px', color: '#0369a1', fontWeight: 'bold' }}>
+                📌 ผลวิเคราะห์หลักภาษา: <span style={{ color: '#0284c7' }}>"{inputText}"</span> เป็น <span style={{ backgroundColor: '#e0f2fe', padding: '1px 5px', borderRadius: '4px' }}>{analysisInfo.type} ({analysisInfo.vowelLen})</span> — {analysisInfo.desc}
               </div>
             )}
           </div>
@@ -1204,8 +1244,8 @@ export default function App() {
             <div></div>
           </div>
 
-          {/* Proportional 5-Line Staff Board */}
-          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', flex: 1, padding: '4px 0', overflow: 'hidden' }}>
+          {/* Proportional 5-Line Staff Board (COMPACT ~3/5 HEIGHT FOR LAPTOP VIEW WITH FIXED HOVER SCALE FOR LINE 3) */}
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '22px', flex: 1, padding: '4px 0', overflow: 'hidden' }}>
             {linesData.map((item, idx) => {
               let rowHeaderColor = '#94a3b8';
               if (item.show) {
@@ -1217,7 +1257,7 @@ export default function App() {
               return (
                 <div 
                   key={idx} 
-                  style={{ display: 'grid', gridTemplateColumns: '160px 1fr 90px', alignItems: 'center', flex: 1 }}
+                  style={{ display: 'grid', gridTemplateColumns: '160px 1fr 90px', alignItems: 'center' }}
                   onMouseEnter={() => setHoveredRowId(item.id)}
                   onMouseLeave={() => setHoveredRowId(null)}
                 >
@@ -1229,14 +1269,14 @@ export default function App() {
                       color: rowHeaderColor, 
                       fontWeight: 'bold', 
                       transition: 'all 0.15s ease',
-                      transform: isHovered ? 'scale(1.05)' : 'scale(1)'
+                      transform: isHovered ? 'scale(1.08)' : 'scale(1)'
                     }}
                   >
                     {item.tone} <span style={{ fontSize: '14px', marginLeft: '2px' }}>[ {item.mark} ]</span>
                   </div>
 
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '100%' }}>
-                    {/* Horizontal Line */}
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '32px' }}>
+                    {/* Horizontal Staff Line */}
                     <div style={{ width: '100%', height: '2px', backgroundColor: '#94a3b8' }}></div>
 
                     {!item.isMulti && item.show && item.word && (
@@ -1247,15 +1287,15 @@ export default function App() {
                           transform: `translateX(-50%) ${isHovered ? 'scale(1.18)' : 'scale(1)'}`,
                           backgroundColor: item.color,
                           color: circleTextColor,
-                          minWidth: '38px',
-                          height: '38px',
-                          padding: '0 6px',
-                          borderRadius: '19px',
+                          minWidth: '42px',
+                          height: '42px',
+                          padding: '0 8px',
+                          borderRadius: '21px',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           fontWeight: 'bold',
-                          fontSize: '15px',
+                          fontSize: '16px',
                           boxShadow: '0 3px 8px rgba(0,0,0,0.2)',
                           cursor: 'pointer',
                           transition: 'all 0.15s ease'
@@ -1264,10 +1304,10 @@ export default function App() {
                         <svg
                           style={{
                             position: 'absolute',
-                            top: '-16px',
+                            top: '-18px',
                             left: 'calc(100% - 3px)',
-                            width: '16px',
-                            height: '36px',
+                            width: '18px',
+                            height: '40px',
                             pointerEvents: 'none',
                             overflow: 'visible',
                             color: item.color
@@ -1282,7 +1322,17 @@ export default function App() {
                     )}
 
                     {item.isMulti && item.show && (
-                      <div style={{ position: 'absolute', left: item.leftPos, transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div 
+                        style={{ 
+                          position: 'absolute', 
+                          left: item.leftPos, 
+                          transform: `translateX(-50%) ${isHovered ? 'scale(1.18)' : 'scale(1)'}`, // FIXED HOVER EXPANSION FOR LINE 3
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: '6px',
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
                         {item.multi.map((circle, i) => (
                           <React.Fragment key={i}>
                             {i > 0 && <span style={{ color: '#94a3b8', fontWeight: 'bold', fontSize: '16px' }}>/</span>}
@@ -1290,15 +1340,15 @@ export default function App() {
                               style={{
                                 backgroundColor: circle.color,
                                 color: circleTextColor,
-                                minWidth: '38px',
-                                height: '38px',
-                                padding: '0 6px',
-                                borderRadius: '19px',
+                                minWidth: '42px',
+                                height: '42px',
+                                padding: '0 8px',
+                                borderRadius: '21px',
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 fontWeight: 'bold',
-                                fontSize: '15px',
+                                fontSize: '16px',
                                 boxShadow: '0 3px 8px rgba(0,0,0,0.2)',
                                 cursor: 'pointer',
                                 transition: 'all 0.15s ease'
@@ -1307,10 +1357,10 @@ export default function App() {
                               <svg
                                 style={{
                                   position: 'absolute',
-                                  top: '-16px',
+                                  top: '-18px',
                                   left: 'calc(100% - 3px)',
-                                  width: '16px',
-                                  height: '36px',
+                                  width: '18px',
+                                  height: '40px',
                                   pointerEvents: 'none',
                                   overflow: 'visible',
                                   color: circle.color
