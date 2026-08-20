@@ -57,39 +57,39 @@ export default function App() {
     'หร', 'หล', 'หว', 'ทร', 'ศร', 'สร', 'จร', 'ซร'
   ];
 
-  // สระเรียงลำดับมาตรฐานการท่องจำ (อะ อา, อิ อี, อึ อือ, อุ อู...)
+  // สระเรียงลำดับมาตรฐานการท่องจำ (ใช้ ◌ วงกลมไข่ปลา แทน - เพื่อให้แสดงผลบนมือถือได้อย่างถูกต้องโดยไม่เป็นรูปสี่เหลี่ยม [X])
   const longVowels = [
-    { label: '-า', front: '', rear: 'า' },
-    { label: '-ี', front: '', rear: 'ี' },
-    { label: '-ือ', front: '', rear: 'ือ' },
-    { label: '-ู', front: '', rear: 'ู' },
-    { label: 'เ-', front: 'เ', rear: '' },
-    { label: 'แ-', front: 'แ', rear: '' },
-    { label: 'โ-', front: 'โ', rear: '' },
-    { label: '-อ', front: '', rear: 'อ' },
-    { label: 'เ-อ', front: 'เ', rear: 'อ' },
-    { label: 'เ-ีย', front: 'เ', rear: 'ีย' },
-    { label: 'เ-ือ', front: 'เ', rear: 'ือ' },
-    { label: '-ัว', front: '', rear: 'ัว' },
-    { label: '-ำ', front: '', rear: 'ำ' },
-    { label: 'ใ-', front: 'ใ', rear: '' },
-    { label: 'ไ-', front: 'ไ', rear: '' },
-    { label: 'เ-า', front: 'เ', rear: 'า' }
+    { label: '◌า', front: '', rear: 'า' },
+    { label: '◌ี', front: '', rear: 'ี' },
+    { label: '◌ือ', front: '', rear: 'ือ' },
+    { label: '◌ู', front: '', rear: 'ู' },
+    { label: 'เ◌', front: 'เ', rear: '' },
+    { label: 'แ◌', front: 'แ', rear: '' },
+    { label: 'โ◌', front: 'โ', rear: '' },
+    { label: '◌อ', front: '', rear: 'อ' },
+    { label: 'เ◌อ', front: 'เ', rear: 'อ' },
+    { label: 'เ◌ีย', front: 'เ', rear: 'ีย' },
+    { label: 'เ◌ือ', front: 'เ', rear: 'ือ' },
+    { label: '◌ัว', front: '', rear: 'ัว' },
+    { label: '◌ำ', front: '', rear: 'ำ' },
+    { label: 'ใ◌', front: 'ใ', rear: '' },
+    { label: 'ไ◌', front: 'ไ', rear: '' },
+    { label: 'เ◌า', front: 'เ', rear: 'า' }
   ];
 
   const shortVowels = [
-    { label: '-ะ', front: '', rear: 'ะ' },
-    { label: '-ิ', front: '', rear: 'ิ' },
-    { label: '-ึ', front: '', rear: 'ึ' },
-    { label: '-ุ', front: '', rear: 'ุ' },
-    { label: 'เ-ะ', front: 'เ', rear: 'ะ' },
-    { label: 'แ-ะ', front: 'แ', rear: 'ะ' },
-    { label: 'โ-ะ', front: 'โ', rear: 'ะ' },
-    { label: 'เ-าะ', front: 'เ', rear: 'าะ' },
-    { label: 'เ-อะ', front: 'เ', rear: 'อะ' },
-    { label: 'เ-ียะ', front: 'เ', rear: 'ียะ' },
-    { label: 'เ-ือะ', front: 'เ', rear: 'ือะ' },
-    { label: '-ัวะ', front: '', rear: 'ัวะ' }
+    { label: '◌ะ', front: '', rear: 'ะ' },
+    { label: '◌ิ', front: '', rear: 'ิ' },
+    { label: '◌ึ', front: '', rear: 'ึ' },
+    { label: '◌ุ', front: '', rear: 'ุ' },
+    { label: 'เ◌ะ', front: 'เ', rear: 'ะ' },
+    { label: 'แ◌ะ', front: 'แ', rear: 'ะ' },
+    { label: 'โ◌ะ', front: 'โ', rear: 'ะ' },
+    { label: 'เ◌าะ', front: 'เ', rear: 'าะ' },
+    { label: 'เ◌อะ', front: 'เ', rear: 'อะ' },
+    { label: 'เ◌ียะ', front: 'เ', rear: 'ียะ' },
+    { label: 'เ◌ือะ', front: 'เ', rear: 'ือะ' },
+    { label: '◌ัวะ', front: '', rear: 'ัวะ' }
   ];
 
   const pairMap = {
