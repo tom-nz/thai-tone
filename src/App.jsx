@@ -5,38 +5,85 @@ const apiKey = "";
 
 export default function App() {
 
-  // 1. กดพยัญชนะด่วน -> เริ่มคำใหม่ [พยัญชนะ + อ] เสมอ
+  // ฟังก์ชันแยกหา "พยัญชนะต้นตัวจริง" จากคำเดิม
+  const getRootConsonant = (word) => {
+    if (!word) return "ก";
+    const thaiVowelsOnly = ["ะ", "ั", "า", "ำ", "ิ", "ี", "ึ", "ื", "ุ", "ู", "เ", "แ", "โ", "ใ", "ไ", "็", "่", "้", "๊", "๋", "์", "ํ"];
+    
+    // กรณีพิเศษสระหน้า: เช่น โอ, โก, เก, แก -> พยัญชนะต้นอยู่ตัวที่สอง
+    if (word.length >= 2 && ["เ", "แ", "โ", "ใ", "ไ"].includes(word[0])) {
+      return word[1];
+    }
+    // กรณีคำลงท้ายด้วย อ (ทำหน้าที่เป็นสระออ เช่น กอ, ขอ, มอ, ออ) -> พยัญชนะต้นคือตัวแรก
+    if (word.length >= 2 && word.endsWith("อ")) {
+      return word[0];
+    }
+    // กรณีทั่วไป: ค้นหาตัวอักษรแรกที่ไม่ใช่สระบน/ล่าง
+    for (let c of word) {
+      if (!thaiVowelsOnly.includes(c)) return c;
+    }
+    return word[0] || "ก";
+  };
+
+  // 1. เมื่อคลิกปุ่มพยัญชนะ
   const handleQuickConsonantClick = (c) => {
+    let current = (inputText || "").trim();
+    let currentVowel = "อ"; // ค่าเริ่มต้น
+    
+    // ดึงสระจากคำปัจจุบันมาผสมกับพยัญชนะใหม่ (ถ้ามี)
+    if (current) {
+      const root = getRootConsonant(current);
+      // หากคำเดิมมีสระหน้า
+      if (["เ", "แ", "โ", "ใ", "ไ"].includes(current[0])) {
+        const prefix = current[0];
+        const postfix = current.slice(2);
+        const newWord = prefix + c + postfix;
+        setInputText(newWord);
+        if (typeof handleAnalyze === "function") handleAnalyze(newWord);
+        else if (typeof processToneAnalysis === "function") processToneAnalysis(newWord, mode);
+        return;
+      }
+      // หากเป็นสระหลัง/บน/ล่าง
+      const postfix = current.slice(current.indexOf(root) + 1);
+      if (postfix) {
+        const newWord = c + postfix;
+        setInputText(newWord);
+        if (typeof handleAnalyze === "function") handleAnalyze(newWord);
+        else if (typeof processToneAnalysis === "function") processToneAnalysis(newWord, mode);
+        return;
+      }
+    }
+    
+    // กรณีไม่มีสระเดิม ให้เริ่มต้นเป็น [พยัญชนะ + อ]
     const newWord = c + "อ";
     setInputText(newWord);
     if (typeof handleAnalyze === "function") handleAnalyze(newWord);
     else if (typeof processToneAnalysis === "function") processToneAnalysis(newWord, mode);
   };
 
-  // 2. กดสระด่วน -> ดึงเฉพาะพยัญชนะต้นตัวจริงตัวแรก ไม่ให้มี อ หรือสระเก่าติดมา
+  // 2. เมื่อคลิกปุ่มสระ -> แทนที่สระเดิมด้วยสระใหม่อย่างถูกต้อง 100%
   const handleQuickVowelClick = (v) => {
     let current = (inputText || "").trim();
-    // ดึงพยัญชนะไทยตัวแรกที่พบในคำ
-    const thaiVowels = ["ะ", "ั", "า", "ำ", "ิ", "ี", "ึ", "ื", "ุ", "ู", "เ", "แ", "โ", "ใ", "ไ", "็", "่", "้", "๊", "๋", "์", "ํ"];
-    let firstCons = "ก";
-    for (let char of current) {
-      if (!thaiVowels.includes(char)) {
-        firstCons = char;
-        break;
-      }
-    }
+    const cons = getRootConsonant(current);
 
     let result = "";
+    // จัดตำแหน่งสระหน้าและสระผสม
     if (v.startsWith("เ") || v.startsWith("แ") || v.startsWith("โ") || v.startsWith("ใ") || v.startsWith("ไ")) {
-      result = v[0] + firstCons + v.slice(1);
+      result = v[0] + cons + v.slice(1);
     } else {
-      result = firstCons + v;
+      result = cons + v;
     }
 
     setInputText(result);
     if (typeof handleAnalyze === "function") handleAnalyze(result);
     else if (typeof processToneAnalysis === "function") processToneAnalysis(result, mode);
   };
+
+  // 1. กดพยัญชนะด่วน -> เริ่มคำใหม่ [พยัญชนะ + อ] เสมอ
+  
+
+  // 2. กดสระด่วน -> ดึงเฉพาะพยัญชนะต้นตัวจริงตัวแรก ไม่ให้มี อ หรือสระเก่าติดมา
+  
 
   // 1. กดพยัญชนะด่วน -> เริ่มคำใหม่เป็น [พยัญชนะ + อ] เสมอ ป้องกันการพิมพ์ต่อท้าย
   
