@@ -18,7 +18,7 @@ export default function App() {
   // โหมดผันและมุมมองหน้าจอ (ตั้งค่าเริ่มต้นคำว่า "กอ")
   const [mode, setMode] = useState("full5"); // 'full5' | 'highOnly' | 'lowOnly'
   const [viewLayout, setViewLayout] = useState("split"); // 'standard' | 'split' | 'present'
-  const [inputText, setInputText] = useState("กอ");
+  const [inputText, setInputText] = useState("");
   const [inputError, setInputError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -1344,7 +1344,7 @@ export default function App() {
               และการผันวรรณยุกต์
             </div>
 
-            {analysisInfo.desc && (
+            {inputText && analysisInfo.desc && (
               <div
                 style={{
                   backgroundColor: "#f0f9ff",
@@ -1815,7 +1815,7 @@ export default function App() {
               </div>
             </div>
 
-            {analysisInfo.desc && (
+            {inputText && analysisInfo.desc && (
               <div
                 style={{
                   backgroundColor: "#f0f9ff",
@@ -2146,70 +2146,8 @@ export default function App() {
                   ✨ ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ
                 </div>
 
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "6px",
-                    marginBottom: "12px",
-                    fontSize: "13px",
-                    color: "#334155",
-                  }}
-                >
-                  <label
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="mode"
-                      checked={mode === "full5"}
-                      onChange={() => setMode("full5")}
-                    />
-                    ผันครบทั้ง 5 บรรทัด (อักษรคู่ / ห นำ)
-                  </label>
-                  <label
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="mode"
-                      checked={mode === "highOnly"}
-                      onChange={() => setMode("highOnly")}
-                    />
-                    เฉพาะเสียงสูง (เอก, โท, จัตวา)
-                  </label>
-                  <label
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="mode"
-                      checked={mode === "lowOnly"}
-                      onChange={() => setMode("lowOnly")}
-                    />
-                    เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)
-                  </label>
-                </div>
-
-                {/* กล่องรับข้อความและปุ่มผันคำอยู่ในบรรทัดเดียวกัน */}
-                <div
-                  style={{ display: "flex", gap: "8px", alignItems: "center" }}
-                >
+                {/* กล่องรับข้อความและปุ่มผันคำ */}
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                   <input
                     type="text"
                     value={inputText}
@@ -2223,9 +2161,7 @@ export default function App() {
                       flex: 1,
                       padding: "8px 12px",
                       borderRadius: "8px",
-                      border: inputError
-                        ? "2px solid #ef4444"
-                        : "1px solid #cbd5e1",
+                      border: inputError ? "2px solid #ef4444" : "1px solid #cbd5e1",
                       fontSize: "15px",
                       backgroundColor: "#f1f5f9",
                       color: "#0f172a",
@@ -2233,7 +2169,6 @@ export default function App() {
                       boxSizing: "border-box",
                     }}
                   />
-
                   <button
                     onClick={handleGenerate}
                     disabled={loading}
@@ -2252,16 +2187,31 @@ export default function App() {
                     {loading ? "..." : "ผันคำ"}
                   </button>
                 </div>
+
                 {inputError && (
-                  <div
-                    style={{
-                      color: "#ef4444",
-                      fontSize: "12px",
-                      marginTop: "6px",
-                      fontWeight: "bold",
-                    }}
-                  >
+                  <div style={{ color: "#ef4444", fontSize: "12px", marginTop: "6px", fontWeight: "bold" }}>
                     {inputError}
+                  </div>
+                )}
+
+                {/* ปุ่ม Radio แสดงเฉพาะเมื่อมีข้อความ */}
+                {inputText && inputText.trim().length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "12px", fontSize: "13px", color: "#334155" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }} onClick={() => setMode("full5")}>
+                      <span style={{ width: "16px", height: "16px", borderRadius: "50%", display: "inline-block", backgroundColor: mode === "full5" ? "#000000" : "#ffffff", border: mode === "full5" ? "2px solid #000000" : "2px solid #475569", boxSizing: "border-box" }}></span>
+                      <input type="radio" name="mode" checked={mode === "full5"} onChange={() => setMode("full5")} style={{ display: "none" }} />
+                      ผันครบทั้ง 5 บรรทัด (อักษรคู่ / ห นำ)
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }} onClick={() => setMode("highOnly")}>
+                      <span style={{ width: "16px", height: "16px", borderRadius: "50%", display: "inline-block", backgroundColor: mode === "highOnly" ? "#000000" : "#ffffff", border: mode === "highOnly" ? "2px solid #000000" : "2px solid #475569", boxSizing: "border-box" }}></span>
+                      <input type="radio" name="mode" checked={mode === "highOnly"} onChange={() => setMode("highOnly")} style={{ display: "none" }} />
+                      เฉพาะเสียงสูง (เอก, โท, จัตวา)
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }} onClick={() => setMode("lowOnly")}>
+                      <span style={{ width: "16px", height: "16px", borderRadius: "50%", display: "inline-block", backgroundColor: mode === "lowOnly" ? "#000000" : "#ffffff", border: mode === "lowOnly" ? "2px solid #000000" : "2px solid #475569", boxSizing: "border-box" }}></span>
+                      <input type="radio" name="mode" checked={mode === "lowOnly"} onChange={() => setMode("lowOnly")} style={{ display: "none" }} />
+                      เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)
+                    </label>
                   </div>
                 )}
               </div>
