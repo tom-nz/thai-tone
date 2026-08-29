@@ -18,7 +18,7 @@ export default function App() {
   // โหมดผันและมุมมองหน้าจอ (ตั้งค่าเริ่มต้นคำว่า "กอ")
   const [mode, setMode] = useState("full5"); // 'full5' | 'highOnly' | 'lowOnly'
   const [viewLayout, setViewLayout] = useState("split"); // 'standard' | 'split' | 'present'
-  const [inputText, setInputText] = useState("กอ");
+  const [inputText, setInputText] = useState("");
   const [inputError, setInputError] = useState("");
   const [loading, setLoading] = useState(false);
 
