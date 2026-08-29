@@ -1,4 +1,19 @@
 
+// Mapping คู่เสียงตามหลักไตรยางศ์
+const SOUND_MAP_HIGH_TO_LOW = {
+  "ข": "ค", "ฃ": "ค", "ฉ": "ช", "ฐ": "ท", "ถ": "ท",
+  "ผ": "พ", "ฝ": "ฟ", "ศ": "ซ", "ษ": "ซ", "ส": "ซ", "ห": "ฮ"
+};
+const SOUND_MAP_LOW_TO_HIGH = {
+  "ค": "ข", "ฅ": "ข", "ฆ": "ข", "ช": "ฉ", "ฌ": "ฉ", "ซ": "ส",
+  "ฑ": "ถ", "ฒ": "ถ", "ท": "ถ", "ธ": "ถ", "พ": "ผ", "ภ": "ผ",
+  "ฟ": "ฝ", "ฮ": "ห"
+};
+
+const getLowPairChar = (ch) => SOUND_MAP_HIGH_TO_LOW[ch] || ch;
+const getHighPairChar = (ch) => SOUND_MAP_LOW_TO_HIGH[ch] || ch;
+
+
 // --- ตารางจัดกลุ่มพยัญชนะตามฐานเสียง (Sound Groups) ---
 const SOUND_PAIRS = {
   // กลุ่มเสียง /s/
