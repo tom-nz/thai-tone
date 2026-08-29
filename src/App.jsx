@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 
-// --- ตารางจับคู่กลุ่มเสียงตามหลักไตรยางศ์ ---
-const HIGH_TO_LOW_SOUND = {
+// --- ตารางจับคู่อักษรคู่เสียงแท้ (Sound Family Mapping) ---
+// อักษรสูง -> อักษรต่ำคู่
+const HIGH_TO_LOW = {
   "ข": "ค", "ฃ": "ค",
   "ฉ": "ช",
   "ฐ": "ท", "ถ": "ท",
@@ -11,7 +12,8 @@ const HIGH_TO_LOW_SOUND = {
   "ห": "ฮ"
 };
 
-const LOW_TO_HIGH_SOUND = {
+// อักษรต่ำคู่ -> อักษรสูง
+const LOW_TO_HIGH = {
   "ค": "ข", "ฅ": "ข", "ฆ": "ข",
   "ช": "ฉ", "ฌ": "ฉ",
   "ซ": "ส",
@@ -21,9 +23,9 @@ const LOW_TO_HIGH_SOUND = {
   "ฮ": "ห"
 };
 
-const MID_CONSONANTS = ["ก", "จ", "ฎ", "ฏ", "ด", "ต", "บ", "ป", "อ"];
-const HIGH_CONSONANTS = ["ข", "ฃ", "ฉ", "ฐ", "ถ", "ผ", "ฝ", "ศ", "ษ", "ส", "ห"];
-const LOW_PAIR_CONSONANTS = Object.keys(LOW_TO_HIGH_SOUND);
+const MID_CONS = ["ก", "จ", "ฎ", "ฏ", "ด", "ต", "บ", "ป", "อ"];
+const HIGH_CONS = Object.keys(HIGH_TO_LOW);
+const LOW_PAIR_CONS = Object.keys(LOW_TO_HIGH);
 
 const CONSONANTS_44 = [
   "ก", "ข", "ฃ", "ค", "ฅ", "ฆ", "ง", "จ", "ฉ", "ช", "ซ",
@@ -48,7 +50,6 @@ export default function App() {
     };
   }, []);
 
-  // ฟังก์ชันคำนวณการผันวรรณยุกต์และกำหนดลูกบอลโน้ต
   const processToneAnalysis = (text, runMode) => {
     if (!text || !text.trim()) {
       setToneData(null);
@@ -61,9 +62,9 @@ export default function App() {
     const m = runMode || mode;
 
     let cType = "LOW_SINGLE";
-    if (MID_CONSONANTS.includes(firstChar)) cType = "MID";
-    else if (HIGH_CONSONANTS.includes(firstChar)) cType = "HIGH";
-    else if (LOW_PAIR_CONSONANTS.includes(firstChar)) cType = "LOW_PAIR";
+    if (MID_CONS.includes(firstChar)) cType = "MID";
+    else if (HIGH_CONS.includes(firstChar)) cType = "HIGH";
+    else if (LOW_PAIR_CONS.includes(firstChar)) cType = "LOW_PAIR";
 
     let desc = `ผลวิเคราะห์หลักภาษา: \"${word}\" เป็น คำเป็น (สระเสียงยาว) — `;
     let notes = { จัตวา: [], ตรี: [], โท: [], เอก: [], สามัญ: [] };
@@ -79,7 +80,7 @@ export default function App() {
       }
     } else if (cType === "HIGH") {
       desc += "อักษรสูง คำเป็น (ผันได้เฉพาะ เอก, โท, จัตวา)";
-      const lowPairChar = HIGH_TO_LOW_SOUND[firstChar] || "ซ";
+      const lowPairChar = HIGH_TO_LOW[firstChar] || "ซ";
 
       if (m === "full5") {
         notes["สามัญ"].push({ text: lowPairChar + rest, color: "#0284c7", left: 10 });
@@ -99,7 +100,7 @@ export default function App() {
       }
     } else if (cType === "LOW_PAIR") {
       desc += "อักษรต่ำคู่ คำเป็น (ผันได้เฉพาะ สามัญ, โท, ตรี)";
-      const highPairChar = LOW_TO_HIGH_SOUND[firstChar] || "ส";
+      const highPairChar = LOW_TO_HIGH[firstChar] || "ส";
 
       if (m === "full5") {
         notes["สามัญ"].push({ text: word, color: "#0284c7", left: 10 });
@@ -158,7 +159,7 @@ export default function App() {
 
           <div style={{ textAlign: "center", fontSize: "13px", color: "#0284c7", fontWeight: "bold", marginBottom: "16px" }}>รูปวรรณยุกต์</div>
 
-          {/* 5-Staff Lines (บันไดเสียงแนวเฉียง) */}
+          {/* 5-Staff Lines */}
           <div style={{ display: "flex", flexDirection: "column", gap: "36px", margin: "10px 0" }}>
             {[
               { id: "จัตวา", name: "เสียงจัตวา", mark: " ๋ ", label: "เสียงสูง", color: "#dc2626" },
@@ -224,7 +225,7 @@ export default function App() {
                 autoFocus
                 value={inputText}
                 onChange={(e) => {
-                  const cleaned = e.target.value.replace(/[0-9\s]/g, "").slice(0, 5);
+                  const cleaned = e.target.value.replace(/[0-9]/g, "").slice(0, 5);
                   setInputText(cleaned);
                 }}
                 onKeyDown={(e) => e.key === "Enter" && processToneAnalysis(inputText, mode)}
