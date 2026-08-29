@@ -23,6 +23,26 @@ const apiKey = "";
     return c;
   };
 
+
+  // แปลงคู่เสียงพยัญชนะอักษรสูง <-> ต่ำคู่
+  const getPairedSoundStrict = (char) => {
+    if (["ศ", "ษ", "ส"].includes(char)) return "ซ";
+    if (char === "ซ") return "ส";
+    if (["ข", "ฃ"].includes(char)) return "ค";
+    if (["ค", "ฅ", "ฆ"].includes(char)) return "ข";
+    if (char === "ฉ") return "ช";
+    if (["ช", "ฌ"].includes(char)) return "ฉ";
+    if (["ถ", "ฐ"].includes(char)) return "ท";
+    if (["ท", "ธ", "ฑ", "ฒ"].includes(char)) return "ถ";
+    if (char === "ผ") return "พ";
+    if (["พ", "ภ"].includes(char)) return "ผ";
+    if (char === "ฝ") return "ฟ";
+    if (char === "ฟ") return "ฝ";
+    if (char === "ห") return "ฮ";
+    if (char === "ฮ") return "ห";
+    return char;
+  };
+
 export default function App() {
   // บันทึกและดึง Custom API Key (ถ้ามี) จาก LocalStorage
   const [customApiKey, setCustomApiKey] = useState(
