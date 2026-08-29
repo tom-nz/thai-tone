@@ -3,6 +3,26 @@ import React, { useState, useEffect } from "react";
 // ตัวแปร API Key สำรองสำหรับเรียก Gemini API
 const apiKey = "";
 
+
+  // แปลงพยัญชนะต้นสำหรับลูกบอลเสียงต่ำ/สูง
+  const resolvePairConsonant = (initial) => {
+    if (['ศ', 'ษ', 'ส'].includes(initial)) return 'ซ';
+    if (initial === 'ซ') return 'ส';
+    if (['ข', 'ฃ'].includes(initial)) return 'ค';
+    if (['ค', 'ฅ', 'ฆ'].includes(initial)) return 'ข';
+    if (initial === 'ฉ') return 'ช';
+    if (['ช', 'ฌ'].includes(initial)) return 'ฉ';
+    if (['ถ', 'ฐ'].includes(initial)) return 'ท';
+    if (['ท', 'ธ', 'ฑ', 'ฒ'].includes(initial)) return 'ถ';
+    if (initial === 'ผ') return 'พ';
+    if (['พ', 'ภ'].includes(initial)) return 'ผ';
+    if (initial === 'ฝ') return 'ฟ';
+    if (initial === 'ฟ') return 'ฝ';
+    if (initial === 'ห') return 'ฮ';
+    if (initial === 'ฮ') return 'ห';
+    return initial;
+  };
+
 export default function App() {
   // บันทึกและดึง Custom API Key (ถ้ามี) จาก LocalStorage
   const [customApiKey, setCustomApiKey] = useState(
@@ -195,7 +215,7 @@ export default function App() {
     ซ: "ศ",
     ศ: "ซ",
     ษ: "ซ",
-    ส: "ซ", ศ: "ซ", ษ: "ซ",
+    ส: 'ซ', ศ: 'ซ', ษ: 'ซ',
     ท: "ถ",
     ธ: "ถ",
     ฑ: "ฐ",
