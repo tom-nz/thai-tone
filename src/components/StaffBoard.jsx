@@ -3,7 +3,7 @@ import { TONE_LEVELS } from "../utils/toneEngine";
 
 /**
  * StaffBoard Component
- * แสดงเส้นบรรทัด 5 เส้น และลูกบอลตัวโน้ตขนาดปกติคงที่
+ * กระดานแสดงผลเส้นโน้ต 5 บรรทัด และลูกบอลตัวโน้ตขนาดคงที่ (ไม่ขยายใหญ่)
  */
 export default function StaffBoard({ inputText, analysisInfo, placedNotes, onBackgroundClick }) {
   return (
@@ -26,7 +26,7 @@ export default function StaffBoard({ inputText, analysisInfo, placedNotes, onBac
         <span style={{ color: "#ea580c", fontSize: "14px" }}>และการผันวรรณยุกต์</span>
       </div>
 
-      {/* กล่องผลวิเคราะห์หลักภาษา */}
+      {/* กล่องผลวิเคราะห์หลักภาษา (แสดงเฉพาะเมื่อมีข้อความ) */}
       {inputText && analysisInfo && (
         <div style={{
           backgroundColor: "#e0f2fe",
@@ -49,7 +49,7 @@ export default function StaffBoard({ inputText, analysisInfo, placedNotes, onBac
               {t.name} <span style={{ color: "#94a3b8" }}>[{t.mark}]</span>
             </div>
             <div style={{ flex: 1, height: "2px", backgroundColor: "#cbd5e1", position: "relative" }}>
-              {/* ลูกบอลตัวโน้ต: ขนาดคงที่ 34px ฟอนต์ 14px ไม่ขยายใหญ่ */}
+              {/* ลูกบอลตัวโน้ตขนาดปกติ 34px คงที่ */}
               {placedNotes && placedNotes[t.id] && (
                 <div
                   onClick={(e) => e.stopPropagation()}

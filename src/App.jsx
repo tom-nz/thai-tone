@@ -4,6 +4,9 @@ import StaffBoard from "./components/StaffBoard";
 import ControlPanel from "./components/ControlPanel";
 import { analyzeWord } from "./utils/toneEngine";
 
+/**
+ * Main Application Component
+ */
 export default function App() {
   const [viewMode, setViewMode] = useState("split");
   const [inputText, setInputText] = useState("");
@@ -11,9 +14,11 @@ export default function App() {
   const [placedNotes, setPlacedNotes] = useState(null);
   const [analysisInfo, setAnalysisInfo] = useState(null);
 
+  // คำนวณและวางลูกบอลตัวโน้ต
   const handleGenerate = (text) => {
     const word = text !== undefined ? text : inputText;
     if (!word || !word.trim()) return;
+
     setAnalysisInfo(analyzeWord(word));
     setPlacedNotes({
       จัตวา: word === "กอ" ? "ก๋อ" : word,
@@ -24,6 +29,7 @@ export default function App() {
     });
   };
 
+  // เมื่อเลือกพยัญชนะด่วน
   const handleQuickSelect = (word) => {
     setInputText(word);
     setMode("full5");
@@ -31,7 +37,7 @@ export default function App() {
   };
 
   const handleBackgroundClick = () => {
-    // ป้องกันการค้าง active หรือการขยายตัวเมื่อคลิกพื้นที่นอกเส้น
+    // รีเซ็ตสถานะเมื่อคลิกพื้นที่ว่าง
   };
 
   return (
