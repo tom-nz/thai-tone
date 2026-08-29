@@ -2156,7 +2156,7 @@ export default function App() {
                       validateInput(e.target.value);
                     }}
                     onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
-                    placeholder="พิมพ์ 1 คำ เช่น กอ, เมา, กวาง"
+                    autoFocus placeholder="พิมพ์ 1 คำ เช่น กอ, เมา, กวาง"
                     style={{
                       flex: 1,
                       padding: "8px 12px",
