@@ -4,67 +4,6 @@ import React, { useState, useEffect } from "react";
 const apiKey = "";
 
 export default function App() {
-
-  // 1. กดพยัญชนะ -> เริ่มคำใหม่ [พยัญชนะ + อ]
-  const handleQuickConsonantClick = (c) => {
-    const newWord = c + "อ";
-    setInputText(newWord);
-    if (typeof handleAnalyze === "function") handleAnalyze(newWord);
-    else if (typeof processToneAnalysis === "function") processToneAnalysis(newWord, mode);
-  };
-
-  // 2. กดสระใหม่ -> ตัดสระเดิมและตัด อ เดิมทิ้ง เหลือแต่พยัญชนะ แล้วใส่สระใหม่
-  const handleQuickVowelClick = (v) => {
-    let current = (inputText || "").trim();
-    const thaiVowels = ["ะ", "ั", "า", "ำ", "ิ", "ี", "ึ", "ื", "ุ", "ู", "เ", "แ", "โ", "ใ", "ไ", "็", "่", "้", "๊", "๋", "์", "ํ"];
-    
-    // ดึงเฉพาะพยัญชนะตัวแรก (ถ้าคำเดิมเป็น ออ ตัวพยัญชนะคือ อ)
-    let cons = "ก";
-    if (current === "ออ") {
-      cons = "อ";
-    } else {
-      // ตัดสระทั้งหมดออก
-      let cleaned = current.split("").filter(ch => !thaiVowels.includes(ch));
-      // ถ้าตัวสุดท้ายเป็น อ ให้ตัดออก (ยกเว้นเหลือ อ ตัวเดียว)
-      if (cleaned.length > 1 && cleaned[cleaned.length - 1] === "อ") {
-        cleaned.pop();
-      }
-      cons = cleaned[0] || "ก";
-    }
-
-    // ประกอบคำกับสระใหม่
-    let result = "";
-    if (v.startsWith("เ") || v.startsWith("แ") || v.startsWith("โ") || v.startsWith("ใ") || v.startsWith("ไ")) {
-      result = v[0] + cons + v.slice(1);
-    } else {
-      result = cons + v;
-    }
-
-    setInputText(result);
-    if (typeof handleAnalyze === "function") handleAnalyze(result);
-    else if (typeof processToneAnalysis === "function") processToneAnalysis(result, mode);
-  };
-
-  // ฟังก์ชันแยกหา "พยัญชนะต้นตัวจริง" จากคำเดิม
-  
-
-  // 1. เมื่อคลิกปุ่มพยัญชนะ
-  
-
-  // 2. เมื่อคลิกปุ่มสระ -> แทนที่สระเดิมด้วยสระใหม่อย่างถูกต้อง 100%
-  
-
-  // 1. กดพยัญชนะด่วน -> เริ่มคำใหม่ [พยัญชนะ + อ] เสมอ
-  
-
-  // 2. กดสระด่วน -> ดึงเฉพาะพยัญชนะต้นตัวจริงตัวแรก ไม่ให้มี อ หรือสระเก่าติดมา
-  
-
-  // 1. กดพยัญชนะด่วน -> เริ่มคำใหม่เป็น [พยัญชนะ + อ] เสมอ ป้องกันการพิมพ์ต่อท้าย
-  
-
-  // 2. กดสระด่วน -> ดึงเฉพาะพยัญชนะต้นเดิมมาผสมกับสระใหม่ (ตัดสระเดิมและ อ ออก ไม่ให้สระซ้อน)
-  
   // บันทึกและดึง Custom API Key (ถ้ามี) จาก LocalStorage
   const [customApiKey, setCustomApiKey] = useState(
     () => localStorage.getItem("gemini_api_key") || "",
@@ -1185,9 +1124,24 @@ export default function App() {
     setTimeout(() => setApiSaveStatus(""), 3000);
   };
 
-  
+  const handleQuickConsonantClick = (c) => {
+    const { frontVowel, aboveBelowVowel, rest } = parseThaiWord(inputText);
+    const newWord = buildWord(
+      frontVowel || "",
+      c,
+      aboveBelowVowel || "",
+      "",
+      rest || "อ",
+    );
+    setInputText(newWord);
+  };
 
-  
+  const handleQuickVowelClick = (vowelObj) => {
+    const { initial } = parseThaiWord(inputText);
+    const cons = initial || "ก";
+    const newWord = `${vowelObj.front}${cons}${vowelObj.rear}`;
+    setInputText(newWord);
+  };
 
   const handleGenerate = async () => {
     const word = inputText.trim();
