@@ -4,6 +4,74 @@ import React, { useState, useEffect } from "react";
 const apiKey = "";
 
 export default function App() {
+
+  // 1. ฟังก์ชันดึงพยัญชนะต้นตัวจริงจากคำปัจจุบัน
+  const extractRootConsonant = (word) => {
+    if (!word) return "ก";
+    const frontVowels = ["เ", "แ", "โ", "ใ", "ไ"];
+    const allVowelsAndMarks = ["ะ", "ั", "า", "ำ", "ิ", "ี", "ึ", "ื", "ุ", "ู", "เ", "แ", "โ", "ใ", "ไ", "็", "่", "้", "๊", "๋", "์", "ํ"];
+    
+    // ถ้าขึ้นต้นด้วยสระหน้า (เช่น เก, โก, เออ, เอือ) -> พยัญชนะต้นคือตัวที่ 2
+    if (word.length >= 2 && frontVowels.includes(word[0])) {
+      return word[1];
+    }
+    // ถ้าลงท้ายด้วย อ (เช่น กอ, ขอ, ออ) -> พยัญชนะต้นคือตัวแรก
+    if (word.length >= 2 && word.endsWith("อ")) {
+      return word[0];
+    }
+    // กรณีทั่วไป -> หาตัวอักษรแรกที่ไม่ใช่สระบน/ล่าง
+    for (let c of word) {
+      if (!allVowelsAndMarks.includes(c)) return c;
+    }
+    return word[0] || "ก";
+  };
+
+  // 2. เมื่อคลิกเลือกพยัญชนะใหม่: ลบพยัญชนะเก่าออกทั้งหมด แล้วใส่พยัญชนะใหม่แทนที่ในสระเดิม
+  const handleQuickConsonantClick = (newCons) => {
+    let current = (inputText || "").trim();
+    const frontVowels = ["เ", "แ", "โ", "ใ", "ไ"];
+    const oldCons = extractRootConsonant(current);
+
+    let nextWord = "";
+    if (!current || current === "ออ" || current === oldCons + "อ") {
+      nextWord = newCons + "อ";
+    } else if (frontVowels.includes(current[0])) {
+      // สระหน้า: เช่น "โก" -> เปลี่ยนเป็น "โ" + newCons + ส่วนท้าย
+      nextWord = current[0] + newCons + current.slice(2);
+    } else {
+      // สระหลัง/บน/ล่าง: เช่น "กา" -> เปลี่ยนเป็น newCons + "า"
+      const oldIdx = current.indexOf(oldCons);
+      if (oldIdx !== -1) {
+        nextWord = current.slice(0, oldIdx) + newCons + current.slice(oldIdx + oldCons.length);
+      } else {
+        nextWord = newCons + "อ";
+      }
+    }
+
+    setInputText(nextWord);
+    if (typeof handleAnalyze === "function") handleAnalyze(nextWord);
+    else if (typeof processToneAnalysis === "function") processToneAnalysis(nextWord, mode);
+  };
+
+  // 3. เมื่อคลิกเลือกสระใหม่: ลบสระเก่าออกทั้งหมด เหลือแต่พยัญชนะต้น แล้วใส่สระใหม่
+  const handleQuickVowelClick = (v) => {
+    let current = (inputText || "").trim();
+    const cons = extractRootConsonant(current);
+
+    let nextWord = "";
+    // ถ้าสระที่ส่งมามีรูปพยัญชนะตัวอย่าง "อ" อยู่ (เช่น "เออ", "เอือ", "อัว", "เอา") ให้แทนที่ "อ" ตัวแรกด้วยพยัญชนะจริง
+    if (v.includes("อ")) {
+      nextWord = v.replace("อ", cons);
+    } else if (v.startsWith("เ") || v.startsWith("แ") || v.startsWith("โ") || v.startsWith("ใ") || v.startsWith("ไ")) {
+      nextWord = v[0] + cons + v.slice(1);
+    } else {
+      nextWord = cons + v;
+    }
+
+    setInputText(nextWord);
+    if (typeof handleAnalyze === "function") handleAnalyze(nextWord);
+    else if (typeof processToneAnalysis === "function") processToneAnalysis(nextWord, mode);
+  };
   // บันทึกและดึง Custom API Key (ถ้ามี) จาก LocalStorage
   const [customApiKey, setCustomApiKey] = useState(
     () => localStorage.getItem("gemini_api_key") || "",
@@ -388,7 +456,17 @@ export default function App() {
     };
   };
 
-  const calculateTones = (word, currentMode, midC, highC, lowC) => {
+  
+  const HIGH_TO_LOW_PAIRS = {
+    "ข": "ค", "ฃ": "ค", "ฉ": "ช", "ฐ": "ท", "ถ": "ท", "ผ": "พ", "ฝ": "ฟ",
+    "ศ": "ซ", "ษ": "ซ", "ส": "ซ", "ห": "ฮ"
+  };
+  const LOW_TO_HIGH_PAIRS = {
+    "ค": "ข", "ฅ": "ข", "ฆ": "ข", "ช": "ฉ", "ฌ": "ฉ", "ซ": "ส",
+    "ฑ": "ถ", "ฒ": "ถ", "ท": "ถ", "ธ": "ถ", "พ": "ผ", "ภ": "ผ", "ฟ": "ฝ", "ฮ": "ห"
+  };
+
+const calculateTones = (word, currentMode, midC, highC, lowC) => {
     if (!word || word.trim() === "") {
       return [
         {
@@ -1124,24 +1202,9 @@ export default function App() {
     setTimeout(() => setApiSaveStatus(""), 3000);
   };
 
-  const handleQuickConsonantClick = (c) => {
-    const { frontVowel, aboveBelowVowel, rest } = parseThaiWord(inputText);
-    const newWord = buildWord(
-      frontVowel || "",
-      c,
-      aboveBelowVowel || "",
-      "",
-      rest || "อ",
-    );
-    setInputText(newWord);
-  };
+  
 
-  const handleQuickVowelClick = (vowelObj) => {
-    const { initial } = parseThaiWord(inputText);
-    const cons = initial || "ก";
-    const newWord = `${vowelObj.front}${cons}${vowelObj.rear}`;
-    setInputText(newWord);
-  };
+  
 
   const handleGenerate = async () => {
     const word = inputText.trim();
