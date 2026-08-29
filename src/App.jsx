@@ -4,6 +4,36 @@ import React, { useState, useEffect } from "react";
 const apiKey = "";
 
 export default function App() {
+
+  // เมื่อคลิกสระใหม่: ลบสระเก่าออกทั้งหมด เหลือแต่พยัญชนะต้น แล้วใส่สระใหม่
+  const handleQuickVowelClick = (v) => {
+    let current = (inputText || "").trim();
+    const thaiVowels = ["ะ", "ั", "า", "ำ", "ิ", "ี", "ึ", "ื", "ุ", "ู", "เ", "แ", "โ", "ใ", "ไ", "็", "่", "้", "๊", "๋", "์", "ํ"];
+    
+    // 1. ดึงเฉพาะพยัญชนะต้นตัวจริง
+    let cons = "ก";
+    if (current === "ออ") {
+      cons = "อ";
+    } else {
+      // กรองสระออก
+      let letters = current.split("").filter(ch => !thaiVowels.includes(ch));
+      // ถ้าตัวท้ายเป็น อ ที่เป็นสระออเดิม ให้ตัดออก
+      if (letters.length > 1 && letters[letters.length - 1] === "อ") {
+        letters.pop();
+      }
+      cons = letters[0] || (current[0] !== "อ" ? current[0] : "ก") || "ก";
+    }
+
+    // 2. ผสมกับสระใหม่
+    let result = "";
+    if (v.startsWith("เ") || v.startsWith("แ") || v.startsWith("โ") || v.startsWith("ใ") || v.startsWith("ไ")) {
+      result = v[0] + cons + v.slice(1);
+    } else {
+      result = cons + v;
+    }
+
+    setInputText(result);
+  };
   // บันทึกและดึง Custom API Key (ถ้ามี) จาก LocalStorage
   const [customApiKey, setCustomApiKey] = useState(
     () => localStorage.getItem("gemini_api_key") || "",
@@ -1136,12 +1166,7 @@ export default function App() {
     setInputText(newWord);
   };
 
-  const handleQuickVowelClick = (vowelObj) => {
-    const { initial } = parseThaiWord(inputText);
-    const cons = initial || "ก";
-    const newWord = `${vowelObj.front}${cons}${vowelObj.rear}`;
-    setInputText(newWord);
-  };
+  
 
   const handleGenerate = async () => {
     const word = inputText.trim();
