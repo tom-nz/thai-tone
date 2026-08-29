@@ -2,7 +2,7 @@
 // Mapping คู่เสียงตามหลักไตรยางศ์
 const SOUND_MAP_HIGH_TO_LOW = {
   "ข": "ค", "ฃ": "ค", "ฉ": "ช", "ฐ": "ท", "ถ": "ท",
-  "ผ": "พ", "ฝ": "ฟ", "ศ": "ซ", "ษ": "ซ", "ส": "ซ", "ห": "ฮ"
+  "ผ": "พ", "ฝ": "ฟ", "ศ": "ซ", "ษ": "ซ", "ส": "ซ", "ศ": "ซ", "ษ": "ซ", "ห": "ฮ"
 };
 const SOUND_MAP_LOW_TO_HIGH = {
   "ค": "ข", "ฅ": "ข", "ฆ": "ข", "ช": "ฉ", "ฌ": "ฉ", "ซ": "ส",
@@ -17,7 +17,7 @@ const getHighPairChar = (ch) => SOUND_MAP_LOW_TO_HIGH[ch] || ch;
 // --- ตารางจัดกลุ่มพยัญชนะตามฐานเสียง (Sound Groups) ---
 const SOUND_PAIRS = {
   // กลุ่มเสียง /s/
-  "ศ": "ซ", "ษ": "ซ", "ส": "ซ", "ซ": "ส",
+  "ศ": "ซ", "ษ": "ซ", "ส": "ซ", "ศ": "ซ", "ษ": "ซ", "ซ": "ส",
   // กลุ่มเสียง /kh/
   "ข": "ค", "ฃ": "ค", "ค": "ข", "ฅ": "ข", "ฆ": "ข",
   // กลุ่มเสียง /ch/
@@ -260,7 +260,7 @@ export default function App() {
     ซ: "ศ",
     ศ: "ซ",
     ษ: "ซ",
-    ส: 'ซ', ศ: 'ซ', ษ: 'ซ',
+    ส: 'ซ', ศ: 'ซ', ษ: 'ซ', ศ: 'ซ', ษ: 'ซ',
     ท: "ถ",
     ธ: "ถ",
     ฑ: "ฐ",
@@ -2217,7 +2217,7 @@ export default function App() {
                     type="text"
                     value={inputText}
                     onChange={(e) => {
-                      setInputText(e.target.value);
+                      setInputText(e.target.value.trim().slice(0, 5));
                       validateInput(e.target.value);
                     }}
                     onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
