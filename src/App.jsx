@@ -1125,15 +1125,12 @@ export default function App() {
   };
 
   const handleQuickConsonantClick = (c) => {
-    const { frontVowel, aboveBelowVowel, rest } = parseThaiWord(inputText);
-    const newWord = buildWord(
-      frontVowel || "",
-      c,
-      aboveBelowVowel || "",
-      "",
-      rest || "อ",
-    );
-    setInputText(newWord);
+    const word = c + "อ";
+    setInputText(word);
+    setMode("full5");
+    if (typeof handleGenerate === "function") {
+      setTimeout(() => handleGenerate(word), 0);
+    }
   };
 
   const handleQuickVowelClick = (vowelObj) => {
@@ -1253,25 +1250,962 @@ export default function App() {
     const labelSize = `clamp(${Math.round(14 * circleRatio)}px, ${(0.08 * labelFontSize).toFixed(2)}vw, ${Math.round(26 * circleRatio)}px)`;
 
     return (
-      <div style={{ fontSize: "13px", fontWeight: "bold", color: "#1f2937", marginBottom: "8px" }}>✨ ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ</div>
-<div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "12px", fontSize: "13px", color: "#334155" }}>
-  <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }} onClick={() => setMode("full5")}>
-    <span style={{ width: "16px", height: "16px", borderRadius: "50%", display: "inline-block", backgroundColor: mode === "full5" ? "#000000" : "#ffffff", border: "2px solid #000000", boxSizing: "border-box" }}></span>
-    <input type="radio" name="mode" checked={mode === "full5"} onChange={() => setMode("full5")} style={{ display: "none" }} />
-    ผันครบทั้ง 5 บรรทัด (อักษรคู่ / ห นำ)
-  </label>
-  <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }} onClick={() => setMode("highOnly")}>
-    <span style={{ width: "16px", height: "16px", borderRadius: "50%", display: "inline-block", backgroundColor: mode === "highOnly" ? "#000000" : "#ffffff", border: "2px solid #000000", boxSizing: "border-box" }}></span>
-    <input type="radio" name="mode" checked={mode === "highOnly"} onChange={() => setMode("highOnly")} style={{ display: "none" }} />
-    เฉพาะเสียงสูง (เอก, โท, จัตวา)
-  </label>
-  <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }} onClick={() => setMode("lowOnly")}>
-    <span style={{ width: "16px", height: "16px", borderRadius: "50%", display: "inline-block", backgroundColor: mode === "lowOnly" ? "#000000" : "#ffffff", border: "2px solid #000000", boxSizing: "border-box" }}></span>
-    <input type="radio" name="mode" checked={mode === "lowOnly"} onChange={() => setMode("lowOnly")} style={{ display: "none" }} />
-    เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)
-  </label>
-</div>
-<div style={{ display: "flex", gap: "8px", alignItems: "center" }}
+      <div
+        onDoubleClick={toggleFullscreen}
+        onClick={() => {
+          if (showFsNotice) {
+            toggleFullscreen();
+            setShowFsNotice(false);
+          }
+        }}
+        title="ดับเบิ้ลคลิกเพื่อสลับโหมดเต็มจอ"
+        style={{
+          height: "100vh",
+          width: "100vw",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxSizing: "border-box",
+          padding: "0",
+          margin: "0",
+          fontFamily: "'Sarabun', sans-serif",
+          overflow: "hidden",
+          position: "fixed",
+          top: 0,
+          left: 0,
+          cursor: "pointer",
+          ...getContainerBgStyle(),
+        }}
+      >
+        {showFsNotice && (
+          <div
+            style={{
+              position: "absolute",
+              top: "20px",
+              left: "50%",
+              transform: "translateX(-50%)",
+              backgroundColor: "rgba(15, 23, 42, 0.92)",
+              color: "#ffffff",
+              padding: "10px 22px",
+              borderRadius: "30px",
+              fontSize: "15px",
+              fontWeight: "bold",
+              zIndex: 9999,
+              boxShadow: "0 10px 25px rgba(0,0,0,0.3)",
+              pointerEvents: "none",
+              border: "1px solid #38bdf8",
+              backdropFilter: "blur(8px)",
+            }}
+          >
+            ⛶ คลิก 1 ครั้งตรงไหนก็ได้บนจอนี้เพื่อสลับเต็มจอ
+          </div>
+        )}
+
+        <div
+          style={{
+            width: "clamp(320px, 70vw, 1200px)",
+            height: "clamp(320px, 70vh, 850px)",
+            maxHeight: "88vh",
+            maxWidth: "92vw",
+            backgroundColor: "rgba(255, 255, 255, 0.96)",
+            borderRadius: "clamp(16px, 2vw, 28px)",
+            padding: "clamp(16px, 2.2vw, 32px) clamp(20px, 3vw, 48px)",
+            boxShadow: "0 15px 40px rgba(0,0,0,0.12)",
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            boxSizing: "border-box",
+            border: "1px solid #cbd5e1",
+            backdropFilter: "blur(8px)",
+          }}
+        >
+          <div style={{ textAlign: "center" }}>
+            <h2
+              style={{
+                margin: "0 0 2px 0",
+                color: "#ea580c",
+                fontSize: "clamp(22px, 2.4vw, 34px)",
+                fontWeight: "bold",
+              }}
+            >
+              ไตรยางศ์ หรือ อักษร 3 หมู่
+            </h2>
+            <div
+              style={{
+                color: "#ea580c",
+                fontSize: "clamp(15px, 1.5vw, 22px)",
+                fontWeight: "600",
+                marginBottom: "10px",
+              }}
+            >
+              และการผันวรรณยุกต์
+            </div>
+
+            {inputText && analysisInfo.desc && (
+              <div
+                style={{
+                  backgroundColor: "#f0f9ff",
+                  border: "1px solid #bae6fd",
+                  padding: "clamp(6px, 1vh, 10px) clamp(12px, 1.5vw, 20px)",
+                  borderRadius: "12px",
+                  margin: "0 auto 10px auto",
+                  maxWidth: "850px",
+                  textAlign: "center",
+                  fontSize: "clamp(12px, 1.1vw, 16px)",
+                  color: "#0369a1",
+                  fontWeight: "bold",
+                }}
+              >
+                📌 ผลวิเคราะห์หลักภาษา:{" "}
+                <span style={{ color: "#0284c7" }}>"{inputText}"</span> เป็น{" "}
+                <span
+                  style={{
+                    backgroundColor: "#e0f2fe",
+                    padding: "2px 8px",
+                    borderRadius: "4px",
+                  }}
+                >
+                  {analysisInfo.type} ({analysisInfo.vowelLen})
+                </span>{" "}
+                — {analysisInfo.desc}
+              </div>
+            )}
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "clamp(150px, 20vw, 250px) 1fr clamp(80px, 10vw, 140px)",
+                color: "#0284c7",
+                fontWeight: "bold",
+                fontSize: "clamp(12px, 1.1vw, 16px)",
+                margin: "0 0 -2px 0",
+              }}
+            >
+              <div
+                style={{
+                  textAlign: "right",
+                  paddingRight: "20px",
+                  color: "#0284c7",
+                  fontWeight: "bold",
+                }}
+              >
+                รูปวรรณยุกต์
+              </div>
+              <div></div>
+              <div></div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-around",
+              flex: 1,
+              padding: "4px 0",
+            }}
+          >
+            {linesData.map((item, idx) => {
+              let rowHeaderColor = "#94a3b8";
+              if (item.show) {
+                rowHeaderColor = item.isMulti
+                  ? item.multi[0]?.color
+                  : item.color;
+              }
+              const fixedRight = fixedRightLabels[item.id];
+              const isHovered = hoveredRowId === item.id;
+
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "clamp(150px, 20vw, 250px) 1fr clamp(80px, 10vw, 140px)",
+                    alignItems: "center",
+                    cursor: "pointer",
+                  }}
+                  onClick={() =>
+                    setHoveredRowId((prev) =>
+                      prev === item.id ? null : item.id,
+                    )
+                  }
+                >
+                  <div
+                    style={{
+                      textAlign: "right",
+                      paddingRight: "20px",
+                      fontSize: labelSize,
+                      color: rowHeaderColor,
+                      fontWeight: "bold",
+                      transition: "all 0.15s ease",
+                      transform: isHovered ? "scale(1.08)" : "scale(1)",
+                    }}
+                  >
+                    {item.tone}{" "}
+                    <span style={{ fontSize: "0.9em", marginLeft: "4px" }}>
+                      [ {item.mark} ]
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      position: "relative",
+                      display: "flex",
+                      alignItems: "center",
+                      height: "clamp(28px, 4vh, 60px)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: "100%",
+                        height: "3px",
+                        backgroundColor: "#94a3b8",
+                      }}
+                    ></div>
+
+                    {!item.isMulti && item.show && item.word && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: item.leftPos,
+                          transform: `translateX(-50%) ${isHovered ? "scale(1.22)" : "scale(1)"}`,
+                          backgroundColor: item.color,
+                          color: circleTextColor,
+                          minWidth: circleSize,
+                          height: circleSize,
+                          padding: "0 10px",
+                          borderRadius: "50%",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontWeight: "bold",
+                          fontSize: circleFontSize,
+                          boxShadow: isHovered
+                            ? "0 8px 20px rgba(0,0,0,0.35)"
+                            : "0 5px 14px rgba(0,0,0,0.22)",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                          filter: isHovered
+                            ? "brightness(1.15)"
+                            : "brightness(1)",
+                        }}
+                      >
+                        {/* หางตัวโน้ตดนตรี (เขบ็ตชั้นเดียว) */}
+                        <svg
+                          style={{
+                            position: "absolute",
+                            top: `-${Math.round(20 * circleRatio)}px`,
+                            left: `calc(100% - ${Math.round(3 * circleRatio)}px)`,
+                            width: `${Math.round(20 * circleRatio)}px`,
+                            height: `${Math.round(44 * circleRatio)}px`,
+                            pointerEvents: "none",
+                            overflow: "visible",
+                            color: item.color,
+                          }}
+                          viewBox="0 0 20 44"
+                        >
+                          <path
+                            d="M 2 44 L 2 2"
+                            stroke="currentColor"
+                            strokeWidth="3.5"
+                            strokeLinecap="round"
+                          />
+                          <path
+                            d="M 2 2 C 9 8, 17 15, 13 24 C 9 17, 5 11, 2 7 Z"
+                            fill="currentColor"
+                          />
+                        </svg>
+                        {item.word}
+                      </div>
+                    )}
+
+                    {item.isMulti && item.show && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: item.leftPos,
+                          transform: "translateX(-50%)",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        {item.multi.map((circle, i) => (
+                          <React.Fragment key={i}>
+                            {i > 0 && (
+                              <span
+                                style={{
+                                  color: "#94a3b8",
+                                  fontWeight: "bold",
+                                  fontSize: circleFontSize,
+                                }}
+                              >
+                                /
+                              </span>
+                            )}
+                            <div
+                              style={{
+                                backgroundColor: circle.color,
+                                color: circleTextColor,
+                                minWidth: circleSize,
+                                height: circleSize,
+                                padding: "0 10px",
+                                borderRadius: "50%",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontWeight: "bold",
+                                fontSize: circleFontSize,
+                                boxShadow: isHovered
+                                  ? "0 8px 20px rgba(0,0,0,0.35)"
+                                  : "0 5px 14px rgba(0,0,0,0.22)",
+                                cursor: "pointer",
+                                transition: "all 0.15s ease",
+                                transform: isHovered
+                                  ? "scale(1.22)"
+                                  : "scale(1)",
+                                filter: isHovered
+                                  ? "brightness(1.15)"
+                                  : "brightness(1)",
+                              }}
+                            >
+                              <svg
+                                style={{
+                                  position: "absolute",
+                                  top: `-${Math.round(20 * circleRatio)}px`,
+                                  left: `calc(100% - ${Math.round(3 * circleRatio)}px)`,
+                                  width: `${Math.round(20 * circleRatio)}px`,
+                                  height: `${Math.round(44 * circleRatio)}px`,
+                                  pointerEvents: "none",
+                                  overflow: "visible",
+                                  color: circle.color,
+                                }}
+                                viewBox="0 0 20 44"
+                              >
+                                <path
+                                  d="M 2 44 L 2 2"
+                                  stroke="currentColor"
+                                  strokeWidth="3.5"
+                                  strokeLinecap="round"
+                                />
+                                <path
+                                  d="M 2 2 C 9 8, 17 15, 13 24 C 9 17, 5 11, 2 7 Z"
+                                  fill="currentColor"
+                                />
+                              </svg>
+                              {circle.text}
+                            </div>
+                          </React.Fragment>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div
+                    style={{
+                      textAlign: "center",
+                      color: fixedRight ? fixedRight.color : "#94a3b8",
+                      fontWeight: "bold",
+                      fontSize: "clamp(13px, 1.3vw, 21px)",
+                    }}
+                  >
+                    {fixedRight ? fixedRight.text : ""}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        height: "100vh",
+        boxSizing: "border-box",
+        overflow: "hidden",
+        padding: "24px 15px",
+        fontFamily: "'Sarabun', sans-serif",
+        transition: "all 0.3s ease",
+        ...getContainerBgStyle(),
+      }}
+    >
+      <div
+        style={{
+          maxWidth: viewLayout === "split" ? "1280px" : "920px",
+          margin: "0 auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: "20px",
+        }}
+      >
+        {/* แถบมุมมองและปุ่มเปิด/สลับเต็มจอมอนิเตอร์ที่ 2 */}
+        <div
+          style={{
+            backgroundColor: "rgba(255, 255, 255, 0.95)",
+            borderRadius: "14px",
+            padding: "14px 20px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
+            flexWrap: "wrap",
+            gap: "12px",
+            border: "1px solid #e2e8f0",
+            backdropFilter: "blur(6px)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span
+              style={{ fontWeight: "bold", fontSize: "15px", color: "#1e293b" }}
+            >
+              🖥️ มุมมอง:
+            </span>
+            <button
+              onClick={() => setViewLayout("standard")}
+              style={{
+                padding: "7px 12px",
+                borderRadius: "8px",
+                border: "none",
+                backgroundColor:
+                  viewLayout === "standard" ? "#0284c7" : "#f1f5f9",
+                color: viewLayout === "standard" ? "#fff" : "#475569",
+                fontWeight: "bold",
+                fontSize: "13px",
+                cursor: "pointer",
+              }}
+            >
+              ชิดเดียว
+            </button>
+            <button
+              onClick={() => setViewLayout("split")}
+              style={{
+                padding: "7px 12px",
+                borderRadius: "8px",
+                border: "none",
+                backgroundColor: viewLayout === "split" ? "#0284c7" : "#f1f5f9",
+                color: viewLayout === "split" ? "#fff" : "#475569",
+                fontWeight: "bold",
+                fontSize: "13px",
+                cursor: "pointer",
+              }}
+            >
+              แบ่ง 2 จอ
+            </button>
+            <button
+              onClick={() => setViewLayout("present")}
+              style={{
+                padding: "7px 12px",
+                borderRadius: "8px",
+                border: "none",
+                backgroundColor:
+                  viewLayout === "present" ? "#0284c7" : "#f1f5f9",
+                color: viewLayout === "present" ? "#fff" : "#475569",
+                fontWeight: "bold",
+                fontSize: "13px",
+                cursor: "pointer",
+              }}
+            >
+              โหมดพรีวิว
+            </button>
+          </div>
+
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <button
+              onClick={handleToggleDisplayFullscreen}
+              style={{
+                backgroundColor: "#0284c7",
+                color: "#ffffff",
+                border: "none",
+                padding: "9px 16px",
+                borderRadius: "8px",
+                fontWeight: "bold",
+                fontSize: "14px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                boxShadow: "0 4px 10px rgba(2,132,199,0.25)",
+                transition: "all 0.2s ease",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.backgroundColor = "#0369a1")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.backgroundColor = "#0284c7")
+              }
+            >
+              ⛶ สลับเต็มจอ จอที่ 2
+            </button>
+
+            <button
+              onClick={handleOpenDualMonitor}
+              style={{
+                backgroundColor: "#16a34a",
+                color: "#ffffff",
+                border: "none",
+                padding: "9px 18px",
+                borderRadius: "8px",
+                fontWeight: "bold",
+                fontSize: "14px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                boxShadow: "0 4px 10px rgba(22,163,74,0.3)",
+                transition: "all 0.2s ease",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.backgroundColor = "#15803d")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.backgroundColor = "#16a34a")
+              }
+            >
+              🚀 เปิดกระดานแยกขึ้นมอนิเตอร์ที่ 2
+            </button>
+          </div>
+        </div>
+
+        {/* โครงสร้าง layout: การแสดงผลขยับมาอยู่ซ้ายมือ (1fr) และ แผงควบคุมอยู่ขวามือ (410px) */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: viewLayout === "split" ? "1fr 410px" : "1fr",
+            gap: "20px",
+            alignItems: "start",
+          }}
+        >
+          {/* 1. กระดานบรรทัด 5 เส้น แสดงผล (ซ้ายมือ) */}
+          <div
+            style={{
+              backgroundColor: "rgba(255, 255, 255, 0.95)",
+              borderRadius: "16px",
+              padding: viewLayout === "present" ? "40px 50px" : "35px 25px",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+              backdropFilter: "blur(6px)",
+            }}
+          >
+            <div style={{ textAlign: "center", margin: "0 0 20px 0" }}>
+              <h2
+                style={{
+                  margin: "0 0 2px 0",
+                  color: "#ea580c",
+                  fontSize: "28px",
+                  fontWeight: "bold",
+                }}
+              >
+                ไตรยางศ์ หรือ อักษร 3 หมู่
+              </h2>
+              <div
+                style={{
+                  color: "#ea580c",
+                  fontSize: "18px",
+                  fontWeight: "600",
+                }}
+              >
+                และการผันวรรณยุกต์
+              </div>
+            </div>
+
+            {inputText && analysisInfo.desc && (
+              <div
+                style={{
+                  backgroundColor: "#f0f9ff",
+                  border: "1px solid #bae6fd",
+                  padding: "10px 16px",
+                  borderRadius: "10px",
+                  marginBottom: "25px",
+                  textAlign: "center",
+                  fontSize: "14px",
+                  color: "#0369a1",
+                  fontWeight: "bold",
+                }}
+              >
+                📌 ผลวิเคราะห์หลักภาษา:{" "}
+                <span style={{ color: "#0284c7" }}>"{inputText}"</span> เป็น{" "}
+                <span
+                  style={{
+                    backgroundColor: "#e0f2fe",
+                    padding: "2px 8px",
+                    borderRadius: "4px",
+                  }}
+                >
+                  {analysisInfo.type} ({analysisInfo.vowelLen})
+                </span>{" "}
+                — {analysisInfo.desc}
+              </div>
+            )}
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "220px 1fr 110px",
+                color: "#0284c7",
+                fontWeight: "bold",
+                fontSize: "14px",
+                marginBottom: "4px",
+              }}
+            >
+              <div
+                style={{
+                  textAlign: "right",
+                  paddingRight: "20px",
+                  color: "#0284c7",
+                  fontWeight: "bold",
+                }}
+              >
+                รูปวรรณยุกต์
+              </div>
+              <div></div>
+              <div></div>
+            </div>
+
+            <div
+              style={{ display: "flex", flexDirection: "column", gap: "34px" }}
+            >
+              {linesData.map((item, idx) => {
+                let rowHeaderColor = "#94a3b8";
+                if (item.show) {
+                  rowHeaderColor = item.isMulti
+                    ? item.multi[0]?.color
+                    : item.color;
+                }
+                const fixedRight = fixedRightLabels[item.id];
+                const isHovered = hoveredRowId === item.id;
+
+                return (
+                  <div
+                    key={idx}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "220px 1fr 110px",
+                      alignItems: "center",
+                      cursor: "pointer",
+                    }}
+                    onClick={() =>
+                      setHoveredRowId((prev) =>
+                        prev === item.id ? null : item.id,
+                      )
+                    }
+                  >
+                    <div
+                      style={{
+                        textAlign: "right",
+                        paddingRight: "20px",
+                        fontSize: `${isHovered ? 19 : 17}px`,
+                        color: rowHeaderColor,
+                        fontWeight: "bold",
+                        transition: "all 0.15s ease",
+                        transform: isHovered ? "scale(1.08)" : "scale(1)",
+                      }}
+                    >
+                      {item.tone}{" "}
+                      <span
+                        style={{
+                          fontSize: `${isHovered ? 19 : 17}px`,
+                          marginLeft: "4px",
+                          letterSpacing: "1px",
+                        }}
+                      >
+                        [ {item.mark} ]
+                      </span>
+                    </div>
+
+                    <div
+                      style={{
+                        position: "relative",
+                        display: "flex",
+                        alignItems: "center",
+                        height: "30px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: "100%",
+                          height: "2px",
+                          backgroundColor: "#94a3b8",
+                        }}
+                      ></div>
+
+                      {!item.isMulti && item.show && item.word && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: item.leftPos,
+                            transform: `translateX(-50%) ${isHovered ? "scale(1.22)" : "scale(1)"}`,
+                            backgroundColor: item.color,
+                            color: circleTextColor,
+                            minWidth: "46px",
+                            height: "46px",
+                            padding: "0 10px",
+                            borderRadius: "23px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontWeight: "bold",
+                            fontSize: "18px",
+                            boxShadow: isHovered
+                              ? "0 6px 16px rgba(0,0,0,0.3)"
+                              : "0 3px 8px rgba(0,0,0,0.25)",
+                            cursor: "pointer",
+                            transition: "all 0.15s ease",
+                            filter: isHovered
+                              ? "brightness(1.15)"
+                              : "brightness(1)",
+                          }}
+                        >
+                          <svg
+                            style={{
+                              position: "absolute",
+                              top: "-20px",
+                              left: "calc(100% - 3px)",
+                              width: "20px",
+                              height: "44px",
+                              pointerEvents: "none",
+                              overflow: "visible",
+                              color: item.color,
+                            }}
+                            viewBox="0 0 20 44"
+                          >
+                            <path
+                              d="M 2 44 L 2 2"
+                              stroke="currentColor"
+                              strokeWidth="3.5"
+                              strokeLinecap="round"
+                            />
+                            <path
+                              d="M 2 2 C 9 8, 17 15, 13 24 C 9 17, 5 11, 2 7 Z"
+                              fill="currentColor"
+                            />
+                          </svg>
+                          {item.word}
+                        </div>
+                      )}
+
+                      {item.isMulti && item.show && (
+                        <div
+                          style={{
+                            position: "absolute",
+                            left: item.leftPos,
+                            transform: "translateX(-50%)",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                          }}
+                        >
+                          {item.multi.map((circle, i) => (
+                            <React.Fragment key={i}>
+                              {i > 0 && (
+                                <span
+                                  style={{
+                                    color: "#94a3b8",
+                                    fontWeight: "bold",
+                                    fontSize: "20px",
+                                  }}
+                                >
+                                  /
+                                </span>
+                              )}
+                              <div
+                                style={{
+                                  backgroundColor: circle.color,
+                                  color: circleTextColor,
+                                  minWidth: "46px",
+                                  height: "46px",
+                                  padding: "0 10px",
+                                  borderRadius: "23px",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontWeight: "bold",
+                                  fontSize: "18px",
+                                  boxShadow: isHovered
+                                    ? "0 6px 16px rgba(0,0,0,0.3)"
+                                    : "0 3px 8px rgba(0,0,0,0.25)",
+                                  cursor: "pointer",
+                                  transition: "all 0.15s ease",
+                                  transform: isHovered
+                                    ? "scale(1.22)"
+                                    : "scale(1)",
+                                  filter: isHovered
+                                    ? "brightness(1.15)"
+                                    : "brightness(1)",
+                                }}
+                              >
+                                <svg
+                                  style={{
+                                    position: "absolute",
+                                    top: "-20px",
+                                    left: "calc(100% - 3px)",
+                                    width: "20px",
+                                    height: "44px",
+                                    pointerEvents: "none",
+                                    overflow: "visible",
+                                    color: circle.color,
+                                  }}
+                                  viewBox="0 0 20 44"
+                                >
+                                  <path
+                                    d="M 2 44 L 2 2"
+                                    stroke="currentColor"
+                                    strokeWidth="3.5"
+                                    strokeLinecap="round"
+                                  />
+                                  <path
+                                    d="M 2 2 C 9 8, 17 15, 13 24 C 9 17, 5 11, 2 7 Z"
+                                    fill="currentColor"
+                                  />
+                                </svg>
+                                {circle.text}
+                              </div>
+                            </React.Fragment>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div
+                      style={{
+                        textAlign: "center",
+                        color: fixedRight ? fixedRight.color : "#94a3b8",
+                        fontWeight: "bold",
+                        fontSize: "16px",
+                      }}
+                    >
+                      {fixedRight ? fixedRight.text : ""}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 2. แผงควบคุมพร้อมแถบเลื่อน Scrollbar (ขวามือ) */}
+          {viewLayout !== "present" && (
+            <div
+              style={{
+                backgroundColor: "#ffffff",
+                borderRadius: "14px",
+                padding: "20px",
+                boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
+                border: "1px solid #e5e7eb",
+                display: "flex",
+                flexDirection: "column",
+                gap: "16px",
+                maxHeight:
+                  viewLayout === "split" ? "calc(100vh - 100px)" : "none",
+                overflowY: viewLayout === "split" ? "auto" : "visible",
+                position: viewLayout === "split" ? "sticky" : "static",
+                top: "20px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: "18px",
+                    fontWeight: "bold",
+                    color: "#1f2937",
+                  }}
+                >
+                  ⚙️ แผงควบคุม
+                </h3>
+              </div>
+
+              {/* 1. ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ */}
+              <div
+                style={{
+                  backgroundColor: "#f8fafc",
+                  padding: "14px",
+                  borderRadius: "10px",
+                  border: "1px solid #e2e8f0",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: "bold",
+                    color: "#1f2937",
+                    marginBottom: "8px",
+                  }}
+                >
+                  ✨ ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "6px",
+                    marginBottom: "12px",
+                    fontSize: "13px",
+                    color: "#334155",
+                  }}
+                >
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="radio" style={{ accentColor: "#000000", cursor: "pointer", width: "16px", height: "16px" }}
+                      name="mode"
+                      checked={mode === "full5"}
+                      onChange={() => setMode("full5")}
+                    />
+                    ผันครบทั้ง 5 บรรทัด (อักษรคู่ / ห นำ)
+                  </label>
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="radio" style={{ accentColor: "#000000", cursor: "pointer", width: "16px", height: "16px" }}
+                      name="mode"
+                      checked={mode === "highOnly"}
+                      onChange={() => setMode("highOnly")}
+                    />
+                    เฉพาะเสียงสูง (เอก, โท, จัตวา)
+                  </label>
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="radio" style={{ accentColor: "#000000", cursor: "pointer", width: "16px", height: "16px" }}
+                      name="mode"
+                      checked={mode === "lowOnly"}
+                      onChange={() => setMode("lowOnly")}
+                    />
+                    เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)
+                  </label>
+                </div>
+
+                {/* กล่องรับข้อความและปุ่มผันคำอยู่ในบรรทัดเดียวกัน */}
+                <div
+                  style={{ display: "flex", gap: "8px", alignItems: "center" }}
                 >
                   <input
                     type="text"
