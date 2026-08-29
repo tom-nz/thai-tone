@@ -1,76 +1,9 @@
-
-const getPairedSoundChar = (c) => {
-  const map = {
-    "ศ": "ซ", "ษ": "ซ", "ส": "ซ", "ศ": "ซ", "ษ": "ซ", "ซ": "ส",
-    "ข": "ค", "ฃ": "ค", "ค": "ข", "ฅ": "ข", "ฆ": "ข",
-    "ฉ": "ช", "ช": "ฉ", "ฌ": "ฉ",
-    "ฐ": "ท", "ถ": "ท", "ท": "ถ", "ธ": "ถ", "ฑ": "ถ", "ฒ": "ถ",
-    "ผ": "พ", "พ": "ผ", "ภ": "ผ",
-    "ฝ": "ฟ", "ฟ": "ฝ",
-    "ห": "ฮ", "ฮ": "ห"
-  };
-  return map[c] || c;
-};
-
 import React, { useState, useEffect } from "react";
 
 // ตัวแปร API Key สำรองสำหรับเรียก Gemini API
 const apiKey = "";
 
-
-  // กฎจับคู่พยัญชนะอักษรสูง-ต่ำคู่ (ศ, ษ, ส <-> ซ)
-  const getPairedConsonantStrict = (c) => {
-    if (["ศ", "ษ", "ส"].includes(c)) return "ซ";
-    if (c === "ซ") return "ส";
-    if (["ข", "ฃ"].includes(c)) return "ค";
-    if (["ค", "ฅ", "ฆ"].includes(c)) return "ข";
-    if (c === "ฉ") return "ช";
-    if (["ช", "ฌ"].includes(c)) return "ฉ";
-    if (["ถ", "ฐ"].includes(c)) return "ท";
-    if (["ท", "ธ", "ฑ", "ฒ"].includes(c)) return "ถ";
-    if (c === "ผ") return "พ";
-    if (["พ", "ภ"].includes(c)) return "ผ";
-    if (c === "ฝ") return "ฟ";
-    if (c === "ฟ") return "ฝ";
-    if (c === "ห") return "ฮ";
-    if (c === "ฮ") return "ห";
-    return c;
-  };
-
-
-  // แปลงคู่เสียงพยัญชนะอักษรสูง <-> ต่ำคู่
-  const getPairedSoundStrict = (char) => {
-    if (["ศ", "ษ", "ส"].includes(char)) return "ซ";
-    if (char === "ซ") return "ส";
-    if (["ข", "ฃ"].includes(char)) return "ค";
-    if (["ค", "ฅ", "ฆ"].includes(char)) return "ข";
-    if (char === "ฉ") return "ช";
-    if (["ช", "ฌ"].includes(char)) return "ฉ";
-    if (["ถ", "ฐ"].includes(char)) return "ท";
-    if (["ท", "ธ", "ฑ", "ฒ"].includes(char)) return "ถ";
-    if (char === "ผ") return "พ";
-    if (["พ", "ภ"].includes(char)) return "ผ";
-    if (char === "ฝ") return "ฟ";
-    if (char === "ฟ") return "ฝ";
-    if (char === "ห") return "ฮ";
-    if (char === "ฮ") return "ห";
-    return char;
-  };
-
 export default function App() {
-
-  // --- ตัวแปลงคู่เสียงบังคับใช้ทุกจุด (Strict Sound Mapping) ---
-  const PAIR_LOOKUP = {
-    'ศ': 'ซ', 'ษ': 'ซ', "ส": "ซ", "ศ": "ซ", "ษ": "ซ", 'ซ': 'ส',
-    'ข': 'ค', 'ฃ': 'ค', 'ค': 'ข', 'ฅ': 'ข', 'ฆ': 'ข',
-    'ฉ': 'ช', 'ช': 'ฉ', 'ฌ': 'ฉ',
-    'ฐ': 'ท', 'ถ': 'ท', 'ท': 'ถ', 'ธ': 'ถ', 'ฑ': 'ถ', 'ฒ': 'ถ',
-    'ผ': 'พ', 'พ': 'ผ', 'ภ': 'ผ',
-    'ฝ': 'ฟ', 'ฟ': 'ฝ',
-    'ห': 'ฮ', 'ฮ': 'ห'
-  };
-  const getPairedCharUniversal = (c) => PAIR_LOOKUP[c] || c;
-
   // บันทึกและดึง Custom API Key (ถ้ามี) จาก LocalStorage
   const [customApiKey, setCustomApiKey] = useState(
     () => localStorage.getItem("gemini_api_key") || "",
@@ -85,7 +18,7 @@ export default function App() {
   // โหมดผันและมุมมองหน้าจอ (ตั้งค่าเริ่มต้นคำว่า "กอ")
   const [mode, setMode] = useState("full5"); // 'full5' | 'highOnly' | 'lowOnly'
   const [viewLayout, setViewLayout] = useState("split"); // 'standard' | 'split' | 'present'
-  const [inputText, setInputText] = useState("กอ");
+  const [inputText, setInputText] = useState("");
   const [inputError, setInputError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -1411,7 +1344,7 @@ export default function App() {
               และการผันวรรณยุกต์
             </div>
 
-            {analysisInfo.desc && (
+            {inputText && analysisInfo.desc && (
               <div
                 style={{
                   backgroundColor: "#f0f9ff",
@@ -1882,7 +1815,7 @@ export default function App() {
               </div>
             </div>
 
-            {analysisInfo.desc && (
+            {inputText && analysisInfo.desc && (
               <div
                 style={{
                   backgroundColor: "#f0f9ff",
@@ -2213,83 +2146,22 @@ export default function App() {
                   ✨ ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ
                 </div>
 
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "6px",
-                    marginBottom: "12px",
-                    fontSize: "13px",
-                    color: "#334155",
-                  }}
-                >
-                  <label
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="mode"
-                      checked={mode === "full5"}
-                      onChange={() => setMode("full5")}
-                    />
-                    ผันครบทั้ง 5 บรรทัด (อักษรคู่ / ห นำ)
-                  </label>
-                  <label
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="mode"
-                      checked={mode === "highOnly"}
-                      onChange={() => setMode("highOnly")}
-                    />
-                    เฉพาะเสียงสูง (เอก, โท, จัตวา)
-                  </label>
-                  <label
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="mode"
-                      checked={mode === "lowOnly"}
-                      onChange={() => setMode("lowOnly")}
-                    />
-                    เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)
-                  </label>
-                </div>
-
-                {/* กล่องรับข้อความและปุ่มผันคำอยู่ในบรรทัดเดียวกัน */}
-                <div
-                  style={{ display: "flex", gap: "8px", alignItems: "center" }}
-                >
+                {/* กล่องรับข้อความและปุ่มผันคำ */}
+                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                   <input
                     type="text"
                     value={inputText}
-                    onChange={(e) => { let v = e.target.value.replace(/[0-9\s]/g, '').slice(0, 5); setInputText(v); }}
+                    onChange={(e) => {
+                      setInputText(e.target.value);
+                      validateInput(e.target.value);
+                    }}
                     onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
                     placeholder="พิมพ์ 1 คำ เช่น กอ, เมา, กวาง"
                     style={{
                       flex: 1,
                       padding: "8px 12px",
                       borderRadius: "8px",
-                      border: inputError
-                        ? "2px solid #ef4444"
-                        : "1px solid #cbd5e1",
+                      border: inputError ? "2px solid #ef4444" : "1px solid #cbd5e1",
                       fontSize: "15px",
                       backgroundColor: "#f1f5f9",
                       color: "#0f172a",
@@ -2297,7 +2169,6 @@ export default function App() {
                       boxSizing: "border-box",
                     }}
                   />
-
                   <button
                     onClick={handleGenerate}
                     disabled={loading}
@@ -2316,16 +2187,31 @@ export default function App() {
                     {loading ? "..." : "ผันคำ"}
                   </button>
                 </div>
+
                 {inputError && (
-                  <div
-                    style={{
-                      color: "#ef4444",
-                      fontSize: "12px",
-                      marginTop: "6px",
-                      fontWeight: "bold",
-                    }}
-                  >
+                  <div style={{ color: "#ef4444", fontSize: "12px", marginTop: "6px", fontWeight: "bold" }}>
                     {inputError}
+                  </div>
+                )}
+
+                {/* ปุ่ม Radio แสดงเฉพาะเมื่อมีข้อความ */}
+                {inputText && inputText.trim().length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginTop: "12px", fontSize: "13px", color: "#334155" }}>
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }} onClick={() => setMode("full5")}>
+                      <span style={{ width: "16px", height: "16px", borderRadius: "50%", display: "inline-block", backgroundColor: mode === "full5" ? "#000000" : "#ffffff", border: mode === "full5" ? "2px solid #000000" : "2px solid #475569", boxSizing: "border-box" }}></span>
+                      <input type="radio" name="mode" checked={mode === "full5"} onChange={() => setMode("full5")} style={{ display: "none" }} />
+                      ผันครบทั้ง 5 บรรทัด (อักษรคู่ / ห นำ)
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }} onClick={() => setMode("highOnly")}>
+                      <span style={{ width: "16px", height: "16px", borderRadius: "50%", display: "inline-block", backgroundColor: mode === "highOnly" ? "#000000" : "#ffffff", border: mode === "highOnly" ? "2px solid #000000" : "2px solid #475569", boxSizing: "border-box" }}></span>
+                      <input type="radio" name="mode" checked={mode === "highOnly"} onChange={() => setMode("highOnly")} style={{ display: "none" }} />
+                      เฉพาะเสียงสูง (เอก, โท, จัตวา)
+                    </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }} onClick={() => setMode("lowOnly")}>
+                      <span style={{ width: "16px", height: "16px", borderRadius: "50%", display: "inline-block", backgroundColor: mode === "lowOnly" ? "#000000" : "#ffffff", border: mode === "lowOnly" ? "2px solid #000000" : "2px solid #475569", boxSizing: "border-box" }}></span>
+                      <input type="radio" name="mode" checked={mode === "lowOnly"} onChange={() => setMode("lowOnly")} style={{ display: "none" }} />
+                      เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)
+                    </label>
                   </div>
                 )}
               </div>
@@ -2676,7 +2562,10 @@ export default function App() {
                     <input
                       type="color"
                       value={bgColor}
-                      onChange={(e) => { let v = e.target.value.replace(/[0-9\s]/g, '').slice(0, 5); setInputText(v); }}
+                      onChange={(e) => {
+                        setBgColor(e.target.value);
+                        setBgType("color");
+                      }}
                       style={{
                         opacity: 0,
                         width: 0,
