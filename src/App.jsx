@@ -3,6 +3,26 @@ import React, { useState, useEffect } from "react";
 // ตัวแปร API Key สำรองสำหรับเรียก Gemini API
 const apiKey = "";
 
+
+  // กฎจับคู่พยัญชนะอักษรสูง-ต่ำคู่ (ศ, ษ, ส <-> ซ)
+  const getPairedConsonantStrict = (c) => {
+    if (["ศ", "ษ", "ส"].includes(c)) return "ซ";
+    if (c === "ซ") return "ส";
+    if (["ข", "ฃ"].includes(c)) return "ค";
+    if (["ค", "ฅ", "ฆ"].includes(c)) return "ข";
+    if (c === "ฉ") return "ช";
+    if (["ช", "ฌ"].includes(c)) return "ฉ";
+    if (["ถ", "ฐ"].includes(c)) return "ท";
+    if (["ท", "ธ", "ฑ", "ฒ"].includes(c)) return "ถ";
+    if (c === "ผ") return "พ";
+    if (["พ", "ภ"].includes(c)) return "ผ";
+    if (c === "ฝ") return "ฟ";
+    if (c === "ฟ") return "ฝ";
+    if (c === "ห") return "ฮ";
+    if (c === "ฮ") return "ห";
+    return c;
+  };
+
 export default function App() {
   // บันทึกและดึง Custom API Key (ถ้ามี) จาก LocalStorage
   const [customApiKey, setCustomApiKey] = useState(
