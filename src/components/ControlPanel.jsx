@@ -1,7 +1,16 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { CONSONANTS, LONG_VOWELS, SHORT_VOWELS } from "../utils/toneEngine";
 
 export default function ControlPanel({ inputText, setInputText, mode, setMode, handleGenerate, handleQuickSelect }) {
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      // ยกเลิก DOM reference เมื่อ unmount
+      inputRef.current = null;
+    };
+  }, []);
+
   return (
     <div style={{ width: "380px", backgroundColor: "#ffffff", borderRadius: "16px", padding: "20px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05)", border: "1px solid #e2e8f0" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: "bold", color: "#334155", marginBottom: "14px" }}>
@@ -14,6 +23,7 @@ export default function ControlPanel({ inputText, setInputText, mode, setMode, h
         </div>
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
           <input
+            ref={inputRef}
             type="text"
             autoFocus
             value={inputText}

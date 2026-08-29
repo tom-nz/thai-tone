@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 
 const TONES = [
   { id: "จัตวา", name: "เสียงจัตวา", mark: " ๋ ", label: "เสียงสูง", color: "#dc2626" },
@@ -9,6 +9,12 @@ const TONES = [
 ];
 
 export default function StaffBoard({ inputText, analysisInfo, placedNotes }) {
+  useEffect(() => {
+    return () => {
+      // Memory cleanup hook เมื่อ unmount กระดาน
+    };
+  }, []);
+
   return (
     <div style={{ flex: 1, backgroundColor: "#ffffff", borderRadius: "16px", padding: "24px", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05)", border: "1px solid #e2e8f0" }}>
       <div style={{ textAlign: "center", marginBottom: "20px" }}>
