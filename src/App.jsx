@@ -1344,7 +1344,7 @@ export default function App() {
               และการผันวรรณยุกต์
             </div>
 
-            {analysisInfo.desc && (
+            {inputText && analysisInfo.desc && (
               <div
                 style={{
                   backgroundColor: "#f0f9ff",
@@ -1815,7 +1815,7 @@ export default function App() {
               </div>
             </div>
 
-            {analysisInfo.desc && (
+            {inputText && analysisInfo.desc && (
               <div
                 style={{
                   backgroundColor: "#f0f9ff",
@@ -2156,54 +2156,32 @@ export default function App() {
                     color: "#334155",
                   }}
                 >
-                  <label
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <input
-                      type="radio" style={{ accentColor: "#000000", cursor: "pointer" }}
-                      name="mode"
-                      checked={mode === "full5"}
-                      onChange={() => setMode("full5")}
-                    />
-                    ผันครบทั้ง 5 บรรทัด (อักษรคู่ / ห นำ)
-                  </label>
-                  <label
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <input
-                      type="radio" style={{ accentColor: "#000000", cursor: "pointer" }}
-                      name="mode"
-                      checked={mode === "highOnly"}
-                      onChange={() => setMode("highOnly")}
-                    />
-                    เฉพาะเสียงสูง (เอก, โท, จัตวา)
-                  </label>
-                  <label
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <input
-                      type="radio" style={{ accentColor: "#000000", cursor: "pointer" }}
-                      name="mode"
-                      checked={mode === "lowOnly"}
-                      onChange={() => setMode("lowOnly")}
-                    />
-                    เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)
-                  </label>
+                  
+
+
+<label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+  <span style={{
+    width: "18px",
+    height: "18px",
+    borderRadius: "50%",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: mode === "lowOnly" ? "#000000" : "#ffffff",
+    border: mode === "lowOnly" ? "2px solid #000000" : "2px solid #64748b",
+    boxSizing: "border-box"
+  }}>
+    <input
+      type="radio"
+      name="mode"
+      checked={mode === "lowOnly"}
+      onChange={() => setMode("lowOnly")}
+      style={{ display: "none" }}
+    />
+  </span>
+  เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)
+</label>
+
                 </div>
 
                 {/* กล่องรับข้อความและปุ่มผันคำอยู่ในบรรทัดเดียวกัน */}
