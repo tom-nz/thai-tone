@@ -1,28 +1,30 @@
 
   // ฟังก์ชันแปลงพยัญชนะคู่เสียง
-  const getPairedConsonant = (char) => {
-    // กลุ่มเสียง /s/: ศ, ษ, ส คู่กับ ซ
-    if (["ศ", "ษ", "ส"].includes(char)) return "ซ";
-    if (char === "ซ") return "ส";
-    // กลุ่มเสียง /kh/: ข, ฃ คู่กับ ค, ฅ, ฆ
-    if (["ข", "ฃ"].includes(char)) return "ค";
-    if (["ค", "ฅ", "ฆ"].includes(char)) return "ข";
-    // กลุ่มเสียง /ch/: ฉ คู่กับ ช, ฌ
-    if (char === "ฉ") return "ช";
-    if (["ช", "ฌ"].includes(char)) return "ฉ";
-    // กลุ่มเสียง /th/: ถ, ฐ คู่กับ ท, ธ, ฑ, ฒ
-    if (["ถ", "ฐ"].includes(char)) return "ท";
-    if (["ท", "ธ", "ฑ", "ฒ"].includes(char)) return "ถ";
-    // กลุ่มเสียง /ph/: ผ คู่กับ พ, ภ
-    if (char === "ผ") return "พ";
-    if (["พ", "ภ"].includes(char)) return "ผ";
-    // กลุ่มเสียง /f/: ฝ คู่กับ ฟ
-    if (char === "ฝ") return "ฟ";
-    if (char === "ฟ") return "ฝ";
-    // กลุ่มเสียง /h/: ห คู่กับ ฮ
-    if (char === "ห") return "ฮ";
-    if (char === "ฮ") return "ห";
-    return char;
+  // กฎจับคู่พยัญชนะอักษรคู่ (High <-> Low Pairing)
+  const getPairedConsonant = (c) => {
+    // 1. อักษรสูง ศ, ษ, ส จับคู่กับ ซ
+    if (["ศ", "ษ", "ส"].includes(c)) return "ซ";
+    // 2. อักษรต่ำ ซ จับคู่กับ ส เสมอ
+    if (c === "ซ") return "ส";
+    // 3. ข, ฃ <-> ค, ฅ, ฆ
+    if (["ข", "ฃ"].includes(c)) return "ค";
+    if (["ค", "ฅ", "ฆ"].includes(c)) return "ข";
+    // 4. ฉ <-> ช, ฌ
+    if (c === "ฉ") return "ช";
+    if (["ช", "ฌ"].includes(c)) return "ฉ";
+    // 5. ถ, ฐ <-> ท, ธ, ฑ, ฒ
+    if (["ถ", "ฐ"].includes(c)) return "ท";
+    if (["ท", "ธ", "ฑ", "ฒ"].includes(c)) return "ถ";
+    // 6. ผ <-> พ, ภ
+    if (c === "ผ") return "พ";
+    if (["พ", "ภ"].includes(c)) return "ผ";
+    // 7. ฝ <-> ฟ
+    if (c === "ฝ") return "ฟ";
+    if (c === "ฟ") return "ฝ";
+    // 8. ห <-> ฮ
+    if (c === "ห") return "ฮ";
+    if (c === "ฮ") return "ห";
+    return c;
   };
 
 /**
