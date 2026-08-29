@@ -1,3 +1,52 @@
+
+// --- ฟังก์ชันแยกและรวม พยัญชนะ + สระเดิม ---
+const THAI_CONSONANTS = /[ก-ฮ]/g;
+const THAI_VOWELS_AND_MARKS = /[^ก-ฮ]/g;
+
+const replaceConsonantKeepVowel = (syllable, newConsonant) => {
+  if (!syllable) return newConsonant;
+  // ดึงเฉพาะรูปสระ/วรรณยุกต์เดิม
+  const vowelsOnly = syllable.replace(THAI_CONSONANTS, "");
+  // ถ้าไม่มีรูปสระ ให้คืนค่าพยัญชนะใหม่
+  if (!vowelsOnly) return newConsonant;
+  // ประกอบพยัญชนะใหม่เข้ากับรูปสระเดิม
+  // กรณีสระหน้า เช่น เ แ โ ใ ไ
+  const leadingVowels = ["เ", "แ", "โ", "ใ", "ไ"];
+  let leading = "";
+  let otherVowels = "";
+  for (const ch of vowelsOnly) {
+    if (leadingVowels.includes(ch)) {
+      leading += ch;
+    } else {
+      otherVowels += ch;
+    }
+  }
+  return `${leading}${newConsonant}${otherVowels}`;
+};
+
+const replaceVowelKeepConsonant = (syllable, newVowelPattern) => {
+  if (!syllable) return newVowelPattern || "";
+  // ดึงเฉพาะพยัญชนะเดิม
+  const consonantsOnly = syllable.match(THAI_CONSONANTS);
+  const baseConsonant = consonantsOnly ? consonantsOnly.join("") : "";
+  if (!baseConsonant) return newVowelPattern;
+  if (!newVowelPattern) return baseConsonant;
+
+  // ถ้า newVowelPattern มี placeholder เช่น อ หรือ - ให้แทนที่ด้วยพยัญชนะเดิม
+  if (newVowelPattern.includes("อ")) {
+    return newVowelPattern.replace(/อ/g, baseConsonant);
+  }
+  if (newVowelPattern.includes("-")) {
+    return newVowelPattern.replace(/-/g, baseConsonant);
+  }
+  // กรณีเป็นรูปสระเดี่ยวๆ เช่น า, ิ, ี
+  const leadingVowels = ["เ", "แ", "โ", "ใ", "ไ"];
+  if (leadingVowels.includes(newVowelPattern[0])) {
+    return `${newVowelPattern[0]}${baseConsonant}${newVowelPattern.slice(1)}`;
+  }
+  return `${baseConsonant}${newVowelPattern}`;
+};
+
 import React, { useState, useEffect } from "react";
 
 // ตัวแปร API Key สำรองสำหรับเรียก Gemini API
