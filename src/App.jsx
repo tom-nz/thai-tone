@@ -2165,7 +2165,7 @@ export default function App() {
                     }}
                   >
                     <input
-                      type="radio"
+                      type="radio" style={{ accentColor: "#000000", cursor: "pointer" }}
                       name="mode"
                       checked={mode === "full5"}
                       onChange={() => setMode("full5")}
@@ -2181,7 +2181,7 @@ export default function App() {
                     }}
                   >
                     <input
-                      type="radio"
+                      type="radio" style={{ accentColor: "#000000", cursor: "pointer" }}
                       name="mode"
                       checked={mode === "highOnly"}
                       onChange={() => setMode("highOnly")}
@@ -2197,7 +2197,7 @@ export default function App() {
                     }}
                   >
                     <input
-                      type="radio"
+                      type="radio" style={{ accentColor: "#000000", cursor: "pointer" }}
                       name="mode"
                       checked={mode === "lowOnly"}
                       onChange={() => setMode("lowOnly")}
