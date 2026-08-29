@@ -5,6 +5,42 @@ const apiKey = "";
 
 export default function App() {
 
+  // เมื่อคลิกเปลี่ยนพยัญชนะ: เอาพยัญชนะเก่าออกทั้งหมด แล้วใส่พยัญชนะใหม่แทนที่โดยคงสระเดิมไว้
+  const handleQuickConsonantClick = (newCons) => {
+    let current = (inputText || "").trim();
+    const thaiVowels = ["ะ", "ั", "า", "ำ", "ิ", "ี", "ึ", "ื", "ุ", "ู", "เ", "แ", "โ", "ใ", "ไ", "็", "่", "้", "๊", "๋", "์", "ํ"];
+    
+    // 1. ถ้ายังไม่มีข้อความ หรือเป็นค่าเริ่มต้นสระออ (เช่น กอ, ขอ, ออ)
+    if (!current || current === "ออ" || (current.length === 2 && current.endsWith("อ") && !thaiVowels.includes(current[0]))) {
+      setInputText(newCons + "อ");
+      return;
+    }
+
+    // 2. ดึงหาพยัญชนะเดิมตัวแรก
+    let oldCons = "";
+    if (["เ", "แ", "โ", "ใ", "ไ"].includes(current[0])) {
+      oldCons = current[1] || "";
+    } else {
+      for (let ch of current) {
+        if (!thaiVowels.includes(ch)) {
+          oldCons = ch;
+          break;
+        }
+      }
+    }
+
+    // 3. แทนที่พยัญชนะเดิมด้วยพยัญชนะใหม่ในตำแหน่งเดิม
+    let result = "";
+    if (oldCons) {
+      const idx = current.indexOf(oldCons);
+      result = current.slice(0, idx) + newCons + current.slice(idx + 1);
+    } else {
+      result = newCons + "อ";
+    }
+
+    setInputText(result);
+  };
+
   // เมื่อคลิกสระใหม่: ลบสระเก่าออกทั้งหมด เหลือแต่พยัญชนะต้น แล้วใส่สระใหม่
   const handleQuickVowelClick = (v) => {
     let current = (inputText || "").trim();
@@ -1154,17 +1190,7 @@ export default function App() {
     setTimeout(() => setApiSaveStatus(""), 3000);
   };
 
-  const handleQuickConsonantClick = (c) => {
-    const { frontVowel, aboveBelowVowel, rest } = parseThaiWord(inputText);
-    const newWord = buildWord(
-      frontVowel || "",
-      c,
-      aboveBelowVowel || "",
-      "",
-      rest || "อ",
-    );
-    setInputText(newWord);
-  };
+  
 
   
 
