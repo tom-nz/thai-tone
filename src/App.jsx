@@ -2233,10 +2233,7 @@ export default function App() {
                   <input
                     type="text"
                     value={inputText}
-                    onChange={(e) => {
-                      setInputText(e.target.value);
-                      validateInput(e.target.value);
-                    }}
+                    onChange={(e) => { let v = e.target.value.replace(/[0-9\s]/g, '').slice(0, 5); setInputText(v); }}
                     onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
                     placeholder="พิมพ์ 1 คำ เช่น กอ, เมา, กวาง"
                     style={{
@@ -2632,10 +2629,7 @@ export default function App() {
                     <input
                       type="color"
                       value={bgColor}
-                      onChange={(e) => {
-                        setBgColor(e.target.value);
-                        setBgType("color");
-                      }}
+                      onChange={(e) => { let v = e.target.value.replace(/[0-9\s]/g, '').slice(0, 5); setInputText(v); }}
                       style={{
                         opacity: 0,
                         width: 0,
