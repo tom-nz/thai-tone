@@ -1125,12 +1125,15 @@ export default function App() {
   };
 
   const handleQuickConsonantClick = (c) => {
-    const word = c + "อ";
-    setInputText(word);
-    setMode("full5");
-    if (typeof handleGenerate === "function") {
-      setTimeout(() => handleGenerate(word), 0);
-    }
+    const { frontVowel, aboveBelowVowel, rest } = parseThaiWord(inputText);
+    const newWord = buildWord(
+      frontVowel || "",
+      c,
+      aboveBelowVowel || "",
+      "",
+      rest || "อ",
+    );
+    setInputText(newWord);
   };
 
   const handleQuickVowelClick = (vowelObj) => {
@@ -2162,7 +2165,7 @@ export default function App() {
                     }}
                   >
                     <input
-                      type="radio" style={{ accentColor: "#000000", cursor: "pointer", width: "16px", height: "16px" }}
+                      type="radio"
                       name="mode"
                       checked={mode === "full5"}
                       onChange={() => setMode("full5")}
@@ -2178,7 +2181,7 @@ export default function App() {
                     }}
                   >
                     <input
-                      type="radio" style={{ accentColor: "#000000", cursor: "pointer", width: "16px", height: "16px" }}
+                      type="radio"
                       name="mode"
                       checked={mode === "highOnly"}
                       onChange={() => setMode("highOnly")}
@@ -2194,7 +2197,7 @@ export default function App() {
                     }}
                   >
                     <input
-                      type="radio" style={{ accentColor: "#000000", cursor: "pointer", width: "16px", height: "16px" }}
+                      type="radio"
                       name="mode"
                       checked={mode === "lowOnly"}
                       onChange={() => setMode("lowOnly")}
