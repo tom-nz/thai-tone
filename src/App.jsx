@@ -44,6 +44,19 @@ const apiKey = "";
   };
 
 export default function App() {
+
+  // --- ตัวแปลงคู่เสียงบังคับใช้ทุกจุด (Strict Sound Mapping) ---
+  const PAIR_LOOKUP = {
+    'ศ': 'ซ', 'ษ': 'ซ', 'ส': 'ซ', 'ซ': 'ส',
+    'ข': 'ค', 'ฃ': 'ค', 'ค': 'ข', 'ฅ': 'ข', 'ฆ': 'ข',
+    'ฉ': 'ช', 'ช': 'ฉ', 'ฌ': 'ฉ',
+    'ฐ': 'ท', 'ถ': 'ท', 'ท': 'ถ', 'ธ': 'ถ', 'ฑ': 'ถ', 'ฒ': 'ถ',
+    'ผ': 'พ', 'พ': 'ผ', 'ภ': 'ผ',
+    'ฝ': 'ฟ', 'ฟ': 'ฝ',
+    'ห': 'ฮ', 'ฮ': 'ห'
+  };
+  const getPairedCharUniversal = (c) => PAIR_LOOKUP[c] || c;
+
   // บันทึกและดึง Custom API Key (ถ้ามี) จาก LocalStorage
   const [customApiKey, setCustomApiKey] = useState(
     () => localStorage.getItem("gemini_api_key") || "",
