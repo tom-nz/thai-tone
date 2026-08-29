@@ -456,7 +456,17 @@ export default function App() {
     };
   };
 
-  const calculateTones = (word, currentMode, midC, highC, lowC) => {
+  
+  const HIGH_TO_LOW_PAIRS = {
+    "ข": "ค", "ฃ": "ค", "ฉ": "ช", "ฐ": "ท", "ถ": "ท", "ผ": "พ", "ฝ": "ฟ",
+    "ศ": "ซ", "ษ": "ซ", "ส": "ซ", "ห": "ฮ"
+  };
+  const LOW_TO_HIGH_PAIRS = {
+    "ค": "ข", "ฅ": "ข", "ฆ": "ข", "ช": "ฉ", "ฌ": "ฉ", "ซ": "ส",
+    "ฑ": "ถ", "ฒ": "ถ", "ท": "ถ", "ธ": "ถ", "พ": "ผ", "ภ": "ผ", "ฟ": "ฝ", "ฮ": "ห"
+  };
+
+const calculateTones = (word, currentMode, midC, highC, lowC) => {
     if (!word || word.trim() === "") {
       return [
         {
