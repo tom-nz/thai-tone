@@ -5,7 +5,7 @@ const apiKey = "";
 
 export default function App() {
 
-  // 1. กดพยัญชนะด่วน -> เริ่มคำใหม่เป็น [พยัญชนะ + อ] เสมอ ป้องกันการพิมพ์ต่อท้าย
+  // 1. กดพยัญชนะด่วน -> เริ่มคำใหม่ [พยัญชนะ + อ] เสมอ
   const handleQuickConsonantClick = (c) => {
     const newWord = c + "อ";
     setInputText(newWord);
@@ -13,24 +13,36 @@ export default function App() {
     else if (typeof processToneAnalysis === "function") processToneAnalysis(newWord, mode);
   };
 
-  // 2. กดสระด่วน -> ดึงเฉพาะพยัญชนะต้นเดิมมาผสมกับสระใหม่ (ตัดสระเดิมและ อ ออก ไม่ให้สระซ้อน)
+  // 2. กดสระด่วน -> ดึงเฉพาะพยัญชนะต้นตัวจริงตัวแรก ไม่ให้มี อ หรือสระเก่าติดมา
   const handleQuickVowelClick = (v) => {
-    const thaiVowels = ["ะ", "ั", "า", "ำ", "ิ", "ี", "ึ", "ื", "ุ", "ู", "เ", "แ", "โ", "ใ", "ไ", "็", "่", "้", "๊", "๋", "์", "ํ"];
     let current = (inputText || "").trim();
-    // ค้นหาพยัญชนะต้นจริงตัวแรก (ที่ไม่ใช่สระ และไม่ใช่ อ ที่ทำหน้าที่เป็นสระออเดิม)
-    let cons = current.split("").find(ch => !thaiVowels.includes(ch) && ch !== "อ") || (current[0] !== "อ" ? current[0] : "ก") || "ก";
+    // ดึงพยัญชนะไทยตัวแรกที่พบในคำ
+    const thaiVowels = ["ะ", "ั", "า", "ำ", "ิ", "ี", "ึ", "ื", "ุ", "ู", "เ", "แ", "โ", "ใ", "ไ", "็", "่", "้", "๊", "๋", "์", "ํ"];
+    let firstCons = "ก";
+    for (let char of current) {
+      if (!thaiVowels.includes(char)) {
+        firstCons = char;
+        break;
+      }
+    }
 
     let result = "";
     if (v.startsWith("เ") || v.startsWith("แ") || v.startsWith("โ") || v.startsWith("ใ") || v.startsWith("ไ")) {
-      result = v[0] + cons + v.slice(1);
+      result = v[0] + firstCons + v.slice(1);
     } else {
-      result = cons + v;
+      result = firstCons + v;
     }
 
     setInputText(result);
     if (typeof handleAnalyze === "function") handleAnalyze(result);
     else if (typeof processToneAnalysis === "function") processToneAnalysis(result, mode);
   };
+
+  // 1. กดพยัญชนะด่วน -> เริ่มคำใหม่เป็น [พยัญชนะ + อ] เสมอ ป้องกันการพิมพ์ต่อท้าย
+  
+
+  // 2. กดสระด่วน -> ดึงเฉพาะพยัญชนะต้นเดิมมาผสมกับสระใหม่ (ตัดสระเดิมและ อ ออก ไม่ให้สระซ้อน)
+  
   // บันทึกและดึง Custom API Key (ถ้ามี) จาก LocalStorage
   const [customApiKey, setCustomApiKey] = useState(
     () => localStorage.getItem("gemini_api_key") || "",
