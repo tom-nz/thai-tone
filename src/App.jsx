@@ -651,9 +651,7 @@ export default function App() {
 
     if (highConsonants.includes(primaryConsonant) || initial.startsWith("ห")) {
       highConsonant = initial;
-      lowConsonant =
-        Object.keys(pairMap).find((k) => pairMap[k] === primaryConsonant) ||
-        primaryConsonant;
+      lowConsonant = pairMap[primaryConsonant] || primaryConsonant;
     } else if (lowSingleConsonants.includes(primaryConsonant)) {
       lowConsonant = initial;
       highConsonant = `ห${initial}`;
