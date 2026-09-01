@@ -1396,7 +1396,9 @@ export default function App() {
               <div></div>
               <div></div>
             </div>
+
           </div>
+              
 
           <div
             style={{
@@ -1813,7 +1815,7 @@ export default function App() {
               </div>
             </div>
 
-            {analysisInfo.desc && (
+            {inputText && analysisInfo.desc && (
               <div
                 style={{
                   backgroundColor: "#f0f9ff",
