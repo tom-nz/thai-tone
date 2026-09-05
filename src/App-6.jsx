@@ -188,21 +188,9 @@ function analyzeSyllable(word, currentMode) {
         : `อักษรกลาง${clusterLabel} คำเป็น (ผันได้ครบ 5 เสียง)`;
     }
   } else if (highConsonants.includes(primaryConsonant) || initial.startsWith("ห")) {
-    if (currentMode === "highOnly") {
-      desc = isDead
-        ? `อักษรสูง${clusterLabel} คำตาย (ผันได้เฉพาะ เสียงเอก และ เสียงโท)`
-        : `อักษรสูง${clusterLabel} คำเป็น (ผันได้เฉพาะ เอก, โท, จัตวา)`;
-    } else if (currentMode === "lowOnly") {
-      desc = isDead
-        ? isShort
-          ? `เทียบผันเป็นอักษรต่ำคู่${clusterLabel} คำตายสระสั้น (พื้นเสียงตรี, ผันเสียงโท)`
-          : `เทียบผันเป็นอักษรต่ำคู่${clusterLabel} คำตายสระยาว (พื้นเสียงโท, ผันเสียงตรี)`
-        : `เทียบผันเป็นอักษรต่ำคู่${clusterLabel} คำเป็น (ผันได้ สามัญ, โท, ตรี)`;
-    } else {
-      desc = isDead
-        ? `ผันคู่ อักษรสูง${clusterLabel} คำตาย [เอก, โท] + อักษรต่ำ [โท, ตรี]`
-        : `ผันคู่ อักษรสูง${clusterLabel} คำเป็น [เอก, โท, จัตวา] + อักษรต่ำ [สามัญ, โท, ตรี] รวมผันได้ครบทั้ง 5 เสียง`;
-    }
+    desc = isDead
+      ? `อักษรสูง${clusterLabel} คำตาย (ผันได้เฉพาะ เสียงเอก และ เสียงโท)`
+      : `อักษรสูง${clusterLabel} คำเป็น (ผันได้เฉพาะ เอก, โท, จัตวา)`;
   } else if (currentMode === "full5") {
     desc = isDead
       ? "ผันคู่ อักษรสูง/ห นำ [เอก, โท] + อักษรต่ำ [โท, ตรี]"
@@ -383,23 +371,6 @@ function Board({
   const ratio = Math.max(0.8, fontSize / 20);
   const circleSize = isDisplay ? `clamp(42px, ${4.2 * ratio}vw, 70px)` : "48px";
   const textSize = isDisplay ? `clamp(15px, ${1.5 * ratio}vw, 25px)` : "17px";
-  const circleFontSize = isDisplay
-    ? `clamp(16px, ${1.8 * ratio}vw, 27px)`
-    : "18px";
-
-  const getCircleStyle = (color) => ({
-    backgroundColor: color,
-    color: circleTextColor,
-    "--note-color": color,
-    width: circleSize,
-    minWidth: circleSize,
-    maxWidth: circleSize,
-    height: circleSize,
-    padding: 0,
-    fontSize: circleFontSize,
-    lineHeight: 1,
-    flex: `0 0 ${circleSize}`,
-  });
 
   return (
     <div
@@ -459,8 +430,15 @@ function Board({
                   <div
                     className="tone-circle"
                     style={{
-                      ...getCircleStyle(item.color),
                       left: item.leftPos,
+                      backgroundColor: item.color,
+                      color: circleTextColor,
+                      "--note-color": item.color,
+                      minWidth: circleSize,
+                      height: circleSize,
+                      fontSize: isDisplay
+                        ? `clamp(16px, ${1.8 * ratio}vw, 27px)`
+                        : "18px",
                     }}
                   >
                     {item.word}
@@ -475,10 +453,17 @@ function Board({
                         <div
                           className="tone-circle"
                           style={{
-                            ...getCircleStyle(circle.color),
                             position: "relative",
                             left: "auto",
                             transform: "none",
+                            backgroundColor: circle.color,
+                            color: circleTextColor,
+                            "--note-color": circle.color,
+                            minWidth: circleSize,
+                            height: circleSize,
+                            fontSize: isDisplay
+                              ? `clamp(16px, ${1.8 * ratio}vw, 27px)`
+                              : "18px",
                           }}
                         >
                           {circle.text}
@@ -1524,13 +1509,13 @@ const styles = `
   .tone-circle {
     position: absolute;
     transform: translateX(-50%);
-    border-radius: 50%;
+    padding: 0 10px;
+    border-radius: 999px;
     display: flex;
     align-items: center;
     justify-content: center;
     white-space: nowrap;
     font-weight: 700;
-    overflow: visible;
     box-shadow: 0 4px 11px rgba(0,0,0,.24);
     transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
   }
@@ -1776,14 +1761,7 @@ const styles = `
     .tone-name { font-size: 13px !important; white-space: normal; }
     .fixed-tone-label { font-size: 12px; }
     .tone-rows { gap: 20px; }
-    .tone-circle {
-      width: 39px !important;
-      min-width: 39px !important;
-      max-width: 39px !important;
-      height: 39px !important;
-      padding: 0 !important;
-      font-size: 15px !important;
-    }
+    .tone-circle { padding: 0 7px; min-width: 39px !important; height: 39px !important; font-size: 15px !important; }
     .multi-circles { gap: 4px; }
     .slash { font-size: 16px; }
     .consonant-grid { gap: 3px; }
