@@ -109,9 +109,7 @@ function parseThaiWord(word = "") {
 }
 
 function buildWord(frontVowel, initial, aboveBelowVowel, tone, rest) {
-  // บังคับจัดเรียง: สระบน/ล่าง ต้องมาก่อนวรรณยุกต์เสมอ และรวมอักขระให้อยู่ในฟอร์มมาตรฐาน
-  const rawWord = `${frontVowel}${initial}${aboveBelowVowel}${tone}${rest}`;
-  return rawWord.replace(/([่้๊๋])([ิีึืุูั็ํ])/g, "$2$1").normalize("NFC");
+  return `${frontVowel}${initial}${aboveBelowVowel}${tone}${rest}`;
 }
 
 function analyzeSyllable(word, currentMode) {
@@ -253,7 +251,7 @@ function calculateTones(word, mode, colorMid, colorHigh, colorLow) {
       row(5, make(initial, "๋"), colorMid),
       row(4, make(initial, "๊"), colorMid),
       row(3, make(initial, "้"), colorMid),
-      row(2, isDead ? buildWord(frontVowel, initial, aboveBelowVowel, "", rest) : make(initial, "่"), colorMid),
+      row(2, isDead ? word : make(initial, "่"), colorMid),
       row(1, isDead ? "" : make(initial), colorMid, !isDead),
     ];
   }
@@ -504,8 +502,8 @@ export default function App() {
   const speak = (text) => {
     if (!speechEnabled || !text || !("speechSynthesis" in window)) return;
 
-    // เคลียร์ลำดับอักขระอีกชั้นก่อนส่งให้ TTS เพื่อป้องกันการอ่านสะกดคำ
-    const normalizedText = text.replace(/([่้๊๋])([ิีึืุูั็ํ])/g, "$2$1").normalize("NFC");
+    // สลับตำแหน่งวรรณยุกต์และสระบน/ล่างให้อยู่ในลำดับที่ถูกต้องสำหรับ TTS
+    const normalizedText = text.replace(/([่้๊๋])([ิีึืุูั็ํ])/g, "$2$1");
 
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(normalizedText);
@@ -1599,7 +1597,7 @@ const styles = `
     position: absolute;
     right: 8px;
     bottom: 50%;
-    width: 5px; /* ปรับก้านให้หนาขึ้น */
+    width: 3px;
     height: 40px;
     background-color: var(--note-color, transparent);
     z-index: -1;
@@ -1608,13 +1606,13 @@ const styles = `
   .tone-circle::after {
     content: "";
     position: absolute;
-    right: -5px; /* ปรับขยับให้รอยต่อเชื่อมกับก้านที่หนาขึ้นพอดี */
+    right: -4px;
     bottom: calc(50% + 15px);
-    width: 15px;
+    width: 12px;
     height: 25px;
-    border-right: 5px solid var(--note-color, transparent); /* ปรับธงให้หนาขึ้น */
-    border-top: 5px solid var(--note-color, transparent); /* ปรับธงให้หนาขึ้น */
-    border-top-right-radius: 14px;
+    border-right: 3px solid var(--note-color, transparent);
+    border-top: 3px solid var(--note-color, transparent);
+    border-top-right-radius: 12px;
     z-index: -1;
   }
 `;
