@@ -9,7 +9,7 @@ const STRICT_THAI_SYLLABLE_PATTERN = /^[เแโใไ]?[ก-ฮ]{1,2}[ิี�
 
 const midConsonants = ["ก", "จ", "ด", "ต", "บ", "ป", "อ", "ฎ", "ฏ"];
 const highConsonants = ["ข", "ฃ", "ฉ", "ฐ", "ถ", "ผ", "ฝ", "ศ", "ษ", "ส", "ห"];
-const lowSingleConsonants = ["ง", "ญ", "น", "ย", "ณ", "ร", "ว", "ม", "ฬ", "ล"];
+const lowSingleConsonants = ["ง", "ญ", "ณ", "น", "ม", "ย", "ร", "ล", "ฬ", "ว"];
 
 const quickConsonants = [
   "ก", "ข", "ฃ", "ค", "ฅ", "ฆ", "ง", "จ", "ฉ", "ช", "ซ",
@@ -18,11 +18,26 @@ const quickConsonants = [
   "ย", "ร", "ล", "ว", "ศ", "ษ", "ส", "ห", "ฬ", "อ", "ฮ",
 ];
 
-const thaiClusters = [
+// กลุ่มคำควบ/อักษรนำสำหรับปุ่มเลือกด่วน
+const trueClusters = [
   "กร", "กล", "กว", "ขร", "ขล", "ขว", "คร", "คล", "คว",
-  "ตร", "ตล", "ปร", "ปล", "พร", "พล", "ฟร", "ฟล",
+  "ตร", "ปร", "ปล", "พร", "พล", "ฟร", "ฟล",
+];
+
+const leadingHoClusters = [
   "หง", "หญ", "หน", "หม", "หย", "หร", "หล", "หว",
-  "ทร", "ศร", "สร", "จร", "ซร",
+];
+
+const leadingOClusters = ["อย"];
+
+// ควบกล้ำไม่แท้: แยกไว้เพื่อไม่ให้ถูกสรุปเป็นควบแท้
+const falseClusters = ["ทร", "ศร", "สร", "จร", "ซร"];
+
+const thaiClusters = [
+  ...trueClusters,
+  ...leadingHoClusters,
+  ...leadingOClusters,
+  ...falseClusters,
 ];
 
 const longVowels = [
@@ -59,16 +74,6 @@ const shortVowels = [
   { label: "◌ัวะ", front: "", rear: "ัวะ" },
 ];
 
-const pairMap = {
-  ค: "ข", ฅ: "ฃ", ฆ: "ข", ข: "ค", ฃ: "ฅ",
-  ช: "ฉ", ฌ: "ฉ", ฉ: "ช",
-  ซ: "ศ", ศ: "ซ", ษ: "ซ", ส: "ซ",
-  ท: "ถ", ธ: "ถ", ฑ: "ฐ", ฒ: "ฐ", ถ: "ท", ฐ: "ท",
-  พ: "ผ", ภ: "ผ", ผ: "พ",
-  ฟ: "ฝ", ฝ: "ฟ",
-  ฮ: "ห", ห: "ฮ",
-};
-
 const toneRows = [
   { id: 5, tone: "เสียงจัตวา", mark: "◌๋", leftPos: "80%" },
   { id: 4, tone: "เสียงตรี", mark: "◌๊", leftPos: "65%" },
@@ -77,37 +82,184 @@ const toneRows = [
   { id: 1, tone: "เสียงสามัญ", mark: "-", leftPos: "28%" },
 ];
 
-// Custom Radio Component
-function ModeRadio({ value, checked, label, onChange }) {
+// ตารางอ้างอิงการผันวรรณยุกต์ตามไตรยางศ์
+// ที่มา: เอกสาร DLTV ระบุว่า
+// - อักษรกลาง: คำเป็น 5 เสียง / คำตาย 4 เสียง
+// - อักษรสูง: คำเป็น 3 เสียง / คำตาย 2 เสียง
+// - อักษรต่ำ: คำเป็น 3 เสียง / คำตายสั้น 2 เสียง / คำตายยาว 2 เสียง
+const TONE_RULE_TABLE = Object.freeze({
+  middle: {
+    live: Object.freeze({
+      1: "",   // สามัญ
+      2: "่", // เอก
+      3: "้", // โท
+      4: "๊", // ตรี
+      5: "๋", // จัตวา
+    }),
+    dead: Object.freeze({
+      2: "",  // เอก: พื้นเสียง
+      3: "้", // โท
+      4: "๊", // ตรี
+      5: "๋", // จัตวา
+    }),
+  },
+  high: {
+    live: Object.freeze({
+      2: "่", // เอก
+      3: "้", // โท
+      5: "",  // จัตวา: พื้นเสียง
+    }),
+    dead: Object.freeze({
+      2: "",  // เอก: พื้นเสียง
+      3: "้", // โท
+    }),
+  },
+  low: {
+    live: Object.freeze({
+      1: "",  // สามัญ: พื้นเสียง
+      3: "่", // โท
+      4: "้", // ตรี
+    }),
+    deadShort: Object.freeze({
+      3: "่", // โท
+      4: "",  // ตรี: พื้นเสียง
+    }),
+    deadLong: Object.freeze({
+      3: "่", // โท
+      4: "้", // ตรี
+    }),
+  },
+});
+
+// อักษรต่ำคู่ -> อักษรสูงคู่สำหรับ "รูปเทียบการผัน"
+const lowToHighPair = Object.freeze({
+  ค: "ข", ฅ: "ฃ", ฆ: "ข",
+  ช: "ฉ", ฌ: "ฉ",
+  ซ: "ศ",
+  ฑ: "ฐ", ฒ: "ฐ", ท: "ถ", ธ: "ถ",
+  พ: "ผ", ภ: "ผ",
+  ฟ: "ฝ",
+  ฮ: "ห",
+});
+
+// อักษรสูง -> ตัวแทนอักษรต่ำคู่สำหรับใช้สร้าง "รูปเทียบ"
+const highToLowPair = Object.freeze({
+  ข: "ค", ฃ: "ฅ",
+  ฉ: "ช",
+  ฐ: "ฑ", ถ: "ท",
+  ผ: "พ", ฝ: "ฟ",
+  ศ: "ซ", ษ: "ซ", ส: "ซ",
+  ห: "ฮ",
+});
+
+const DEAD_FINAL_CONSONANTS = new Set([
+  "ก", "ข", "ฃ", "ค", "ฅ", "ฆ",
+  "จ", "ช", "ซ", "ฎ", "ฏ", "ฐ", "ฑ", "ฒ",
+  "ด", "ต", "ถ", "ท", "ธ", "ศ", "ษ", "ส",
+  "บ", "ป", "พ", "ฟ", "ภ",
+]);
+
+function getConsonantClass(initial = "", initialKind = "single") {
+  if (!initial) return "unknown";
+
+  if (initialKind === "leadingHo") return "high";
+  if (initialKind === "leadingO") return "middle";
+
+  const first = initial[0];
+
+  if (midConsonants.includes(first)) return "middle";
+  if (highConsonants.includes(first)) return "high";
+  if (lowSingleConsonants.includes(first)) return "low";
+
+  return "low";
+}
+
+function getPairedInitial(initial = "", initialKind = "single", targetClass = "high") {
+  if (!initial) return "";
+
+  if (initialKind === "leadingHo") {
+    const base = initial[1] || "";
+    return targetClass === "high" ? initial : base;
+  }
+
+  if (initialKind === "leadingO") {
+    return initial;
+  }
+
+  const first = initial[0];
+  const rest = initial.slice(1);
+
+  if (targetClass === "high") {
+    const high = highConsonants.includes(first)
+      ? first
+      : lowSingleConsonants.includes(first)
+        ? `ห${first}`
+        : lowToHighPair[first] || `ห${first}`;
+
+    // คำควบแท้คงตัวควบไว้ แล้วเปลี่ยนเฉพาะพยัญชนะตัวแรก
+    return `${high}${rest}`;
+  }
+
+  if (targetClass === "low") {
+    const low = lowSingleConsonants.includes(first)
+      ? first
+      : highToLowPair[first] || first;
+
+    return `${low}${rest}`;
+  }
+
+  return initial;
+}
+
+function isShortThaiVowel(frontVowel, aboveBelowVowel, rest) {
+  const vowelPart = `${frontVowel}${aboveBelowVowel}${rest}`;
+
   return (
-    <label
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "9px",
-        cursor: "pointer",
-      }}
-    >
-      <input
-        type="radio"
-        name="mode"
-        checked={checked}
-        onChange={() => onChange(value)}
-        style={{
-          appearance: "none",
-          width: "18px",
-          height: "18px",
-          borderRadius: "50%",
-          border: "2px solid #475569",
-          backgroundColor: checked ? "#000000" : "#ffffff",
-          cursor: "pointer",
-          margin: 0,
-          flexShrink: 0,
-        }}
-      />
-      {label}
-    </label>
+    vowelPart.includes("ะ") ||
+    vowelPart.includes("ิ") ||
+    vowelPart.includes("ึ") ||
+    vowelPart.includes("ุ") ||
+    vowelPart.includes("ั") ||
+    vowelPart.includes("็") ||
+    /^เ.*อะ/.test(vowelPart) ||
+    /^เ.*ียะ/.test(vowelPart) ||
+    /^เ.*ือะ/.test(vowelPart) ||
+    /อะ$/.test(vowelPart) ||
+    /เอะ$/.test(vowelPart) ||
+    /แอะ$/.test(vowelPart) ||
+    /โอะ$/.test(vowelPart) ||
+    /เอาะ$/.test(vowelPart) ||
+    /อัวะ$/.test(vowelPart)
   );
+}
+
+function isDeadFinalConsonant(consonant = "") {
+  return DEAD_FINAL_CONSONANTS.has(consonant);
+}
+
+function getFinalConsonant(
+  rest = "",
+  frontVowel = "",
+  aboveBelowVowel = "",
+) {
+  let finalPart = rest;
+
+  // ย / ว บางกรณีเป็นส่วนหนึ่งของรูปสระ ไม่ใช่ตัวสะกด
+  // เช่น เ◌ีย, เ◌ียะ, ◌ัว, ◌ัวะ
+  if (
+    frontVowel === "เ" &&
+    aboveBelowVowel.includes("ี") &&
+    finalPart.startsWith("ย")
+  ) {
+    finalPart = finalPart.slice(1);
+  }
+
+  if (aboveBelowVowel.includes("ั") && finalPart.startsWith("ว")) {
+    finalPart = finalPart.slice(1);
+  }
+
+  const consonants = [...finalPart].filter((char) => /[ก-ฮ]/.test(char));
+  return consonants.at(-1) || "";
 }
 
 function parseThaiWord(word = "") {
@@ -120,15 +272,33 @@ function parseThaiWord(word = "") {
   }
 
   let initial = "";
-  if (workStr.length >= 2 && thaiClusters.includes(workStr.slice(0, 2))) {
-    initial = workStr.slice(0, 2);
+  let initialKind = "single";
+  const firstTwo = workStr.slice(0, 2);
+
+  if (trueClusters.includes(firstTwo)) {
+    initial = firstTwo;
+    initialKind = "trueCluster";
+    workStr = workStr.slice(2);
+  } else if (leadingHoClusters.includes(firstTwo)) {
+    initial = firstTwo;
+    initialKind = "leadingHo";
+    workStr = workStr.slice(2);
+  } else if (leadingOClusters.includes(firstTwo)) {
+    initial = firstTwo;
+    initialKind = "leadingO";
+    workStr = workStr.slice(2);
+  } else if (falseClusters.includes(firstTwo)) {
+    initial = firstTwo;
+    initialKind = "falseCluster";
     workStr = workStr.slice(2);
   } else if (workStr.length) {
     initial = workStr[0];
     workStr = workStr.slice(1);
   }
 
-  const aboveBelowVowelChars = ["ิ", "ี", "ึ", "ื", "ุ", "ู", "ั", "็", "ํ"];
+  const aboveBelowVowelChars = [
+    "ิ", "ี", "ึ", "ื", "ุ", "ู", "ั", "็", "ํ",
+  ];
   const toneChars = ["่", "้", "๊", "๋"];
 
   let aboveBelowVowel = "";
@@ -141,68 +311,101 @@ function parseThaiWord(word = "") {
     else rest += char;
   }
 
-  return { initial, frontVowel, aboveBelowVowel, toneMark, rest };
+  return {
+    initial,
+    initialKind,
+    frontVowel,
+    aboveBelowVowel,
+    toneMark,
+    rest,
+  };
 }
 
 function buildWord(frontVowel, initial, aboveBelowVowel, tone, rest) {
   const rawWord = `${frontVowel}${initial}${aboveBelowVowel}${tone}${rest}`;
-  return rawWord.replace(/([่้๊๋])([ิีึืุูั็ํ])/g, "$2$1").normalize("NFC");
+  return rawWord
+    .replace(/([่้๊๋])([ิีึืุูั็ํ])/g, "$2$1")
+    .normalize("NFC");
 }
 
 function analyzeSyllable(word, currentMode) {
-  const { initial, frontVowel, aboveBelowVowel, rest } = parseThaiWord(word);
-  const primaryConsonant = initial?.[0] || "";
-  const rearVowel = aboveBelowVowel + rest;
+  const {
+    initial,
+    initialKind,
+    frontVowel,
+    aboveBelowVowel,
+    rest,
+    toneMark,
+  } = parseThaiWord(word);
 
-  const shortVowelChars = ["ะ", "ิ", "ึ", "ุ", "ั"];
-  const deadEndings = [
-    "ก", "ข", "ค", "ฆ", "บ", "ป", "พ", "ฟ", "ภ",
-    "ด", "จ", "ช", "ซ", "ฎ", "ฏ", "ฐ", "ฑ", "ฒ",
-    "ต", "ถ", "ท", "ธ", "ศ", "ษ", "ส",
-  ];
+  const consonantClass = getConsonantClass(initial, initialKind);
+  const primaryConsonant =
+    initialKind === "leadingHo"
+      ? initial[1] || initial[0] || ""
+      : initial[0] || "";
 
-  const isShort =
-    shortVowelChars.some((v) => rearVowel.includes(v)) ||
-    (frontVowel === "เ" && rearVowel.includes("ะ"));
+  const finalConsonant = getFinalConsonant(
+    rest,
+    frontVowel,
+    aboveBelowVowel,
+  );
+  const isShort = isShortThaiVowel(
+    frontVowel,
+    aboveBelowVowel,
+    rest,
+  );
 
-  const lastChar = rearVowel.slice(-1);
-  const isDead =
-    deadEndings.includes(lastChar) ||
-    rearVowel.endsWith("ะ") ||
-    (isShort && !rest);
+  const hasPronouncedFinal = Boolean(finalConsonant);
+  const isDead = hasPronouncedFinal
+    ? isDeadFinalConsonant(finalConsonant)
+    : isShort;
 
   const type = isDead ? "คำตาย" : "คำเป็น";
   const vowelLen = isShort ? "สระเสียงสั้น" : "สระเสียงยาว";
-  const isCluster = initial.length > 1;
-  const clusterLabel = isCluster ? ` (คำควบกล้ำ "${initial}")` : "";
+
+  const isCluster = initialKind === "trueCluster";
+  const clusterLabel = isCluster
+    ? ` (คำควบกล้ำแท้ "${initial}")`
+    : "";
+
+  const leadingLabel =
+    initialKind === "leadingHo"
+      ? ` (ห นำ "${initial}")`
+      : initialKind === "leadingO"
+        ? ` (อ นำ "${initial}")`
+        : initialKind === "falseCluster"
+          ? ` (กลุ่มอักษรควบไม่แท้ "${initial}")`
+          : "";
+
   let desc = "";
 
-  if (midConsonants.includes(primaryConsonant)) {
-    if (currentMode === "highOnly") {
-      desc = `อักษรกลาง${clusterLabel} เทียบผันเฉพาะเสียงสูง [เอก, โท, จัตวา]`;
-    } else if (currentMode === "lowOnly") {
-      desc = `อักษรกลาง${clusterLabel} เทียบผันเฉพาะเสียงต่ำ [สามัญ, โท, ตรี]`;
-    } else {
-      desc = isDead
-        ? `อักษรกลาง${clusterLabel} คำตาย (ผันได้เฉพาะ เอก, โท, ตรี, จัตวา)`
-        : `อักษรกลาง${clusterLabel} คำเป็น (ผันได้ครบ 5 เสียง)`;
-    }
-  } else if (highConsonants.includes(primaryConsonant) || initial.startsWith("ห")) {
+  if (consonantClass === "middle") {
     desc = isDead
-      ? `อักษรสูง${clusterLabel} คำตาย (ผันได้เฉพาะ เสียงเอก และ เสียงโท)`
-      : `อักษรสูง${clusterLabel} คำเป็น (ผันได้เฉพาะ เอก, โท, จัตวา)`;
-  } else if (currentMode === "full5") {
+      ? `อักษรกลาง${clusterLabel}${leadingLabel} คำตาย ` +
+        `(ผันได้ 4 เสียง: เอก, โท, ตรี, จัตวา; พื้นเสียงเอก)`
+      : `อักษรกลาง${clusterLabel}${leadingLabel} คำเป็น ` +
+        `(ผันได้ครบ 5 เสียง; พื้นเสียงสามัญ)`;
+  } else if (consonantClass === "high") {
     desc = isDead
-      ? "ผันคู่ อักษรสูง/ห นำ [เอก, โท] + อักษรต่ำ [โท, ตรี]"
-      : "ผันคู่ อักษรสูง/ห นำ [เอก, โท, จัตวา] + อักษรต่ำ [สามัญ, โท, ตรี] รวมผันได้ครบทั้ง 5 เสียง";
-  } else if (currentMode === "highOnly") {
-    desc = `เทียบผันเป็น เสียงอักษรสูง/ห นำ${clusterLabel} (ผันได้เฉพาะ เอก, โท, จัตวา)`;
-  } else {
+      ? `อักษรสูง${clusterLabel}${leadingLabel} คำตาย ` +
+        `(ผันได้ 2 เสียง: เอก, โท; พื้นเสียงเอก)`
+      : `อักษรสูง${clusterLabel}${leadingLabel} คำเป็น ` +
+        `(ผันได้ 3 เสียง: เอก, โท, จัตวา; พื้นเสียงจัตวา)`;
+  } else if (consonantClass === "low") {
+    const lowSubtype = lowSingleConsonants.includes(primaryConsonant)
+      ? "อักษรต่ำเดี่ยว"
+      : "อักษรต่ำคู่";
+
     desc = isDead
       ? isShort
-        ? `อักษรต่ำ${clusterLabel} คำตายสระสั้น (พื้นเสียงตรี, ผันเสียงโทและจัตวา)`
-        : `อักษรต่ำ${clusterLabel} คำตายสระยาว (พื้นเสียงโท, ผันเสียงตรี)`
-      : `อักษรต่ำ${clusterLabel} คำเป็น (ผันได้ สามัญ, โท, ตรี)`;
+        ? `${lowSubtype}${clusterLabel}${leadingLabel} คำตายสระเสียงสั้น ` +
+          `(ผันได้ 2 เสียง: โท, ตรี; พื้นเสียงตรี)`
+        : `${lowSubtype}${clusterLabel}${leadingLabel} คำตายสระเสียงยาว ` +
+          `(ผันได้ 2 เสียง: โท, ตรี; พื้นเสียงโท)`
+      : `${lowSubtype}${clusterLabel}${leadingLabel} คำเป็น ` +
+        `(ผันได้ 3 เสียง: สามัญ, โท, ตรี; พื้นเสียงสามัญ)`;
+  } else {
+    desc = "ยังจำแนกหมู่อักษรไม่ได้";
   }
 
   return {
@@ -212,10 +415,14 @@ function analyzeSyllable(word, currentMode) {
     isDead,
     isShort,
     initial,
+    initialKind,
     frontVowel,
     aboveBelowVowel,
     rest,
+    toneMark,
     primaryConsonant,
+    consonantClass,
+    finalConsonant,
   };
 }
 
@@ -227,6 +434,7 @@ function calculateTones(word, mode, colorMid, colorHigh, colorLow) {
     isMulti: false,
     multi: [],
     show: false,
+    isComparison: false,
   }));
 
   if (!word?.trim()) return emptyRows;
@@ -234,121 +442,216 @@ function calculateTones(word, mode, colorMid, colorHigh, colorLow) {
   const info = analyzeSyllable(word, mode);
   const {
     initial,
+    initialKind,
     frontVowel,
     aboveBelowVowel,
     rest,
     isDead,
     isShort,
-    primaryConsonant,
+    consonantClass,
   } = info;
-
-  const row = (id, wordValue, color, show = true) => ({
-    ...toneRows.find((item) => item.id === id),
-    word: wordValue || "",
-    color,
-    isMulti: false,
-    multi: [],
-    show: Boolean(show && wordValue),
-  });
-
-  const multiRow = (id, values) => ({
-    ...toneRows.find((item) => item.id === id),
-    word: "",
-    color: values[0]?.color || "#94a3b8",
-    isMulti: true,
-    multi: values,
-    show: values.length > 0,
-  });
 
   const make = (consonant, mark = "") =>
     buildWord(frontVowel, consonant, aboveBelowVowel, mark, rest);
 
-  if (midConsonants.includes(primaryConsonant)) {
+  const blankRow = (id, color) => ({
+    ...toneRows.find((item) => item.id === id),
+    word: "",
+    color,
+    isMulti: false,
+    multi: [],
+    show: false,
+    isComparison: false,
+  });
+
+  const singleRow = (
+    id,
+    consonant,
+    mark,
+    color,
+    isComparison = false,
+  ) => ({
+    ...toneRows.find((item) => item.id === id),
+    word: make(consonant, mark),
+    color,
+    isMulti: false,
+    multi: [],
+    show: true,
+    isComparison,
+  });
+
+  const multiToneRow = (id, entries) => ({
+    ...toneRows.find((item) => item.id === id),
+    word: "",
+    color: entries[0]?.color || "#94a3b8",
+    isMulti: true,
+    multi: entries.map((entry) => ({
+      text: make(entry.consonant, entry.mark),
+      color: entry.color,
+      isComparison: Boolean(entry.isComparison),
+    })),
+    show: entries.length > 0,
+    isComparison: entries.some((entry) => entry.isComparison),
+  });
+
+  const createRows = (ruleSet, consonant, color, isComparison = false) =>
+    toneRows.map((row) => {
+      const mark = ruleSet[row.id];
+
+      if (mark === undefined) return blankRow(row.id, color);
+
+      return singleRow(
+        row.id,
+        consonant,
+        mark,
+        color,
+        isComparison,
+      );
+    });
+
+  const middleRules = isDead
+    ? TONE_RULE_TABLE.middle.dead
+    : TONE_RULE_TABLE.middle.live;
+
+  if (consonantClass === "middle") {
+    const fullRows = createRows(
+      middleRules,
+      initial,
+      colorMid,
+      false,
+    );
+
     if (mode === "highOnly") {
-      return [
-        row(5, make(initial, "๋"), colorMid),
-        row(4, "", colorMid, false),
-        row(3, make(initial, "้"), colorMid),
-        row(2, make(initial, "่"), colorMid),
-        row(1, "", colorMid, false),
-      ];
+      return fullRows.map((row) => ({
+        ...row,
+        show: [5, 3, 2].includes(row.id),
+      }));
     }
 
     if (mode === "lowOnly") {
-      return [
-        row(5, "", colorMid, false),
-        row(4, make(initial, "๊"), colorMid),
-        row(3, make(initial, "้"), colorMid),
-        row(2, "", colorMid, false),
-        row(1, isDead ? "" : make(initial), colorMid, !isDead),
-      ];
+      return fullRows.map((row) => ({
+        ...row,
+        show: [4, 3, 1].includes(row.id),
+      }));
     }
 
-    return [
-      row(5, make(initial, "๋"), colorMid),
-      row(4, make(initial, "๊"), colorMid),
-      row(3, make(initial, "้"), colorMid),
-      row(2, isDead ? buildWord(frontVowel, initial, aboveBelowVowel, "", rest) : make(initial, "่"), colorMid),
-      row(1, isDead ? "" : make(initial), colorMid, !isDead),
-    ];
+    return fullRows;
   }
 
-  let highConsonant = "";
-  let lowConsonant = "";
+  const pairedHigh =
+    consonantClass === "high"
+      ? initial
+      : getPairedInitial(initial, initialKind, "high");
 
-  if (highConsonants.includes(primaryConsonant) || initial.startsWith("ห")) {
-    highConsonant = initial;
-    lowConsonant = pairMap[primaryConsonant] || primaryConsonant;
-  } else if (lowSingleConsonants.includes(primaryConsonant)) {
-    lowConsonant = initial;
-    highConsonant = `ห${initial}`;
-  } else {
-    lowConsonant = initial;
-    highConsonant = pairMap[primaryConsonant] || `ห${initial}`;
-  }
+  const pairedLow =
+    consonantClass === "low"
+      ? initial
+      : getPairedInitial(initial, initialKind, "low");
 
+  const highRules = isDead
+    ? TONE_RULE_TABLE.high.dead
+    : TONE_RULE_TABLE.high.live;
+
+  const lowRules = isDead
+    ? isShort
+      ? TONE_RULE_TABLE.low.deadShort
+      : TONE_RULE_TABLE.low.deadLong
+    : TONE_RULE_TABLE.low.live;
+
+  // โหมดเสียงสูง: ใช้ตารางอักษรสูงเท่านั้น
   if (mode === "highOnly") {
-    return [
-      row(5, isDead ? "" : make(highConsonant), colorHigh, !isDead),
-      row(4, "", colorHigh, false),
-      row(3, make(highConsonant, "้"), colorHigh),
-      row(2, make(highConsonant, "่"), colorHigh),
-      row(1, "", colorHigh, false),
-    ];
+    return createRows(
+      highRules,
+      pairedHigh,
+      colorHigh,
+      consonantClass !== "high",
+    );
   }
 
+  // โหมดเสียงต่ำ: ใช้ตารางอักษรต่ำเท่านั้น
   if (mode === "lowOnly") {
-    return [
-      row(5, "", colorLow, false),
-      row(4, make(lowConsonant, isDead && isShort ? "" : "้"), colorLow),
-      row(3, make(lowConsonant, isDead && !isShort ? "" : "่"), colorLow),
-      row(2, "", colorLow, false),
-      row(1, isDead ? "" : make(lowConsonant), colorLow, !isDead),
-    ];
+    return createRows(
+      lowRules,
+      pairedLow,
+      colorLow,
+      consonantClass !== "low",
+    );
   }
 
-  return [
-    row(5, isDead ? "" : make(highConsonant), colorHigh, !isDead),
-    row(4, make(lowConsonant, isDead && isShort ? "" : "้"), colorLow),
-    multiRow(3, [
-      {
-        text: make(lowConsonant, isDead && !isShort ? "" : "่"),
-        color: colorLow,
-      },
-      {
-        text: make(highConsonant, "้"),
+  // full5: รวมชุดอักษรคู่/ห นำ เฉพาะเสียงที่ตารางรองรับจริง
+  const combined = toneRows.map((toneRow) => {
+    const highMark = highRules[toneRow.id];
+    const lowMark = lowRules[toneRow.id];
+
+    const entries = [];
+
+    if (highMark !== undefined) {
+      entries.push({
+        consonant: pairedHigh,
+        mark: highMark,
         color: colorHigh,
-      },
-    ]),
-    row(2, make(highConsonant, "่"), colorHigh),
-    row(1, isDead ? "" : make(lowConsonant), colorLow, !isDead),
-  ];
+        isComparison: consonantClass !== "high",
+      });
+    }
+
+    if (lowMark !== undefined) {
+      entries.push({
+        consonant: pairedLow,
+        mark: lowMark,
+        color: colorLow,
+        isComparison: consonantClass !== "low",
+      });
+    }
+
+    // กรณีรูปเดียวกันจากคู่เสียง ไม่ต้องสร้างวงกลมซ้ำ
+    const uniqueEntries = entries.filter(
+      (entry, index, array) =>
+        array.findIndex(
+          (candidate) =>
+            candidate.consonant === entry.consonant &&
+            candidate.mark === entry.mark,
+        ) === index,
+    );
+
+    if (!uniqueEntries.length) {
+      return blankRow(toneRow.id, "#94a3b8");
+    }
+
+    if (uniqueEntries.length === 1) {
+      const entry = uniqueEntries[0];
+      return singleRow(
+        toneRow.id,
+        entry.consonant,
+        entry.mark,
+        entry.color,
+        entry.isComparison,
+      );
+    }
+
+    return multiToneRow(toneRow.id, uniqueEntries);
+  });
+
+  return combined;
 }
 
 function getSpeechText(item) {
   if (!item?.show) return "";
-  if (item.isMulti) return item.multi.map((circle) => circle.text).join(" หรือ ");
-  return item.word || "";
+
+  if (item.isMulti) {
+    return item.multi
+      .map((circle) => circle.ttsText || circle.text)
+      .filter(Boolean)
+      .join(" หรือ ");
+  }
+
+  return item.ttsText || item.word || "";
+}
+
+function normalizeThaiSpeechText(text = "") {
+  return String(text)
+    .normalize("NFC")
+    .replace(/\\s+/g, " ")
+    .trim();
 }
 
 function Board({
@@ -358,6 +661,7 @@ function Board({
   activeRowId,
   onRowClick,
   circleTextColor,
+  mode,
   isDisplay = false,
   fontSize = 20,
   staffBgColor = "#ffffff",
@@ -371,6 +675,23 @@ function Board({
   const ratio = Math.max(0.8, fontSize / 20);
   const circleSize = isDisplay ? `clamp(42px, ${4.2 * ratio}vw, 70px)` : "48px";
   const textSize = isDisplay ? `clamp(15px, ${1.5 * ratio}vw, 25px)` : "17px";
+  const circleFontSize = isDisplay
+    ? `clamp(16px, ${1.8 * ratio}vw, 27px)`
+    : "18px";
+
+  const getCircleStyle = (color) => ({
+    backgroundColor: color,
+    color: circleTextColor,
+    "--note-color": color,
+    width: circleSize,
+    minWidth: circleSize,
+    maxWidth: circleSize,
+    height: circleSize,
+    padding: 0,
+    fontSize: circleFontSize,
+    lineHeight: 1,
+    flex: `0 0 ${circleSize}`,
+  });
 
   return (
     <div
@@ -382,15 +703,79 @@ function Board({
         <div>และการผันวรรณยุกต์</div>
       </div>
 
-      {inputText && analysisInfo?.desc && (
-        <div className="analysis-box">
-          📌 ผลวิเคราะห์หลักภาษา: <strong>"{inputText}"</strong> เป็น{" "}
-          <span className="analysis-tag">
-            {analysisInfo.type} ({analysisInfo.vowelLen})
-          </span>{" "}
-          — {analysisInfo.desc}
-        </div>
-      )}
+      {(() => {
+        const visibleItems = linesData.filter((item) => item.show);
+        const topItem = visibleItems[0];
+        const bottomItem = visibleItems[visibleItems.length - 1];
+        const isMid = midConsonants.includes(analysisInfo?.primaryConsonant);
+
+        const getTargetWord = (item) => getSpeechText(item);
+        const analyses = [];
+
+        if (isMid) {
+          const word = inputText.trim();
+          if (word) {
+            analyses.push({
+              label: "อักษรกลาง",
+              word,
+              info: analyzeSyllable(word, mode),
+            });
+          }
+        } else if (mode === "full5") {
+          const topWord = getTargetWord(topItem);
+          const bottomWord = getTargetWord(bottomItem);
+
+          if (topWord) {
+            analyses.push({
+              label: "เสียงสูง",
+              word: topWord,
+              info: analyzeSyllable(topWord, "highOnly"),
+            });
+          }
+
+          if (bottomWord && bottomItem?.id !== topItem?.id) {
+            analyses.push({
+              label: "เสียงต่ำ",
+              word: bottomWord,
+              info: analyzeSyllable(bottomWord, "lowOnly"),
+            });
+          }
+        } else if (mode === "highOnly") {
+          const word = getTargetWord(topItem);
+          if (word) {
+            analyses.push({
+              label: "เสียงสูง",
+              word,
+              info: analyzeSyllable(word, "highOnly"),
+            });
+          }
+        } else if (mode === "lowOnly") {
+          const word = getTargetWord(bottomItem);
+          if (word) {
+            analyses.push({
+              label: "เสียงต่ำ",
+              word,
+              info: analyzeSyllable(word, "lowOnly"),
+            });
+          }
+        }
+
+        if (!analyses.length) return null;
+
+        return (
+          <div className="analysis-box">
+            {analyses.map(({ label, word, info }, index) => (
+              <div className="analysis-item" key={`${label}-${word}-${index}`}>
+                📌 ผลวิเคราะห์หลักภาษา ({label}): <strong>"{word}"</strong> เป็น{" "}
+                <span className="analysis-tag">
+                  {info.type} ({info.vowelLen})
+                </span>{" "}
+                — {info.desc}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
 
       <div className="tone-header">
         <span>รูปวรรณยุกต์</span>
@@ -430,15 +815,8 @@ function Board({
                   <div
                     className="tone-circle"
                     style={{
+                      ...getCircleStyle(item.color),
                       left: item.leftPos,
-                      backgroundColor: item.color,
-                      color: circleTextColor,
-                      "--note-color": item.color,
-                      minWidth: circleSize,
-                      height: circleSize,
-                      fontSize: isDisplay
-                        ? `clamp(16px, ${1.8 * ratio}vw, 27px)`
-                        : "18px",
                     }}
                   >
                     {item.word}
@@ -453,17 +831,10 @@ function Board({
                         <div
                           className="tone-circle"
                           style={{
+                            ...getCircleStyle(circle.color),
                             position: "relative",
                             left: "auto",
                             transform: "none",
-                            backgroundColor: circle.color,
-                            color: circleTextColor,
-                            "--note-color": circle.color,
-                            minWidth: circleSize,
-                            height: circleSize,
-                            fontSize: isDisplay
-                              ? `clamp(16px, ${1.8 * ratio}vw, 27px)`
-                              : "18px",
                           }}
                         >
                           {circle.text}
@@ -509,7 +880,7 @@ export default function App() {
   const [staffBgColor, setStaffBgColor] = useState("#ffffff");
 
   const [activeRowId, setActiveRowId] = useState(null);
-  const [speechEnabled, setSpeechEnabled] = useState(true);
+  const [speechEnabled, setSpeechEnabled] = useState(false);
   const [speechRate, setSpeechRate] = useState(0.85);
   const [voices, setVoices] = useState([]);
   const [selectedVoiceURI, setSelectedVoiceURI] = useState("");
@@ -549,18 +920,45 @@ export default function App() {
   }, [bgType, bgColor, bgImage]);
 
   const speak = (text) => {
-    if (typeof window === "undefined" || !speechEnabled || !text || !("speechSynthesis" in window)) return;
+    if (
+      typeof window === "undefined" ||
+      !speechEnabled ||
+      !text ||
+      !("speechSynthesis" in window)
+    ) {
+      return;
+    }
 
-    const normalizedText = text.replace(/([่้๊๋])([ิีึืุูั็ํ])/g, "$2$1").normalize("NFC");
+    const normalizedText = normalizeThaiSpeechText(text);
+    const availableVoices = window.speechSynthesis.getVoices();
+
+    const selectedThaiVoice =
+      availableVoices.find(
+        (item) =>
+          item.voiceURI === selectedVoiceURI &&
+          item.lang?.toLowerCase().startsWith("th"),
+      ) ||
+      availableVoices.find((item) =>
+        item.lang?.toLowerCase().startsWith("th"),
+      );
+
+    // ไม่ใช้ voice ภาษาอื่นกับข้อความไทย เพราะบาง voice จะอ่านเป็นชื่อพยัญชนะ
+    // เช่น "กอ ไม้จัตวา งองู" แทนการออกเสียงเป็นพยางค์
+    if (!selectedThaiVoice) {
+      console.warn(
+        "ไม่พบเสียงภาษาไทย (th-TH/th-*). กรุณาเลือก/ติดตั้ง Thai TTS voice ในระบบ",
+      );
+      return;
+    }
 
     window.speechSynthesis.cancel();
+
     const utterance = new SpeechSynthesisUtterance(normalizedText);
     utterance.lang = "th-TH";
+    utterance.voice = selectedThaiVoice;
     utterance.rate = Number(speechRate);
     utterance.pitch = 1;
-
-    const voice = voices.find((item) => item.voiceURI === selectedVoiceURI);
-    if (voice) utterance.voice = voice;
+    utterance.volume = 1;
 
     speechRef.current = utterance;
     window.speechSynthesis.speak(utterance);
@@ -738,11 +1136,35 @@ export default function App() {
 
   const handleOpenDualMonitor = () => {
     if (typeof window === "undefined") return;
+
     const currentUrl = window.location.href.split("?")[0];
+    const screenWidth = window.screen?.availWidth || 1440;
+    const screenHeight = window.screen?.availHeight || 900;
+
+    const popupWidth = Math.max(
+      960,
+      Math.min(1600, Math.floor(screenWidth * 0.86)),
+    );
+    const popupHeight = Math.max(
+      640,
+      Math.min(900, Math.floor(screenHeight * 0.82)),
+    );
+
+    const popupLeft = Math.max(0, Math.floor((screenWidth - popupWidth) / 2));
+    const popupTop = Math.max(0, Math.floor((screenHeight - popupHeight) / 2));
+
     window.open(
       `${currentUrl}?view=display`,
       "ThaiToneDisplayWindow",
-      "width=1280,height=860,resizable=yes,scrollbars=yes,status=yes",
+      [
+        `width=${popupWidth}`,
+        `height=${popupHeight}`,
+        `left=${popupLeft}`,
+        `top=${popupTop}`,
+        "resizable=yes",
+        "scrollbars=no",
+        "status=yes",
+      ].join(","),
     );
   };
 
@@ -804,24 +1226,30 @@ export default function App() {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
 
     const updateVoices = () => {
-      const thaiFirst = window.speechSynthesis
-        .getVoices()
-        .sort((a, b) => Number(b.lang.startsWith("th")) - Number(a.lang.startsWith("th")));
+      const availableVoices = window.speechSynthesis.getVoices();
+      const thaiFirst = [...availableVoices].sort(
+        (a, b) =>
+          Number(b.lang?.toLowerCase().startsWith("th")) -
+          Number(a.lang?.toLowerCase().startsWith("th")),
+      );
+
       setVoices(thaiFirst);
 
-      if (!selectedVoiceURI) {
-        const thaiVoice = thaiFirst.find((voice) => voice.lang.startsWith("th"));
-        if (thaiVoice) setSelectedVoiceURI(thaiVoice.voiceURI);
-      }
+      const thaiVoice = thaiFirst.find((voice) =>
+        voice.lang?.toLowerCase().startsWith("th"),
+      );
+
+      setSelectedVoiceURI((previous) => previous || thaiVoice?.voiceURI || "");
     };
 
     updateVoices();
-    window.speechSynthesis.onvoiceschanged = updateVoices;
+    window.speechSynthesis.addEventListener("voiceschanged", updateVoices);
 
     return () => {
+      window.speechSynthesis.removeEventListener("voiceschanged", updateVoices);
       window.speechSynthesis.cancel();
     };
-  }, [selectedVoiceURI]);
+  }, []);
 
   useEffect(() => {
     if (isDisplayWindow) return;
@@ -952,6 +1380,7 @@ export default function App() {
             activeRowId={activeRowId}
             onRowClick={handleRowClick}
             circleTextColor={circleTextColor}
+            mode={mode}
             isDisplay
             fontSize={labelFontSize}
             staffBgColor={staffBgColor}
@@ -990,6 +1419,7 @@ export default function App() {
                 activeRowId={activeRowId}
                 onRowClick={handleRowClick}
                 circleTextColor={circleTextColor}
+                mode={mode}
                 fontSize={labelFontSize}
                 staffBgColor={staffBgColor}
               />
@@ -1069,6 +1499,7 @@ export default function App() {
                       {quickConsonants.map((consonant) => (
                         <button
                           key={consonant}
+                          type="button"
                           className="consonant-btn"
                           onClick={() => handleQuickConsonantClick(consonant)}
                           style={{
@@ -1082,6 +1513,68 @@ export default function App() {
                           {consonant}
                         </button>
                       ))}
+                    </div>
+
+                    <div className="cluster-groups">
+                      <div>
+                        <div className="section-label cluster-label">
+                          🔗 ควบกล้ำแท้
+                        </div>
+                        <div className="cluster-grid">
+                          {trueClusters.map((cluster) => (
+                            <button
+                              key={cluster}
+                              type="button"
+                              className="cluster-btn true-cluster"
+                              onClick={() =>
+                                handleQuickConsonantClick(cluster)
+                              }
+                            >
+                              {cluster}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="section-label cluster-label">
+                          🟣 อักษรนำ ห-นำ
+                        </div>
+                        <div className="cluster-grid">
+                          {leadingHoClusters.map((cluster) => (
+                            <button
+                              key={cluster}
+                              type="button"
+                              className="cluster-btn leading-ho-cluster"
+                              onClick={() =>
+                                handleQuickConsonantClick(cluster)
+                              }
+                            >
+                              {cluster}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="section-label cluster-label">
+                          🟠 ควบกล้ำไม่แท้
+                        </div>
+                        <div className="cluster-grid">
+                          {falseClusters.map((cluster) => (
+                            <button
+                              key={cluster}
+                              type="button"
+                              className="cluster-btn false-cluster"
+                              onClick={() =>
+                                handleQuickConsonantClick(cluster)
+                              }
+                            >
+                              {cluster}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </section>
 
@@ -1132,13 +1625,26 @@ export default function App() {
                         onChange={(event) => setSelectedVoiceURI(event.target.value)}
                       >
                         <option value="">เลือกอัตโนมัติ</option>
-                        {voices.map((voice) => (
-                          <option key={voice.voiceURI} value={voice.voiceURI}>
-                            {voice.name} ({voice.lang})
-                          </option>
-                        ))}
+                        {voices
+                          .filter((voice) =>
+                            voice.lang?.toLowerCase().startsWith("th"),
+                          )
+                          .map((voice) => (
+                            <option key={voice.voiceURI} value={voice.voiceURI}>
+                              {voice.name} ({voice.lang})
+                            </option>
+                          ))}
                       </select>
                     </label>
+
+                    {voices.every(
+                      (voice) => !voice.lang?.toLowerCase().startsWith("th"),
+                    ) && (
+                      <div className="error-text">
+                        ⚠️ เครื่อง/เบราว์เซอร์นี้ยังไม่มี Thai TTS voice —
+                        ติดตั้งเสียงภาษาไทยก่อนจึงจะอ่านเป็นคำได้
+                      </div>
+                    )}
 
                     <label className="select-label">
                       ความเร็วอ่าน: {speechRate}x
@@ -1349,20 +1855,30 @@ export default function App() {
 
 const styles = `
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: "Sarabun", Arial, sans-serif; }
+  html, body, #root { width: 100%; height: 100%; }
+  body {
+    margin: 0;
+    font-family: "Sarabun", Arial, sans-serif;
+    overflow: hidden;
+  }
   button, input, select { font-family: inherit; }
   button { border: 0; cursor: pointer; }
 
   .app-page {
-    min-height: 100vh;
+    width: 100%;
+    height: 100dvh;
+    min-height: 100dvh;
     padding: 22px 14px;
     background-size: cover;
     background-position: center;
+    overflow: hidden;
   }
 
   .app-shell {
     width: min(1280px, 100%);
+    height: 100%;
     margin: 0 auto;
+    min-height: 0;
   }
 
   .panel {
@@ -1403,8 +1919,24 @@ const styles = `
   .danger-btn { background: #ef4444; color: white; }
   .blue-btn:disabled { opacity: .6; cursor: wait; }
 
-  .main-grid { display: grid; grid-template-columns: 1fr; gap: 20px; align-items: start; }
-  .main-grid.split-layout { grid-template-columns: minmax(0, 1fr) 410px; }
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 20px;
+    align-items: stretch;
+    height: calc(100dvh - 44px);
+    min-height: 0;
+  }
+
+  .main-grid.split-layout {
+    grid-template-columns: minmax(0, 1fr) 410px;
+  }
+
+  .main-grid > section {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
 
   .board-panel { padding: 30px 22px; min-width: 0; }
   .presentation-panel { padding: 45px 50px; }
@@ -1428,6 +1960,9 @@ const styles = `
   }
 
   .analysis-box strong { color: #0284c7; }
+  .analysis-item + .analysis-item {
+    margin-top: 6px;
+  }
   .analysis-tag {
     padding: 2px 7px;
     border-radius: 5px;
@@ -1490,10 +2025,10 @@ const styles = `
     display: flex;
     align-items: center;
     position: relative;
-    transition: transform .18s ease;
+    transition: none;
+    transform: none;
   }
 
-  .tone-row.active .tone-line-wrap { transform: scaleY(1.25); }
   .tone-line {
     width: 100%;
     height: 2px;
@@ -1508,43 +2043,61 @@ const styles = `
 
   .tone-circle {
     position: absolute;
-    transform: translateX(-50%);
-    padding: 0 10px;
-    border-radius: 999px;
+    transform: translate3d(-50%, -50%, 0);
+    aspect-ratio: 1 / 1;
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     white-space: nowrap;
     font-weight: 700;
+    overflow: visible;
+    box-sizing: border-box;
     box-shadow: 0 4px 11px rgba(0,0,0,.24);
     transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
   }
 
+  .tone-line-wrap > .tone-circle {
+    top: 50%;
+  }
+
   .tone-row.active .tone-circle {
-    transform: translateX(-50%) scale(1.23);
+    transform: translate3d(-50%, -50%, 0) scale(1.23);
     box-shadow: 0 8px 20px rgba(0,0,0,.34);
     filter: brightness(1.12);
   }
 
   .multi-circles {
     position: absolute;
-    transform: translateX(-50%);
+    top: 50%;
+    transform: translate3d(-50%, -50%, 0);
     display: flex;
     align-items: center;
     gap: 8px;
     transition: transform .18s ease;
   }
 
-  .tone-row.active .multi-circles { transform: translateX(-50%) scale(1.16); }
-  .tone-row.active .multi-circles .tone-circle { transform: none; }
+  .tone-row.active .multi-circles {
+    transform: translate3d(-50%, -50%, 0) scale(1.16);
+  }
+
+  .tone-row.active .multi-circles .tone-circle {
+    transform: none;
+  }
   .slash { color: #64748b; font-size: 21px; font-weight: 700; }
   .fixed-tone-label { text-align: center; font-size: 16px; font-weight: 700; }
+
+  .right-panel-wrapper {
+    min-height: 0;
+    height: 100%;
+  }
 
   .control-panel {
     padding: 18px;
     display: flex;
     flex-direction: column;
     gap: 16px;
+    min-height: 0;
   }
 
   .control-panel h3 { margin: 0; color: #1e293b; font-size: 19px; }
@@ -1607,6 +2160,51 @@ const styles = `
     border-radius: 6px;
     font-weight: 700;
     font-size: 15px;
+  }
+
+  .cluster-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  .cluster-label {
+    margin-bottom: 5px;
+  }
+
+  .cluster-grid {
+    display: grid;
+    grid-template-columns: repeat(9, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .cluster-btn {
+    min-height: 34px;
+    padding: 6px 7px;
+    border-radius: 7px;
+    background: #fff;
+    font-weight: 700;
+    font-size: 14px;
+    border: 1px solid #cbd5e1;
+  }
+
+  .true-cluster {
+    color: #0369a1;
+    border-color: #bae6fd;
+    background: #f0f9ff;
+  }
+
+  .leading-ho-cluster {
+    color: #7c3aed;
+    border-color: #ddd6fe;
+    background: #f5f3ff;
+  }
+
+  .false-cluster {
+    color: #c2410c;
+    border-color: #fed7aa;
+    background: #fff7ed;
   }
 
   .vowel-list { gap: 5px; }
@@ -1699,9 +2297,10 @@ const styles = `
   .api-input-box strong { display: block; margin-bottom: 7px; }
 
   .display-page {
-    height: 100vh;
-    width: 100vw;
-    padding: 2vh 2vw;
+    width: 100%;
+    height: 100dvh;
+    min-height: 100dvh;
+    padding: clamp(10px, 2vh, 24px) clamp(10px, 2vw, 24px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1712,26 +2311,30 @@ const styles = `
   }
 
   .display-board {
-    width: 100%;
+    width: min(1200px, 96vw);
+    height: min(94dvh, calc(100dvh - 24px));
     max-width: 1200px;
-    height: 100%;
-    max-height: 94vh;
-    padding: clamp(15px, 3vh, 44px);
+    max-height: calc(100dvh - 24px);
+    min-height: 0;
+    padding: clamp(12px, 3vh, 44px);
     border-radius: clamp(16px, 2vw, 28px);
     background: rgba(255,255,255,.96);
     border: 1px solid #cbd5e1;
     box-shadow: 0 16px 42px rgba(0,0,0,.18);
     display: flex;
     flex-direction: column;
+    overflow: hidden;
   }
 
   .display-board .tone-rows {
     flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     justify-content: space-evenly;
     gap: 0;
     margin-top: 2vh;
+    overflow: hidden;
   }
 
   .display-tip {
@@ -1748,8 +2351,22 @@ const styles = `
   }
 
   @media (max-width: 980px) {
-    .main-grid.split-layout { grid-template-columns: 1fr; }
-    .control-panel { position: static; max-height: none; }
+    .app-page {
+      overflow: hidden;
+    }
+
+    .main-grid {
+      height: calc(100dvh - 44px);
+    }
+
+    .main-grid.split-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .control-panel {
+      position: static;
+      min-height: 0;
+    }
   }
 
   @media (max-width: 640px) {
@@ -1761,12 +2378,36 @@ const styles = `
     .tone-name { font-size: 13px !important; white-space: normal; }
     .fixed-tone-label { font-size: 12px; }
     .tone-rows { gap: 20px; }
-    .tone-circle { padding: 0 7px; min-width: 39px !important; height: 39px !important; font-size: 15px !important; }
+    .tone-circle {
+      width: 39px !important;
+      min-width: 39px !important;
+      max-width: 39px !important;
+      height: 39px !important;
+      padding: 0 !important;
+      font-size: 15px !important;
+    }
     .multi-circles { gap: 4px; }
     .slash { font-size: 16px; }
     .consonant-grid { gap: 3px; }
     .consonant-btn { height: 31px; font-size: 13px; }
-    .display-board { width: 98vw; padding: 14px 8px; }
+
+    .cluster-grid {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 4px;
+    }
+
+    .cluster-btn {
+      min-height: 31px;
+      font-size: 13px;
+      padding: 5px 4px;
+    }
+
+    .display-board {
+      width: 96vw;
+      height: calc(100dvh - 20px);
+      max-height: calc(100dvh - 20px);
+      padding: 14px 8px;
+    }
     .display-board .analysis-box { font-size: 11px; margin-bottom: 12px; }
     .display-board .tone-header, .display-board .tone-row { grid-template-columns: 104px minmax(100px, 1fr) 48px; }
     .display-tip { font-size: 10px; max-width: 92vw; white-space: normal; text-align: center; }
