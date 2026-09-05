@@ -1,91 +1,66 @@
 import React, { useState } from "react";
 
-/** ==========================================
- *  MODULE 1: ข้อมูลหลัก (Constants & Rules)
- *  ========================================== */
-const TONE_RULES = {
-  mid: { type: 'mid', label: 'อักษรกลาง' },
-  high: { type: 'high', label: 'อักษรสูง' },
-  low: { type: 'low', label: 'อักษรต่ำ' }
-};
+/* =========================================================================
+   MODULE: ข้อมูลและกฎการผัน (เก็บที่นี่เพื่อให้ AI แก้ไขง่าย)
+========================================================================= */
+const TONE_LEVELS = [
+  { id: 'rising', label: 'เสียงจัตวา [ ๋ ]', color: '#ff4d4f' },
+  { id: 'high', label: 'เสียงตรี [ ๊ ]', color: '#1890ff' },
+  { id: 'mid', label: 'เสียงโท [ ่ ]', color: '#1890ff' }, // ตัวอย่างตำแหน่ง
+  { id: 'low', label: 'เสียงเอก [ ่ ]', color: '#ff4d4f' },
+  { id: 'neutral', label: 'เสียงสามัญ [ - ]', color: '#1890ff' }
+];
 
-const PRONUNCIATION_MAP = {
-  "จริง": "จิง", "สร้าง": "ส้าง", "ทราย": "ซาย", "เศร้า": "เส้า", "ทราบ": "ซาบ"
-};
-
-/** ==========================================
- *  MODULE 2: ฟังก์ชันช่วย (Utils)
- *  ========================================== */
-function getCorrectPronunciation(word) {
-  return PRONUNCIATION_MAP[word] || word;
-}
-
-/** ==========================================
- *  MODULE 3: คอมโพเนนต์ UI
- *  ========================================== */
-function Board({ viewLayout }) {
-  return (
-    <div className="board-container" style={{ padding: '20px', border: '1px solid #ccc' }}>
-      <h1>ไตรยางศ์และการผันวรรณยุกต์</h1>
-      <div className="music-staff-box" style={{ height: '200px', background: '#f8f8f8', marginBottom: '20px' }}>
-        {/* บรรทัด 5 เส้น */}
-      </div>
-      <div className="analysis-box">ผลวิเคราะห์หลักภาษา...</div>
-      <div className="tone-rows-display">การผัน 5 เสียง...</div>
-      <div className="thai-guide-box">
-        <strong>หลักการเรียนรู้:</strong> ไตรยางศ์คือการแบ่งพยัญชนะไทย...
-      </div>
+/* =========================================================================
+   MODULE: COMPONENT BOARD (ส่วนแสดงผลหน้าจอหลัก)
+========================================================================= */
+const Board = () => (
+  <div style={{ padding: '20px', fontFamily: 'Arial, sans-serif' }}>
+    <h2 style={{ textAlign: 'center' }}>ไตรยางศ์ หรือ อักษร 3 หมู่ และการผันวรรณยุกต์</h2>
+    
+    {/* ส่วนวิเคราะห์ */}
+    <div style={{ background: '#e6f7ff', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
+      วิเคราะห์หลักภาษา: "วอง" เป็น คำเป็น (สระเสียงยาว) — ผันคู่ อักษรสูง/ห นำ [เอก, โท, จัตวา] + อักษรต่ำ [สามัญ, โท, ตรี] รวมผันได้ครบทั้ง 5 เสียง
     </div>
-  );
-}
 
-function ControlPanel() {
-  return (
-    <div className="control-panel" style={{ padding: '20px', background: '#eee' }}>
-      <h2>แผงควบคุม</h2>
-      <input type="text" placeholder="พิมพ์คำที่นี่..." />
+    {/* ส่วนบรรทัด 5 เส้นและจุดวงกลม */}
+    <div style={{ position: 'relative', height: '300px', borderLeft: '2px solid #ccc', paddingLeft: '20px' }}>
+      {TONE_LEVELS.map((level, index) => (
+        <div key={level.id} style={{ display: 'flex', alignItems: 'center', height: '60px', borderBottom: '1px solid #eee' }}>
+          <span style={{ width: '150px', fontWeight: 'bold' }}>{level.label}</span>
+          {/* นี่คือตำแหน่งจุดวงกลมจำลอง ให้คุณเติม logic การวางตำแหน่งในนี้ได้เลย */}
+          <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: level.color, marginLeft: '100px' }} />
+        </div>
+      ))}
     </div>
-  );
-}
+  </div>
+);
 
-/** ==========================================
- *  MODULE 4: แอปหลัก (Main)
- *  ========================================== */
+/* =========================================================================
+   MODULE: APP หลัก
+========================================================================= */
 export default function App() {
   const [viewLayout, setViewLayout] = useState("standard");
 
-  const openSecondScreen = () => {
-    const win = window.open("", "_blank", "width=1000,height=800");
-    win.document.write("<html><head><title>Monitor 2</title></head><body><div id='root'></div></body></html>");
-    // ในโปรเจกต์จริง ต้องมีการ render ตัว Board ลงใน win.document นี้
-  };
-
-  const handleSpeak = (text) => {
-    const cleanText = getCorrectPronunciation(text);
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = "th-TH";
-    window.speechSynthesis.speak(utterance);
-  };
-
   return (
-    <div className="app-main">
-      {/* ส่วนควบคุมด้านบน */}
-      <nav className="top-nav" style={{ display: 'flex', gap: '10px', padding: '10px', background: '#333', color: '#fff' }}>
+    <div className="app-container">
+      {/* แถบเมนู */}
+      <nav style={{ padding: '10px', background: '#f0f0f0', display: 'flex', gap: '10px' }}>
         <button onClick={() => setViewLayout("standard")}>ชิดเดียว</button>
-        <button onClick={() => setViewLayout("split")}>แบ่ง 2 เฟรม</button>
-        <button onClick={() => setViewLayout("preview")}>โหมดพรีวิว</button>
-        <button onClick={openSecondScreen} style={{ marginLeft: 'auto', background: 'green', color: 'white' }}>แยกจอมอนิเตอร์ 2</button>
+        <button onClick={() => setViewLayout("split")}>แบ่ง 2 จอ</button>
+        <button style={{ background: 'green', color: 'white' }}>แยกจอมอนิเตอร์ 2</button>
       </nav>
 
-      {/* ส่วนแสดงผลหลัก */}
-      {viewLayout === "preview" ? (
-        <Board viewLayout="preview" />
-      ) : (
-        <div style={{ display: 'flex', flexDirection: viewLayout === 'split' ? 'row' : 'column' }}>
-          <div style={{ flex: 1 }}><Board /></div>
-          {viewLayout === 'split' && <div style={{ flex: 1 }}><ControlPanel /></div>}
-        </div>
-      )}
+      {/* พื้นที่แสดงผล */}
+      <div style={{ display: 'flex' }}>
+        <div style={{ flex: 1 }}><Board /></div>
+        {viewLayout === "split" && (
+          <div style={{ flex: 1, borderLeft: '1px solid #ccc', padding: '20px' }}>
+            <h3>แผงควบคุม</h3>
+            <p>ใส่ Input / คำสั่งผันวรรณยุกต์ที่นี่...</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
