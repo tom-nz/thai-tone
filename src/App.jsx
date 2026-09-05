@@ -360,7 +360,6 @@ function Board({
   circleTextColor,
   isDisplay = false,
   fontSize = 20,
-  staffBgColor = "#ffffff",
 }) {
   const fixedRightLabels = {
     5: { text: "เสียงสูง", color: "#ef4444" },
@@ -368,28 +367,23 @@ function Board({
     1: { text: "เสียงต่ำ", color: "#007bff" },
   };
 
-  // ขนาดไดนามิก ปรับตาม 100vh ป้องกันการล้นจอเด็ดขาด
-  const circleSize = isDisplay ? "min(9vh, 8vw)" : "clamp(38px, 5vh, 48px)";
-  const textSize = isDisplay ? "min(3.5vh, 3vw)" : "clamp(14px, 2vh, 17px)";
-  const titleFontSize = isDisplay ? "min(5vh, 4vw)" : "clamp(20px, 3vh, 26px)";
-  const subTitleFontSize = isDisplay ? "min(3vh, 2.5vw)" : "clamp(14px, 2vh, 16px)";
+  // ขนาดไดนามิก เพื่อให้บีบอัดพอดีจอ ไม่เกิด Scrollbar
+  const ratio = Math.max(0.8, fontSize / 20);
+  const circleSize = isDisplay ? `min(${9 * ratio}vh, 8vw)` : "clamp(36px, 5vh, 48px)";
+  const textSize = isDisplay ? `min(${3.5 * ratio}vh, 3vw)` : "clamp(13px, 2vh, 17px)";
+  const titleFontSize = isDisplay ? `min(${4.5 * ratio}vh, 4vw)` : "clamp(18px, 3vh, 26px)";
+  const subTitleFontSize = isDisplay ? `min(${2.5 * ratio}vh, 2vw)` : "clamp(13px, 2vh, 16px)";
+  const analysisFontSize = isDisplay ? `min(${2 * ratio}vh, 2vw)` : "14px";
 
   return (
-    <div
-      className={`tone-board ${isDisplay ? "display-board" : ""}`}
-      style={
-        isDisplay 
-          ? { backgroundColor: staffBgColor } 
-          : { height: "100%", display: "flex", flexDirection: "column" }
-      }
-    >
+    <div className={`tone-board ${isDisplay ? "display-board" : ""}`}>
       <div className="board-title" style={{ flexShrink: 0 }}>
         <h2 style={{ fontSize: titleFontSize, margin: 0 }}>ไตรยางศ์ หรือ อักษร 3 หมู่</h2>
         <div style={{ fontSize: subTitleFontSize, fontWeight: 600 }}>และการผันวรรณยุกต์</div>
       </div>
 
       {inputText && analysisInfo?.desc && (
-        <div className="analysis-box" style={{ flexShrink: 0 }}>
+        <div className="analysis-box" style={{ flexShrink: 0, fontSize: analysisFontSize, margin: isDisplay ? "1vh auto" : "0 auto 16px" }}>
           📌 ผลวิเคราะห์หลักภาษา: <strong>"{inputText}"</strong> เป็น{" "}
           <span className="analysis-tag">
             {analysisInfo.type} ({analysisInfo.vowelLen})
@@ -399,10 +393,10 @@ function Board({
       )}
 
       <div className="tone-header" style={{ flexShrink: 0 }}>
-        <span>รูปวรรณยุกต์</span>
+        <span style={{ fontSize: isDisplay ? `min(${2.2 * ratio}vh, 2vw)` : undefined }}>รูปวรรณยุกต์</span>
       </div>
 
-      <div className="tone-rows" style={{ flex: 1, minHeight: 0 }}>
+      <div className="tone-rows">
         {linesData.map((item) => {
           const isActive = activeRowId === item.id;
           const fixedRight = fixedRightLabels[item.id];
@@ -442,7 +436,7 @@ function Board({
                       "--note-color": item.color,
                       minWidth: circleSize,
                       height: circleSize,
-                      fontSize: isDisplay ? "min(3.5vh, 3vw)" : "clamp(15px, 2.2vh, 18px)",
+                      fontSize: isDisplay ? `min(${3.5 * ratio}vh, 3vw)` : "clamp(14px, 2.2vh, 18px)",
                     }}
                   >
                     {item.word}
@@ -453,7 +447,7 @@ function Board({
                   <div className="multi-circles" style={{ left: item.leftPos }}>
                     {item.multi.map((circle, index) => (
                       <React.Fragment key={`${circle.text}-${index}`}>
-                        {index > 0 && <span className="slash" style={{ fontSize: isDisplay ? "min(4vh, 3.5vw)" : "18px" }}>/</span>}
+                        {index > 0 && <span className="slash" style={{ fontSize: isDisplay ? `min(${4 * ratio}vh, 3.5vw)` : "18px" }}>/</span>}
                         <div
                           className="tone-circle"
                           style={{
@@ -465,7 +459,7 @@ function Board({
                             "--note-color": circle.color,
                             minWidth: circleSize,
                             height: circleSize,
-                            fontSize: isDisplay ? "min(3.5vh, 3vw)" : "clamp(15px, 2.2vh, 18px)",
+                            fontSize: isDisplay ? `min(${3.5 * ratio}vh, 3vw)` : "clamp(14px, 2.2vh, 18px)",
                           }}
                         >
                           {circle.text}
@@ -478,7 +472,7 @@ function Board({
 
               <div
                 className="fixed-tone-label"
-                style={{ color: fixedRight?.color || "#94a3b8", fontSize: isDisplay ? "min(3vh, 2.5vw)" : "14px" }}
+                style={{ color: fixedRight?.color || "#94a3b8", fontSize: isDisplay ? `min(${2.8 * ratio}vh, 2.5vw)` : "14px" }}
               >
                 {fixedRight?.text || ""}
               </div>
@@ -587,6 +581,7 @@ export default function App() {
       return false;
     }
 
+    // ตรวจสอบคำภาษาไทย 1 พยางค์อย่างเคร่งครัด
     if (!STRICT_THAI_SYLLABLE_PATTERN.test(value)) {
       setInputError("กรุณากรอก 1 พยางค์ให้ถูกหลักภาษาไทย (เช่น พยัญชนะ สระ ตัวสะกด วรรณยุกต์)");
       return false;
@@ -640,4 +635,1193 @@ export default function App() {
 
       const data = await response.json();
       const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-      const jsonText = rawText.replace(/```json|
+      const jsonText = rawText.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(jsonText);
+
+      if (!Array.isArray(parsed) || parsed.length !== 5) throw new Error("Invalid AI response");
+
+      const formatted = parsed.map((item, index) => {
+        const base = toneRows[index];
+        const color =
+          item.type === "high"
+            ? colorHigh
+            : item.type === "low"
+              ? colorLow
+              : colorMid;
+
+        if (Array.isArray(item.words)) {
+          return {
+            ...base,
+            word: "",
+            color,
+            isMulti: true,
+            multi: item.words.map((text, itemIndex) => ({
+              text,
+              color: itemIndex === 0 ? colorLow : colorHigh,
+            })),
+            show: item.words.length > 0,
+          };
+        }
+
+        return {
+          ...base,
+          word: item.word || "",
+          color,
+          isMulti: false,
+          multi: [],
+          show: Boolean(item.word),
+        };
+      });
+
+      setLinesData(formatted);
+      setAnalysisInfo(analyzeSyllable(word, mode));
+    } catch (err) {
+      console.warn("AI Generate fallback:", err);
+      fallback();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleQuickConsonantClick = (consonant) => {
+    const { frontVowel, aboveBelowVowel, rest } = parseThaiWord(inputText);
+    const newWord = buildWord(frontVowel || "", consonant, aboveBelowVowel || "", "", rest || "อ");
+    setInputText(newWord);
+    validateInput(newWord);
+  };
+
+  const handleQuickVowelClick = (vowel) => {
+    const { initial } = parseThaiWord(inputText);
+    const newWord = `${vowel.front}${initial || "ก"}${vowel.rear}`;
+    setInputText(newWord);
+    validateInput(newWord);
+  };
+
+  const handleImageUpload = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setBgImage(reader.result);
+      setBgType("image");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveApiKey = () => {
+    const key = tempApiKey.trim();
+    if (typeof window !== "undefined") {
+      localStorage.setItem("gemini_api_key", key);
+    }
+    setCustomApiKey(key);
+    setApiSaveStatus("บันทึก API Key เรียบร้อยแล้ว!");
+    window.setTimeout(() => setApiSaveStatus(""), 3000);
+  };
+
+  const toggleFullscreen = useCallback(() => {
+    if (typeof document === "undefined") return;
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch((err) => {
+        console.warn("Fullscreen error:", err);
+      });
+    } else {
+      document.exitFullscreen?.().catch((err) => {
+        console.warn("Exit fullscreen error:", err);
+      });
+    }
+  }, []);
+
+  const handleOpenDualMonitor = () => {
+    if (typeof window === "undefined") return;
+    const currentUrl = window.location.href.split("?")[0];
+    window.open(
+      `${currentUrl}?view=display`,
+      "ThaiToneDisplayWindow",
+      "width=1280,height=860,resizable=yes,scrollbars=yes,status=yes",
+    );
+  };
+
+  const syncData = useMemo(
+    () => ({
+      type: "SYNC_STATE",
+      linesData,
+      analysisInfo,
+      inputText,
+      activeRowId,
+      colorMid,
+      colorHigh,
+      colorLow,
+      circleTextColor,
+      labelFontSize,
+      bgType,
+      bgColor,
+      bgImage,
+      staffBgColor,
+      mode,
+      speechEnabled,
+      speechRate,
+      selectedVoiceURI,
+    }),
+    [
+      linesData,
+      analysisInfo,
+      inputText,
+      activeRowId,
+      colorMid,
+      colorHigh,
+      colorLow,
+      circleTextColor,
+      labelFontSize,
+      bgType,
+      bgColor,
+      bgImage,
+      staffBgColor,
+      mode,
+      speechEnabled,
+      speechRate,
+      selectedVoiceURI,
+    ],
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const displayMode = params.get("view") === "display";
+    setIsDisplayWindow(displayMode);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+
+    const updateVoices = () => {
+      const thaiFirst = window.speechSynthesis
+        .getVoices()
+        .sort((a, b) => Number(b.lang.startsWith("th")) - Number(a.lang.startsWith("th")));
+      setVoices(thaiFirst);
+
+      if (!selectedVoiceURI) {
+        const thaiVoice = thaiFirst.find((voice) => voice.lang.startsWith("th"));
+        if (thaiVoice) setSelectedVoiceURI(thaiVoice.voiceURI);
+      }
+    };
+
+    updateVoices();
+    window.speechSynthesis.onvoiceschanged = updateVoices;
+
+    return () => {
+      window.speechSynthesis.cancel();
+    };
+  }, [selectedVoiceURI]);
+
+  useEffect(() => {
+    if (isDisplayWindow) return;
+    setLinesData(calculateTones(inputText, mode, colorMid, colorHigh, colorLow));
+    setAnalysisInfo(analyzeSyllable(inputText, mode));
+  }, [inputText, mode, colorMid, colorHigh, colorLow, isDisplayWindow]);
+
+  useEffect(() => {
+    if (isDisplayWindow || typeof window === "undefined" || !("BroadcastChannel" in window)) return;
+
+    const channel = new BroadcastChannel(CHANNEL_NAME);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(syncData));
+    } catch (err) {
+      console.warn("Storage sync error:", err);
+    }
+    channel.postMessage(syncData);
+
+    const listener = (event) => {
+      if (event.data?.type === "REQUEST_SYNC") channel.postMessage(syncData);
+    };
+
+    channel.addEventListener("message", listener);
+    return () => {
+      channel.removeEventListener("message", listener);
+      channel.close();
+    };
+  }, [isDisplayWindow, syncData]);
+
+  useEffect(() => {
+    if (!isDisplayWindow || typeof window === "undefined") return;
+
+    const apply = (data) => {
+      if (!data) return;
+      if (Array.isArray(data.linesData)) setLinesData(data.linesData);
+      if (data.analysisInfo) setAnalysisInfo(data.analysisInfo);
+      if (data.inputText !== undefined) setInputText(data.inputText);
+      if (data.activeRowId !== undefined) setActiveRowId(data.activeRowId);
+      if (data.colorMid) setColorMid(data.colorMid);
+      if (data.colorHigh) setColorHigh(data.colorHigh);
+      if (data.colorLow) setColorLow(data.colorLow);
+      if (data.circleTextColor) setCircleTextColor(data.circleTextColor);
+      if (data.labelFontSize) setLabelFontSize(data.labelFontSize);
+      if (data.bgType) setBgType(data.bgType);
+      if (data.bgColor) setBgColor(data.bgColor);
+      if (data.bgImage !== undefined) setBgImage(data.bgImage);
+      if (data.staffBgColor) setStaffBgColor(data.staffBgColor);
+      if (data.mode) setMode(data.mode);
+      if (data.speechEnabled !== undefined) setSpeechEnabled(data.speechEnabled);
+      if (data.speechRate) setSpeechRate(data.speechRate);
+      if (data.selectedVoiceURI !== undefined) setSelectedVoiceURI(data.selectedVoiceURI);
+    };
+
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) apply(JSON.parse(saved));
+    } catch (err) {
+      console.warn("Read saved state error:", err);
+    }
+
+    if (!("BroadcastChannel" in window)) return;
+    const channel = new BroadcastChannel(CHANNEL_NAME);
+    const listener = (event) => {
+      if (event.data?.type === "SYNC_STATE") apply(event.data);
+      if (event.data?.type === "TOGGLE_FULLSCREEN") toggleFullscreen();
+    };
+
+    channel.addEventListener("message", listener);
+    channel.postMessage({ type: "REQUEST_SYNC" });
+
+    return () => {
+      channel.removeEventListener("message", listener);
+      channel.close();
+    };
+  }, [isDisplayWindow, toggleFullscreen]);
+
+  const sendFullscreenToDisplay = () => {
+    if (typeof window === "undefined" || !("BroadcastChannel" in window)) return;
+    const channel = new BroadcastChannel(CHANNEL_NAME);
+    channel.postMessage({ type: "TOGGLE_FULLSCREEN" });
+    channel.close();
+  };
+
+  // Component สำหรับสร้าง Top Bar แบบใช้ซ้ำ
+  const renderTopBar = (extraStyle = {}) => (
+    <section className="top-bar panel" style={{ ...extraStyle, flexShrink: 0 }}>
+      <div className="view-buttons">
+        <strong>🖥️ มุมมอง:</strong>
+        {[
+          ["standard", "ชิดเดียว"],
+          ["split", "แบ่ง 2 จอ"],
+          ["present", "โหมดพรีวิว"],
+        ].map(([value, label]) => (
+          <button
+            key={value}
+            className={viewLayout === value ? "selected-btn" : "soft-btn"}
+            onClick={() => setViewLayout(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="monitor-buttons">
+        <button className="blue-btn" onClick={sendFullscreenToDisplay}>
+          ⛶ สลับเต็มจอ จอที่ 2
+        </button>
+        <button className="green-btn" onClick={handleOpenDualMonitor}>
+          🚀 เปิดกระดานแยกขึ้นมอนิเตอร์ที่ 2
+        </button>
+      </div>
+    </section>
+  );
+
+  if (isDisplayWindow) {
+    return (
+      <>
+        <style>{styles}</style>
+        <main
+          className="display-page"
+          style={{ ...containerBackground, backgroundColor: staffBgColor }}
+          onDoubleClick={toggleFullscreen}
+        >
+          <Board
+            linesData={linesData}
+            analysisInfo={analysisInfo}
+            inputText={inputText}
+            activeRowId={activeRowId}
+            onRowClick={handleRowClick}
+            circleTextColor={circleTextColor}
+            isDisplay
+            fontSize={labelFontSize}
+            staffBgColor="transparent"
+          />
+          <div className="display-tip">ดับเบิลคลิกพื้นที่ว่างเพื่อสลับเต็มจอ • คลิกบรรทัดเพื่อขยายและอ่านออกเสียง</div>
+        </main>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <style>{styles}</style>
+
+      <main className="app-page" style={containerBackground}>
+        <div className="app-shell">
+          
+          {/* กรณีโหมด present ให้ Top bar ยังคงลอยอยู่บนสุด */}
+          {viewLayout === "present" && renderTopBar({ marginBottom: "16px" })}
+
+          <div className={`main-grid ${viewLayout === "split" ? "split-layout" : ""}`}>
+            
+            {/* ซ้าย: เฟรมมุมมองกระดาน 5 เส้น (ห้ามล้นกรอบ) */}
+            <section
+              className="panel board-panel"
+              style={{
+                backgroundColor: staffBgColor,
+                padding: viewLayout === "present" ? "30px 40px" : "25px 20px",
+              }}
+            >
+              <Board
+                linesData={linesData}
+                analysisInfo={analysisInfo}
+                inputText={inputText}
+                activeRowId={activeRowId}
+                onRowClick={handleRowClick}
+                circleTextColor={circleTextColor}
+                fontSize={labelFontSize}
+              />
+            </section>
+
+            {/* ขวา: เฟรมแผงควบคุมที่มี TopBar ฝังอยู่ด้านบน */}
+            {viewLayout !== "present" && (
+              <div className="right-panel-wrapper">
+                {/* เฟรมมุมมองย้ายมาอยู่ด้านบนเฟรมแผงควบคุม */}
+                {renderTopBar({ marginBottom: 0 })}
+
+                {/* แผงควบคุมตั้งค่า (มี Scrollbar แค่ตรงนี้จุดเดียว) */}
+                <aside className="control-panel panel">
+                  <h3>⚙️ แผงควบคุม</h3>
+
+                  <section className="control-group">
+                    <strong>✨ ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ</strong>
+
+                    {inputText.trim() !== "" && (
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "6px",
+                          marginBottom: "12px",
+                          fontSize: "13px",
+                          color: "#334155",
+                        }}
+                      >
+                        <ModeRadio value="full5" checked={mode === "full5"} label="ผันครบทั้ง 5 บรรทัด (อักษรคู่ / ห นำ)" onChange={setMode} />
+                        <ModeRadio value="highOnly" checked={mode === "highOnly"} label="เฉพาะเสียงสูง (เอก, โท, จัตวา)" onChange={setMode} />
+                        <ModeRadio value="lowOnly" checked={mode === "lowOnly"} label="เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)" onChange={setMode} />
+                      </div>
+                    )}
+
+                    <div className="input-row">
+                      <input
+                        value={inputText}
+                        placeholder="พิมพ์ 1 คำ เช่น กอ, เมา, กวาง"
+                        onChange={(event) => {
+                          const val = event.target.value;
+                          setInputText(val);
+                          validateInput(val);
+                          if (!val.trim()) {
+                            setMode("full5");
+                          }
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") handleGenerate();
+                        }}
+                        className={inputError ? "input-error" : ""}
+                      />
+                      <button className="blue-btn" disabled={loading} onClick={handleGenerate}>
+                        {loading ? "..." : "ผันคำ"}
+                      </button>
+                    </div>
+
+                    {inputError && <div className="error-text">{inputError}</div>}
+                  </section>
+
+                  <section>
+                    <div className="section-label">⌨️ เลือกพยัญชนะด่วน (๔๔ ตัว):</div>
+                    <div className="consonant-grid">
+                      {quickConsonants.map((consonant) => (
+                        <button
+                          key={consonant}
+                          className="consonant-btn"
+                          onClick={() => handleQuickConsonantClick(consonant)}
+                          style={{
+                            color: midConsonants.includes(consonant)
+                              ? colorMid
+                              : highConsonants.includes(consonant)
+                                ? colorHigh
+                                : colorLow,
+                          }}
+                        >
+                          {consonant}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section>
+                    <div className="section-label green-label">🟢 สระเสียงยาว (คำเป็น):</div>
+                    <div className="vowel-list">
+                      {longVowels.map((vowel) => (
+                        <button
+                          key={vowel.label}
+                          className="vowel-btn long-vowel"
+                          onClick={() => handleQuickVowelClick(vowel)}
+                        >
+                          {vowel.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="section-label red-label">🔴 สระเสียงสั้น (คำตาย):</div>
+                    <div className="vowel-list">
+                      {shortVowels.map((vowel) => (
+                        <button
+                          key={vowel.label}
+                          className="vowel-btn short-vowel"
+                          onClick={() => handleQuickVowelClick(vowel)}
+                        >
+                          {vowel.label}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="control-group">
+                    <strong>🔊 การอ่านออกเสียง</strong>
+
+                    <label className="toggle-label">
+                      <input
+                        type="checkbox"
+                        checked={speechEnabled}
+                        onChange={(event) => setSpeechEnabled(event.target.checked)}
+                      />
+                      เปิดเสียงเมื่อคลิกบรรทัด
+                    </label>
+
+                    <label className="select-label">
+                      เสียงอ่าน
+                      <select
+                        value={selectedVoiceURI}
+                        onChange={(event) => setSelectedVoiceURI(event.target.value)}
+                      >
+                        <option value="">เลือกอัตโนมัติ</option>
+                        {voices.map((voice) => (
+                          <option key={voice.voiceURI} value={voice.voiceURI}>
+                            {voice.name} ({voice.lang})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="select-label">
+                      ความเร็วอ่าน: {speechRate}x
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="1.4"
+                        step="0.05"
+                        value={speechRate}
+                        onChange={(event) => setSpeechRate(Number(event.target.value))}
+                      />
+                    </label>
+
+                    <button
+                      className="soft-btn"
+                      onClick={() => {
+                        const item = linesData.find((line) => line.show);
+                        speak(item ? getSpeechText(item) : inputText);
+                      }}
+                    >
+                      ▶ ทดลองอ่านคำ
+                    </button>
+                  </section>
+
+                  <section className="control-group">
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        fontWeight: "bold",
+                        color: "#4b5563",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      🎼 สีพื้นหลังกระดานบรรทัด 5 เส้น
+                    </div>
+
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                      {[
+                        { label: "ขาว", value: "#ffffff" },
+                        { label: "ครีม", value: "#fffbeb" },
+                        { label: "ฟ้าอ่อน", value: "#f0f9ff" },
+                        { label: "เขียวอ่อน", value: "#f0fdf4" },
+                        { label: "เทาอ่อน", value: "#f8fafc" },
+                      ].map((item) => (
+                        <button
+                          key={item.value}
+                          onClick={() => setStaffBgColor(item.value)}
+                          style={{
+                            backgroundColor: item.value,
+                            border:
+                              staffBgColor === item.value
+                                ? "2px solid #0284c7"
+                                : "1px solid #cbd5e1",
+                            padding: "6px 10px",
+                            borderRadius: "6px",
+                            fontSize: "11px",
+                            fontWeight: "bold",
+                            cursor: "pointer",
+                            color: "#1e293b",
+                          }}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+
+                      <input
+                        type="color"
+                        value={staffBgColor}
+                        onChange={(e) => setStaffBgColor(e.target.value)}
+                        title="เลือกสีเอง"
+                        style={{
+                          width: "34px",
+                          height: "30px",
+                          padding: 0,
+                          cursor: "pointer",
+                          border: "1px solid #cbd5e1",
+                          borderRadius: "6px",
+                        }}
+                      />
+                    </div>
+                  </section>
+
+                  <section>
+                    <div className="section-label">🎨 ตั้งค่าสีประจำหมู่ และสีตัวอักษร</div>
+                    <div className="color-grid">
+                      {[
+                        ["อักษรกลาง", colorMid, setColorMid],
+                        ["อักษรสูง", colorHigh, setColorHigh],
+                        ["อักษรต่ำ", colorLow, setColorLow],
+                        ["สีตัวอักษร", circleTextColor, setCircleTextColor],
+                      ].map(([label, value, setter]) => (
+                        <label
+                          key={label}
+                          className="color-picker"
+                          style={{
+                            backgroundColor: label === "สีตัวอักษร" ? "#334155" : value,
+                            color: label === "สีตัวอักษร" ? value : "#fff",
+                          }}
+                        >
+                          {label}
+                          <input
+                            type="color"
+                            value={value}
+                            onChange={(event) => setter(event.target.value)}
+                          />
+                        </label>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="control-group">
+                    <strong>🖼️ เลือกสีหรือรูปภาพพื้นหลังจอภาพรวม</strong>
+                    <div className="background-colors">
+                      {[
+                        ["เทา", "#e2e8f0"],
+                        ["สว่าง", "#f1f5f9"],
+                        ["ฟ้าอ่อน", "#e0f2fe"],
+                        ["มินต์", "#dcfce7"],
+                        ["ส้มอ่อน", "#fef3c7"],
+                        ["เข้ม", "#334155"],
+                      ].map(([label, color]) => (
+                        <button
+                          key={color}
+                          onClick={() => {
+                            setBgColor(color);
+                            setBgType("color");
+                          }}
+                          className={bgColor === color && bgType === "color" ? "background-selected" : ""}
+                          style={{
+                            backgroundColor: color,
+                            color: color === "#334155" ? "#fff" : "#1e293b",
+                          }}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <label className="upload-btn">
+                      📁 อัปโหลดรูปภาพพื้นหลัง
+                      <input type="file" accept="image/*" onChange={handleImageUpload} />
+                    </label>
+
+                    {bgType === "image" && (
+                      <button
+                        className="danger-btn"
+                        onClick={() => {
+                          setBgType("color");
+                          setBgImage("");
+                        }}
+                      >
+                        ยกเลิกรูปภาพ
+                      </button>
+                    )}
+                  </section>
+
+                  <section className="control-group">
+                    <label className="select-label">
+                      📐 ขนาดตัวหนังสือและวงกลม (จอที่ 2): {labelFontSize}px
+                      <input
+                        type="range"
+                        min="16"
+                        max="32"
+                        value={labelFontSize}
+                        onChange={(event) => setLabelFontSize(Number(event.target.value))}
+                      />
+                    </label>
+                  </section>
+
+                  <section className="api-section">
+                    <button
+                      className="api-toggle"
+                      onClick={() => setShowApiInput((value) => !value)}
+                    >
+                      🔑 {customApiKey ? "เปลี่ยน Gemini API Key" : "เชื่อมต่อ AI (API Key)"}
+                    </button>
+
+                    {showApiInput && (
+                      <div className="api-input-box">
+                        <strong>🔑 เชื่อมต่อ Gemini API Key ส่วนตัว:</strong>
+                        <div className="input-row">
+                          <input
+                            type="password"
+                            value={tempApiKey}
+                            placeholder="วาง Gemini API Key..."
+                            onChange={(event) => setTempApiKey(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") handleSaveApiKey();
+                            }}
+                          />
+                          <button className="green-btn" onClick={handleSaveApiKey}>
+                            บันทึก
+                          </button>
+                        </div>
+                        {apiSaveStatus && <div className="success-text">✓ {apiSaveStatus}</div>}
+                      </div>
+                    )}
+                  </section>
+                </aside>
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
+    </>
+  );
+}
+
+const styles = `
+  * { box-sizing: border-box; }
+  
+  /* ล็อกหน้าจอทั้งหมดไม่ให้มี Scrollbar ทั้งแนวตั้งแนวนอนเด็ดขาด */
+  html, body { 
+    margin: 0; 
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    font-family: "Sarabun", Arial, sans-serif; 
+    overflow: hidden !important; 
+  }
+  
+  button, input, select { font-family: inherit; }
+  button { border: 0; cursor: pointer; }
+
+  /* โครงสร้างหน้าต่างหลักให้เต็มจอเป๊ะๆ */
+  .app-page {
+    height: 100vh; 
+    width: 100vw;
+    padding: 16px 14px;
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .app-shell {
+    width: min(1280px, 100%);
+    height: 100%;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* กุญแจสำคัญให้ Flex ย่อขนาดได้ */
+  }
+
+  .panel {
+    background: rgba(255,255,255,.96);
+    border: 1px solid #dbe4ee;
+    box-shadow: 0 5px 20px rgba(15,23,42,.09);
+    border-radius: 16px;
+  }
+
+  .top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px;
+    flex-wrap: wrap;
+  }
+
+  .view-buttons, .monitor-buttons, .input-row, .vowel-list, .background-colors {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: wrap;
+  }
+
+  .view-buttons strong { color: #1e293b; font-size: 15px; }
+
+  .soft-btn, .selected-btn, .blue-btn, .green-btn, .danger-btn {
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .soft-btn { background: #f1f5f9; color: #475569; }
+  .selected-btn, .blue-btn { background: #0284c7; color: white; }
+  .green-btn { background: #16a34a; color: white; }
+  .danger-btn { background: #ef4444; color: white; }
+  .blue-btn:disabled { opacity: .6; cursor: wait; }
+
+  .main-grid { 
+    flex: 1;
+    display: grid; 
+    grid-template-columns: 1fr; 
+    gap: 16px; 
+    align-items: stretch;
+    min-height: 0; /* ให้ตารางย่อตัวได้ไม่ทะลุ 100vh */
+  }
+  
+  .main-grid.split-layout { grid-template-columns: minmax(0, 1fr) 410px; }
+
+  .board-panel { 
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* ห้ามกระดานฝั่งซ้ายทะลุ */
+  }
+  
+  .right-panel-wrapper {
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .presentation-panel { padding: 45px 50px; }
+
+  /* ให้กระดาน 5 เส้น ยืดหยุ่นในพื้นที่ที่เหลือ */
+  .tone-board { 
+    width: 100%; 
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0; 
+  }
+  
+  .board-title { text-align: center; color: #ea580c; margin-bottom: 18px; }
+  .board-title h2 { margin: 0; font-size: clamp(20px, 2.3vw, 30px); }
+  .board-title div { font-size: clamp(14px, 1.5vw, 19px); font-weight: 600; }
+
+  .analysis-box {
+    padding: 10px 14px;
+    max-width: 900px;
+    text-align: center;
+    border-radius: 10px;
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    color: #0369a1;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .analysis-box strong { color: #0284c7; }
+  .analysis-tag {
+    padding: 2px 7px;
+    border-radius: 5px;
+    background: #e0f2fe;
+    color: #075985;
+  }
+
+  .tone-header, .tone-row {
+    display: grid;
+    grid-template-columns: minmax(80px, 25%) 1fr minmax(60px, 15%); /* ยืดหยุ่นตามความกว้าง */
+    align-items: center;
+  }
+
+  .tone-header {
+    color: #0284c7;
+    font-weight: 700;
+    margin-bottom: 3px;
+  }
+
+  .tone-header span { text-align: right; padding-right: 20px; }
+
+  .tone-rows {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly; /* ให้ระยะห่างเฉลี่ยอัตโนมัติ ห้ามล้น */
+    gap: 0; 
+    min-height: 0;
+  }
+
+  .tone-row {
+    width: 100%;
+    padding: 0; /* เอา padding ออกเพื่อให้บีบได้เต็มที่ */
+    margin: 0;
+    background: transparent;
+    text-align: inherit;
+    border-radius: 12px;
+    transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
+  }
+
+  .tone-row:not(.disabled-tone-row):hover { background: rgba(224,242,254,.45); }
+  .tone-row.active {
+    background: rgba(224,242,254,.78);
+    box-shadow: 0 4px 14px rgba(2,132,199,.13);
+    transform: scale(1.025);
+  }
+
+  .disabled-tone-row { cursor: default; opacity: .72; }
+
+  .tone-name {
+    text-align: right;
+    padding-right: 20px;
+    font-weight: 700;
+    white-space: nowrap;
+    transition: transform .18s ease;
+  }
+
+  .tone-row.active .tone-name { transform: scale(1.06); }
+  .tone-name span { font-size: .92em; margin-left: 4px; }
+
+  .tone-line-wrap {
+    height: 34px;
+    display: flex;
+    align-items: center;
+    position: relative;
+    transition: transform .18s ease;
+  }
+
+  .tone-row.active .tone-line-wrap { transform: scaleY(1.25); }
+  .tone-line {
+    width: 100%;
+    height: 2px;
+    background: #94a3b8;
+    transition: height .18s ease, background .18s ease;
+  }
+
+  .tone-row.active .tone-line {
+    height: 4px;
+    background: #475569;
+  }
+
+  .tone-circle {
+    position: absolute;
+    transform: translateX(-50%);
+    padding: 0 10px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    font-weight: 700;
+    box-shadow: 0 4px 11px rgba(0,0,0,.24);
+    transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+  }
+
+  .tone-row.active .tone-circle {
+    transform: translateX(-50%) scale(1.23);
+    box-shadow: 0 8px 20px rgba(0,0,0,.34);
+    filter: brightness(1.12);
+  }
+
+  .multi-circles {
+    position: absolute;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: transform .18s ease;
+  }
+
+  .tone-row.active .multi-circles { transform: translateX(-50%) scale(1.16); }
+  .tone-row.active .multi-circles .tone-circle { transform: none; }
+  .slash { color: #64748b; font-weight: 700; }
+  .fixed-tone-label { text-align: center; font-weight: 700; }
+
+  /* แผงควบคุมมี Scrollbar ได้จุดเดียว */
+  .control-panel {
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .control-panel h3 { margin: 0; color: #1e293b; font-size: 19px; }
+  .control-group {
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    border-radius: 10px;
+    padding: 13px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    color: #1e293b;
+    font-size: 13px;
+  }
+
+  .radio-label, .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: #334155;
+    cursor: pointer;
+  }
+
+  .input-row { flex-wrap: nowrap; }
+  .input-row input {
+    min-width: 0;
+    flex: 1;
+    width: 100%;
+    padding: 8px 10px;
+    background: #fff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    font-size: 14px;
+  }
+
+  .input-row .input-error { border: 2px solid #ef4444; }
+  .error-text { color: #dc2626; font-size: 12px; font-weight: 700; }
+  .success-text { color: #059669; font-size: 12px; font-weight: 700; }
+
+  .section-label {
+    margin-bottom: 6px;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .green-label { color: #166534; }
+  .red-label { color: #991b1b; margin-top: 10px; }
+
+  .consonant-grid {
+    display: grid;
+    grid-template-columns: repeat(11, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .consonant-btn {
+    height: 34px;
+    border: 1px solid #cbd5e1;
+    background: white;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 15px;
+  }
+
+  .vowel-list { gap: 5px; }
+  .vowel-btn {
+    padding: 7px 9px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 14px;
+  }
+
+  .long-vowel { background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; }
+  .short-vowel { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; }
+
+  .select-label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    color: #475569;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .select-label select, .select-label input[type="range"] { width: 100%; }
+  .select-label select {
+    padding: 7px;
+    background: white;
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+  }
+
+  .color-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .color-picker {
+    min-height: 35px;
+    border-radius: 8px;
+    padding: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .color-picker input { position: absolute; opacity: 0; width: 0; height: 0; }
+
+  .background-colors button {
+    padding: 5px 8px;
+    border-radius: 6px;
+    border: 1px solid #cbd5e1;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .background-colors .background-selected { outline: 2px solid #0284c7; }
+
+  .upload-btn {
+    display: inline-flex;
+    width: fit-content;
+    padding: 7px 9px;
+    color: white;
+    background: #0284c7;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .upload-btn input { display: none; }
+  .api-section { border-top: 1px solid #e2e8f0; padding-top: 12px; }
+  .api-toggle {
+    width: 100%;
+    padding: 9px;
+    border-radius: 8px;
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fde68a;
+    font-weight: 700;
+  }
+
+  .api-input-box {
+    margin-top: 8px;
+    padding: 10px;
+    border: 1px dashed #94a3b8;
+    border-radius: 8px;
+    background: #f8fafc;
+    font-size: 12px;
+    color: #475569;
+  }
+
+  .api-input-box strong { display: block; margin-bottom: 7px; }
+
+  /* CSS สำหรับ Display Page จอ 2 ห้ามล้นจอเด็ดขาด */
+  .display-page {
+    height: 100vh;
+    width: 100vw;
+    padding: 2vh 2vw;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-size: cover;
+    background-position: center;
+    overflow: hidden !important; 
+    box-sizing: border-box;
+  }
+
+  .display-board {
+    width: 100%;
+    max-width: 1200px;
+    height: 100%;
+    padding: clamp(15px, 3vh, 44px) 4vw;
+    border-radius: clamp(16px, 2vw, 28px);
+    border: 1px solid #cbd5e1;
+    box-shadow: 0 16px 42px rgba(0,0,0,.18);
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+  }
+
+  .display-board .tone-header, .display-board .tone-row {
+    grid-template-columns: 20% 1fr 15%; /* ใช้สัดส่วนแทนการฟิกซ์ px ในจอที่ 2 */
+  }
+
+  .display-tip {
+    position: fixed;
+    bottom: 13px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 7px 13px;
+    border-radius: 999px;
+    color: white;
+    background: rgba(15,23,42,.72);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  @media (max-width: 980px) {
+    .main-grid.split-layout { grid-template-columns: 1fr; }
+    .right-panel-wrapper { position: static; max-height: none; }
+  }
+
+  @media (max-width: 640px) {
+    .app-page { padding: 10px; }
+    .top-bar { padding: 12px; }
+    .board-panel, .presentation-panel { padding: 22px 10px; }
+    .tone-header, .tone-row { grid-template-columns: 112px minmax(125px, 1fr) 52px; }
+    .tone-header span, .tone-name { padding-right: 8px; }
+    .tone-name { font-size: 13px !important; white-space: normal; }
+    .fixed-tone-label { font-size: 12px; }
+    .tone-rows { gap: 20px; }
+    .tone-circle { padding: 0 7px; min-width: 39px !important; height: 39px !important; font-size: 15px !important; }
+    .multi-circles { gap: 4px; }
+    .slash { font-size: 16px; }
+    .consonant-grid { gap: 3px; }
+    .consonant-btn { height: 31px; font-size: 13px; }
+    .display-board { width: 98vw; padding: 14px 8px; }
+    .display-board .analysis-box { font-size: 11px; margin-bottom: 12px; }
+    .display-board .tone-header, .display-board .tone-row { grid-template-columns: 104px minmax(100px, 1fr) 48px; }
+    .display-tip { font-size: 10px; max-width: 92vw; white-space: normal; text-align: center; }
+  }
+
+  /* ========================================= */
+  /* วาดก้านและธงเขบ็ตชั้นเดียว (Eighth Note)  */
+  /* ใช้หน่วย em สัมพันธ์กับขนาดฟอนต์วงกลม ยืดหดได้เป๊ะ! */
+  /* ========================================= */
+  .tone-circle::before {
+    content: "";
+    position: absolute;
+    right: 0; /* ชิดขอบสัมผัสด้านขวาของวงกลมพอดี */
+    bottom: 50%; /* เริ่มต้นจากศูนย์กลางแนวตั้ง */
+    width: 0.22em; /* ความหนาก้าน */
+    height: 2.6em; /* ความสูงก้าน */
+    background-color: var(--note-color, transparent);
+    z-index: -1;
+  }
+
+  .tone-circle::after {
+    content: "";
+    position: absolute;
+    right: -0.65em; /* ขยับหางออกขวาเชื่อมขอบก้าน */
+    bottom: calc(50% + 1.2em); /* ขยับขึ้นไปด้านบนใกล้ปลายก้าน */
+    width: 0.65em; /* ความกว้างหาง */
+    height: 1.4em; /* ความสูงหางตวัด */
+    border-right: 0.2em solid var(--note-color, transparent);
+    border-top: 0.25em solid var(--note-color, transparent);
+    border-top-right-radius: 1em 1.2em; /* โค้งตวัดเหมือนหางโน้ตดนตรี */
+    border-bottom-right-radius: 0.1em;
+    z-index: -1;
+  }
+`;
