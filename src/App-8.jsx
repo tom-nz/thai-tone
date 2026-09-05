@@ -18,24 +18,12 @@ const quickConsonants = [
   "ย", "ร", "ล", "ว", "ศ", "ษ", "ส", "ห", "ฬ", "อ", "ฮ",
 ];
 
-// แยกประเภทพยัญชนะต้นให้ชัดเจน เพื่อไม่ตีความอักษรนำ/ควบไม่แท้เป็นควบกล้ำแท้
-const trueClusters = [
+const thaiClusters = [
   "กร", "กล", "กว", "ขร", "ขล", "ขว", "คร", "คล", "คว",
-  "ตร", "ปร", "ปล", "พร", "พล", "ฟร", "ฟล",
+  "ตร", "ตล", "ปร", "ปล", "พร", "พล", "ฟร", "ฟล",
+  "หง", "หญ", "หน", "หม", "หย", "หร", "หล", "หว",
+  "ทร", "ศร", "สร", "จร", "ซร",
 ];
-
-const leadingHo = ["หง", "หญ", "หน", "หม", "หย", "หร", "หล", "หว"];
-const leadingO = ["อย"];
-
-// กรณีคำที่ต้องอาศัยความรู้ศัพท์/การออกเสียงจริงเพิ่มเติม
-// ไม่ใช้เป็นตัวตัดสินแทนกฎทั่วไป แต่ใช้เพื่อระบุว่าไม่ใช่ควบกล้ำแท้
-const lexicalExceptions = {
-  "ทร": { kind: "falseCluster" },
-  "ศร": { kind: "falseCluster" },
-  "สร": { kind: "falseCluster" },
-  "จร": { kind: "falseCluster" },
-  "ซร": { kind: "falseCluster" },
-};
 
 const longVowels = [
   { label: "◌า", front: "", rear: "า" },
@@ -132,20 +120,8 @@ function parseThaiWord(word = "") {
   }
 
   let initial = "";
-  let initialKind = "single";
-
-  const firstTwo = workStr.slice(0, 2);
-  if (trueClusters.includes(firstTwo)) {
-    initial = firstTwo;
-    initialKind = "trueCluster";
-    workStr = workStr.slice(2);
-  } else if (leadingHo.includes(firstTwo)) {
-    initial = firstTwo;
-    initialKind = "leadingHo";
-    workStr = workStr.slice(2);
-  } else if (leadingO.includes(firstTwo)) {
-    initial = firstTwo;
-    initialKind = "leadingO";
+  if (workStr.length >= 2 && thaiClusters.includes(workStr.slice(0, 2))) {
+    initial = workStr.slice(0, 2);
     workStr = workStr.slice(2);
   } else if (workStr.length) {
     initial = workStr[0];
@@ -165,14 +141,7 @@ function parseThaiWord(word = "") {
     else rest += char;
   }
 
-  return {
-    initial,
-    initialKind,
-    frontVowel,
-    aboveBelowVowel,
-    toneMark,
-    rest,
-  };
+  return { initial, frontVowel, aboveBelowVowel, toneMark, rest };
 }
 
 function buildWord(frontVowel, initial, aboveBelowVowel, tone, rest) {
@@ -181,102 +150,71 @@ function buildWord(frontVowel, initial, aboveBelowVowel, tone, rest) {
 }
 
 function analyzeSyllable(word, currentMode) {
-  const {
-    initial,
-    initialKind,
-    frontVowel,
-    aboveBelowVowel,
-    rest,
-  } = parseThaiWord(word);
+  const { initial, frontVowel, aboveBelowVowel, rest } = parseThaiWord(word);
+  const primaryConsonant = initial?.[0] || "";
+  const rearVowel = aboveBelowVowel + rest;
 
-  const primaryConsonant =
-    initialKind === "leadingHo"
-      ? initial[1] || initial[0] || ""
-      : initialKind === "leadingO"
-        ? initial[0] || ""
-        : initial[0] || "";
-
-  const shortVowelPatterns = [
-    "ะ", "ิ", "ึ", "ุ", "ั",
-    "เอะ", "เอะ", "แอะ", "โอะ", "เอาะ", "เอียะ", "เอือะ", "อัวะ",
+  const shortVowelChars = ["ะ", "ิ", "ึ", "ุ", "ั"];
+  const deadEndings = [
+    "ก", "ข", "ค", "ฆ", "บ", "ป", "พ", "ฟ", "ภ",
+    "ด", "จ", "ช", "ซ", "ฎ", "ฏ", "ฐ", "ฑ", "ฒ",
+    "ต", "ถ", "ท", "ธ", "ศ", "ษ", "ส",
   ];
 
-  const normalizedVowelPart = `${frontVowel}${aboveBelowVowel}${rest}`.normalize("NFC");
   const isShort =
-    shortVowelPatterns.some((pattern) => normalizedVowelPart.includes(pattern)) ||
-    (frontVowel === "เ" && rest.includes("ะ")) ||
-    (frontVowel === "แ" && rest.includes("ะ")) ||
-    (frontVowel === "โ" && rest.includes("ะ"));
+    shortVowelChars.some((v) => rearVowel.includes(v)) ||
+    (frontVowel === "เ" && rearVowel.includes("ะ"));
 
-  const hasSilentMarker = rest.includes("์");
-  const restBeforeSilentMarker = hasSilentMarker
-    ? rest.slice(0, rest.indexOf("์"))
-    : rest;
-
-  const finalConsonants = [...restBeforeSilentMarker].filter((char) => /[ก-ฮ]/.test(char));
-  const orthographicFinal = finalConsonants.at(-1) || "";
-
-  const knownDeadFinals = new Set([
-    "ก", "ข", "ฃ", "ค", "ฅ", "ฆ",
-    "จ", "ช", "ซ", "ฎ", "ฏ", "ฐ", "ฑ", "ฒ",
-    "ด", "ต", "ถ", "ท", "ธ", "ศ", "ษ", "ส",
-    "บ", "ป", "พ", "ฟ", "ภ",
-  ]);
-
-  const lexicalWordInfo = Object.prototype.hasOwnProperty.call(lexicalExceptions, initial)
-    ? lexicalExceptions[initial]
-    : null;
-
-  // ศัพท์เฉพาะยังไม่ควรถูกใช้แทนกฎทั่วไป จึงใช้เพียงกำกับชนิด ไม่เปลี่ยนการจำแนกเสียงท้ายอัตโนมัติ
-  const isDeadFinal = knownDeadFinals.has(orthographicFinal);
-  const hasPronouncedFinal = finalConsonants.length > 0 && !hasSilentMarker;
-  const isDead = isDeadFinal || (!hasPronouncedFinal && isShort);
+  const lastChar = rearVowel.slice(-1);
+  const isDead =
+    deadEndings.includes(lastChar) ||
+    rearVowel.endsWith("ะ") ||
+    (isShort && !rest);
 
   const type = isDead ? "คำตาย" : "คำเป็น";
   const vowelLen = isShort ? "สระเสียงสั้น" : "สระเสียงยาว";
-  const isCluster = initialKind === "trueCluster";
-  const isLeading = initialKind === "leadingHo" || initialKind === "leadingO";
-  const clusterLabel = isCluster ? ` (คำควบกล้ำแท้ "${initial}")` : "";
-  const leadingLabel = initialKind === "leadingHo"
-    ? ` (ห นำ "${initial}")`
-    : initialKind === "leadingO"
-      ? ` (อ นำ "${initial}")`
-      : "";
-  const lexicalLabel = lexicalWordInfo ? " (รูปคำมีข้อยกเว้นเชิงศัพท์)" : "";
+  const isCluster = initial.length > 1;
+  const clusterLabel = isCluster ? ` (คำควบกล้ำ "${initial}")` : "";
   let desc = "";
 
   if (midConsonants.includes(primaryConsonant)) {
     if (currentMode === "highOnly") {
-      desc = `อักษรกลาง${clusterLabel}${leadingLabel}${lexicalLabel} คำ${isDead ? "ตาย" : "เป็น"} — แสดงชุดเสียงสูงจากอักษรกลาง`;
+      desc = `อักษรกลาง${clusterLabel} เทียบผันเฉพาะเสียงสูง [เอก, โท, จัตวา]`;
     } else if (currentMode === "lowOnly") {
-      desc = `อักษรกลาง${clusterLabel}${leadingLabel}${lexicalLabel} คำ${isDead ? "ตาย" : "เป็น"} — แสดงชุดเสียงต่ำจากอักษรกลาง`;
+      desc = `อักษรกลาง${clusterLabel} เทียบผันเฉพาะเสียงต่ำ [สามัญ, โท, ตรี]`;
     } else {
       desc = isDead
-        ? `อักษรกลาง${clusterLabel}${leadingLabel}${lexicalLabel} คำตาย (ผันได้ 4 เสียง: เอก, โท, ตรี, จัตวา)`
-        : `อักษรกลาง${clusterLabel}${leadingLabel}${lexicalLabel} คำเป็น (ผันได้ครบ 5 เสียง)`;
+        ? `อักษรกลาง${clusterLabel} คำตาย (ผันได้เฉพาะ เอก, โท, ตรี, จัตวา)`
+        : `อักษรกลาง${clusterLabel} คำเป็น (ผันได้ครบ 5 เสียง)`;
     }
-  } else if (highConsonants.includes(primaryConsonant) || initialKind === "leadingHo") {
+  } else if (highConsonants.includes(primaryConsonant) || initial.startsWith("ห")) {
     if (currentMode === "highOnly") {
       desc = isDead
-        ? `อักษรสูง${clusterLabel}${leadingLabel}${lexicalLabel} คำตาย (ผันได้ 2 เสียง: เอก, โท)`
-        : `อักษรสูง${clusterLabel}${leadingLabel}${lexicalLabel} คำเป็น (ผันได้ 3 เสียง: เอก, โท, จัตวา)`;
+        ? `อักษรสูง${clusterLabel} คำตาย (ผันได้เฉพาะ เสียงเอก และ เสียงโท)`
+        : `อักษรสูง${clusterLabel} คำเป็น (ผันได้เฉพาะ เอก, โท, จัตวา)`;
     } else if (currentMode === "lowOnly") {
       desc = isDead
         ? isShort
-          ? `รูปเทียบอักษรต่ำคู่${clusterLabel}${leadingLabel} คำตายสระสั้น (เสียงตรี, โท)`
-          : `รูปเทียบอักษรต่ำคู่${clusterLabel}${leadingLabel} คำตายสระยาว (เสียงโท, ตรี)`
-        : `รูปเทียบอักษรต่ำคู่${clusterLabel}${leadingLabel} คำเป็น (เสียงสามัญ, โท, ตรี)`;
+          ? `เทียบผันเป็นอักษรต่ำคู่${clusterLabel} คำตายสระสั้น (พื้นเสียงตรี, ผันเสียงโท)`
+          : `เทียบผันเป็นอักษรต่ำคู่${clusterLabel} คำตายสระยาว (พื้นเสียงโท, ผันเสียงตรี)`
+        : `เทียบผันเป็นอักษรต่ำคู่${clusterLabel} คำเป็น (ผันได้ สามัญ, โท, ตรี)`;
     } else {
       desc = isDead
-        ? `อักษรสูง${clusterLabel}${leadingLabel}${lexicalLabel} คำตาย (ผันได้ 2 เสียง: เอก, โท)`
-        : `อักษรสูง${clusterLabel}${leadingLabel}${lexicalLabel} คำเป็น (ผันได้ 3 เสียง: เอก, โท, จัตวา)`;
+        ? `ผันคู่ อักษรสูง${clusterLabel} คำตาย [เอก, โท] + อักษรต่ำ [โท, ตรี]`
+        : `ผันคู่ อักษรสูง${clusterLabel} คำเป็น [เอก, โท, จัตวา] + อักษรต่ำ [สามัญ, โท, ตรี] รวมผันได้ครบทั้ง 5 เสียง`;
     }
+  } else if (currentMode === "full5") {
+    desc = isDead
+      ? "ผันคู่ อักษรสูง/ห นำ [เอก, โท] + อักษรต่ำ [โท, ตรี]"
+      : "ผันคู่ อักษรสูง/ห นำ [เอก, โท, จัตวา] + อักษรต่ำ [สามัญ, โท, ตรี] รวมผันได้ครบทั้ง 5 เสียง";
+  } else if (currentMode === "highOnly") {
+    desc = `เทียบผันเป็น เสียงอักษรสูง/ห นำ${clusterLabel} (ผันได้เฉพาะ เอก, โท, จัตวา)`;
   } else {
     desc = isDead
       ? isShort
-        ? `อักษรต่ำ${clusterLabel}${leadingLabel}${lexicalLabel} คำตายสระสั้น (พื้นเสียงตรี, ผันเสียงโท)`
-        : `อักษรต่ำ${clusterLabel}${leadingLabel}${lexicalLabel} คำตายสระยาว (พื้นเสียงโท, ผันเสียงตรี)`
-      : `อักษรต่ำ${clusterLabel}${leadingLabel}${lexicalLabel} คำเป็น (ผันได้ สามัญ, โท, ตรี)`;
+        ? `อักษรต่ำ${clusterLabel} คำตายสระสั้น (พื้นเสียงตรี, ผันเสียงโทและจัตวา)`
+        : `อักษรต่ำ${clusterLabel} คำตายสระยาว (พื้นเสียงโท, ผันเสียงตรี)`
+      : `อักษรต่ำ${clusterLabel} คำเป็น (ผันได้ สามัญ, โท, ตรี)`;
   }
 
   return {
@@ -286,12 +224,10 @@ function analyzeSyllable(word, currentMode) {
     isDead,
     isShort,
     initial,
-    initialKind,
     frontVowel,
     aboveBelowVowel,
     rest,
     primaryConsonant,
-    orthographicFinal,
   };
 }
 
@@ -303,7 +239,6 @@ function calculateTones(word, mode, colorMid, colorHigh, colorLow) {
     isMulti: false,
     multi: [],
     show: false,
-    isComparison: false,
   }));
 
   if (!word?.trim()) return emptyRows;
@@ -311,7 +246,6 @@ function calculateTones(word, mode, colorMid, colorHigh, colorLow) {
   const info = analyzeSyllable(word, mode);
   const {
     initial,
-    initialKind,
     frontVowel,
     aboveBelowVowel,
     rest,
@@ -320,14 +254,13 @@ function calculateTones(word, mode, colorMid, colorHigh, colorLow) {
     primaryConsonant,
   } = info;
 
-  const row = (id, wordValue, color, show = true, isComparison = false) => ({
+  const row = (id, wordValue, color, show = true) => ({
     ...toneRows.find((item) => item.id === id),
     word: wordValue || "",
     color,
     isMulti: false,
     multi: [],
     show: Boolean(show && wordValue),
-    isComparison,
   });
 
   const multiRow = (id, values) => ({
@@ -337,234 +270,91 @@ function calculateTones(word, mode, colorMid, colorHigh, colorLow) {
     isMulti: true,
     multi: values,
     show: values.length > 0,
-    isComparison: true,
   });
 
   const make = (consonant, mark = "") =>
     buildWord(frontVowel, consonant, aboveBelowVowel, mark, rest);
 
-  const pairInitial = (sourceInitial, sourceKind, direction) => {
-    if (!sourceInitial) return "";
-
-    if (sourceKind === "leadingHo") {
-      return direction === "toHigh"
-        ? sourceInitial
-        : sourceInitial[1] || sourceInitial[0];
-    }
-
-    if (sourceKind === "leadingO") {
-      return sourceInitial;
-    }
-
-    if (trueClusters.includes(sourceInitial)) {
-      const first = sourceInitial[0];
-      const second = sourceInitial.slice(1);
-      const pairedFirst = pairMap[first] || first;
-      return `${pairedFirst}${second}`;
-    }
-
-    if (direction === "toHigh" && lowSingleConsonants.includes(sourceInitial)) {
-      return `ห${sourceInitial}`;
-    }
-
-    if (direction === "toHigh") {
-      return pairMap[sourceInitial] || `ห${sourceInitial}`;
-    }
-
-    return pairMap[sourceInitial] || sourceInitial;
-  };
-
-  // อักษรกลาง: ใช้ตารางอักษรกลางโดยตรง คำตายมี 4 เสียงตามตารางอักษรไทย
   if (midConsonants.includes(primaryConsonant)) {
     if (mode === "highOnly") {
-      return isDead
-        ? [
-            row(5, make(initial, "๋"), colorMid, true),
-            row(4, make(initial, "๊"), colorMid, true),
-            row(3, make(initial, "้"), colorMid, true),
-            row(2, make(initial, ""), colorMid, true),
-            row(1, "", colorMid, false),
-          ]
-        : [
-            row(5, make(initial, "๋"), colorMid),
-            row(4, make(initial, "๊"), colorMid),
-            row(3, make(initial, "้"), colorMid),
-            row(2, make(initial, "่"), colorMid),
-            row(1, make(initial), colorMid),
-          ];
+      return [
+        row(5, make(initial, "๋"), colorMid),
+        row(4, "", colorMid, false),
+        row(3, make(initial, "้"), colorMid),
+        row(2, make(initial, "่"), colorMid),
+        row(1, "", colorMid, false),
+      ];
     }
 
     if (mode === "lowOnly") {
-      return isDead
-        ? [
-            row(5, make(initial, "๋"), colorMid),
-            row(4, make(initial, "๊"), colorMid),
-            row(3, make(initial, "้"), colorMid),
-            row(2, make(initial, ""), colorMid),
-            row(1, "", colorMid, false),
-          ]
-        : [
-            row(5, "", colorMid, false),
-            row(4, make(initial, "๊"), colorMid),
-            row(3, make(initial, "้"), colorMid),
-            row(2, make(initial, "่"), colorMid),
-            row(1, make(initial), colorMid),
-          ];
+      return [
+        row(5, "", colorMid, false),
+        row(4, make(initial, "๊"), colorMid),
+        row(3, make(initial, "้"), colorMid),
+        row(2, "", colorMid, false),
+        row(1, isDead ? "" : make(initial), colorMid, !isDead),
+      ];
     }
 
-    return isDead
-      ? [
-          row(5, make(initial, "๋"), colorMid),
-          row(4, make(initial, "๊"), colorMid),
-          row(3, make(initial, "้"), colorMid),
-          row(2, make(initial, ""), colorMid),
-          row(1, "", colorMid, false),
-        ]
-      : [
-          row(5, make(initial, "๋"), colorMid),
-          row(4, make(initial, "๊"), colorMid),
-          row(3, make(initial, "้"), colorMid),
-          row(2, make(initial, "่"), colorMid),
-          row(1, make(initial), colorMid),
-        ];
+    return [
+      row(5, make(initial, "๋"), colorMid),
+      row(4, make(initial, "๊"), colorMid),
+      row(3, make(initial, "้"), colorMid),
+      row(2, isDead ? buildWord(frontVowel, initial, aboveBelowVowel, "", rest) : make(initial, "่"), colorMid),
+      row(1, isDead ? "" : make(initial), colorMid, !isDead),
+    ];
   }
 
-  const isHighSource = highConsonants.includes(primaryConsonant) || initialKind === "leadingHo";
-  let highConsonant = initial;
-  let lowConsonant = initial;
+  let highConsonant = "";
+  let lowConsonant = "";
 
-  if (isHighSource) {
+  if (highConsonants.includes(primaryConsonant) || initial.startsWith("ห")) {
     highConsonant = initial;
-    lowConsonant = pairInitial(initial, initialKind, "toLow");
+    lowConsonant = pairMap[primaryConsonant] || primaryConsonant;
   } else if (lowSingleConsonants.includes(primaryConsonant)) {
     lowConsonant = initial;
-    highConsonant = pairInitial(initial, initialKind, "toHigh");
+    highConsonant = `ห${initial}`;
   } else {
     lowConsonant = initial;
-    highConsonant = pairInitial(initial, initialKind, "toHigh");
+    highConsonant = pairMap[primaryConsonant] || `ห${initial}`;
   }
 
-  // อักษรสูง: คำเป็น 3 เสียง, คำตาย 2 เสียง
-  if (isHighSource) {
-    if (mode === "highOnly") {
-      return isDead
-        ? [
-            row(5, "", colorHigh, false),
-            row(4, "", colorHigh, false),
-            row(3, make(highConsonant, "้"), colorHigh),
-            row(2, make(highConsonant, ""), colorHigh),
-            row(1, "", colorHigh, false),
-          ]
-        : [
-            row(5, make(highConsonant, ""), colorHigh),
-            row(4, "", colorHigh, false),
-            row(3, make(highConsonant, "้"), colorHigh),
-            row(2, make(highConsonant, "่"), colorHigh),
-            row(1, "", colorHigh, false),
-          ];
-    }
-
-    if (mode === "lowOnly") {
-      return isDead
-        ? [
-            row(5, "", colorLow, false),
-            row(4, make(lowConsonant, isShort ? "" : "้"), colorLow, true, true),
-            row(3, make(lowConsonant, isShort ? "่" : ""), colorLow),
-            row(2, "", colorLow, false),
-            row(1, "", colorLow, false),
-          ]
-        : [
-            row(5, "", colorLow, false),
-            row(4, make(lowConsonant, "๊"), colorLow, true, true),
-            row(3, make(lowConsonant, "้"), colorLow, true, true),
-            row(2, "", colorLow, false),
-            row(1, make(lowConsonant), colorLow, true, true),
-          ];
-    }
-
-    return isDead
-      ? [
-          row(5, "", colorHigh, false),
-          row(4, make(lowConsonant, isShort ? "" : "้"), colorLow, true, true),
-          row(3, make(highConsonant, "้"), colorHigh),
-          row(2, make(highConsonant, ""), colorHigh),
-          row(1, "", colorLow, false),
-        ]
-      : [
-          row(5, make(highConsonant, ""), colorHigh),
-          row(4, make(lowConsonant, "๊"), colorLow, true, true),
-          multiRow(3, [
-            {
-              text: make(lowConsonant, "่"),
-              color: colorLow,
-              isComparison: true,
-            },
-            {
-              text: make(highConsonant, "้"),
-              color: colorHigh,
-              isComparison: true,
-            },
-          ]),
-          row(2, make(highConsonant, "่"), colorHigh),
-          row(1, make(lowConsonant), colorLow, true, true),
-        ];
-  }
-
-  // อักษรต่ำ: คำเป็น 3 เสียง, คำตายสั้น/ยาว 2 เสียง
   if (mode === "highOnly") {
-    return isDead
-      ? [
-          row(5, "", colorHigh, false),
-          row(4, "", colorHigh, false),
-          row(3, make(highConsonant, "้"), colorHigh, true, true),
-          row(2, make(highConsonant, "่"), colorHigh, true, true),
-          row(1, "", colorHigh, false),
-        ]
-      : [
-          row(5, make(highConsonant), colorHigh, true, true),
-          row(4, "", colorHigh, false),
-          row(3, make(highConsonant, "้"), colorHigh, true, true),
-          row(2, make(highConsonant, "่"), colorHigh, true, true),
-          row(1, "", colorHigh, false),
-        ];
+    return [
+      row(5, isDead ? "" : make(highConsonant), colorHigh, !isDead),
+      row(4, "", colorHigh, false),
+      row(3, make(highConsonant, "้"), colorHigh),
+      row(2, make(highConsonant, "่"), colorHigh),
+      row(1, "", colorHigh, false),
+    ];
   }
 
   if (mode === "lowOnly") {
-    return isDead
-      ? [
-          row(5, "", colorLow, false),
-          row(4, make(lowConsonant, isShort ? "" : "้"), colorLow),
-          row(3, make(lowConsonant, isShort ? "่" : ""), colorLow),
-          row(2, "", colorLow, false),
-          row(1, "", colorLow, false),
-        ]
-      : [
-          row(5, "", colorLow, false),
-          row(4, make(lowConsonant, "๊"), colorLow),
-          row(3, make(lowConsonant, "้"), colorLow),
-          row(2, "", colorLow, false),
-          row(1, make(lowConsonant), colorLow),
-        ];
+    return [
+      row(5, "", colorLow, false),
+      row(4, make(lowConsonant, isDead && isShort ? "" : "้"), colorLow),
+      row(3, make(lowConsonant, isDead && !isShort ? "" : "่"), colorLow),
+      row(2, "", colorLow, false),
+      row(1, isDead ? "" : make(lowConsonant), colorLow, !isDead),
+    ];
   }
 
-  return isDead
-    ? [
-        row(5, "", colorHigh, false),
-        row(4, make(lowConsonant, isShort ? "" : "้"), colorLow),
-        row(3, make(lowConsonant, isShort ? "่" : ""), colorLow),
-        row(2, "", colorHigh, false),
-        row(1, "", colorLow, false),
-      ]
-    : [
-        row(5, make(highConsonant), colorHigh, true, true),
-        row(4, make(lowConsonant, "๊"), colorLow, true, true),
-        multiRow(3, [
-          { text: make(lowConsonant, "่"), color: colorLow, isComparison: true },
-          { text: make(highConsonant, "้"), color: colorHigh, isComparison: true },
-        ]),
-        row(2, make(highConsonant, "่"), colorHigh, true, true),
-        row(1, make(lowConsonant), colorLow),
-      ];
+  return [
+    row(5, isDead ? "" : make(highConsonant), colorHigh, !isDead),
+    row(4, make(lowConsonant, isDead && isShort ? "" : "้"), colorLow),
+    multiRow(3, [
+      {
+        text: make(lowConsonant, isDead && !isShort ? "" : "่"),
+        color: colorLow,
+      },
+      {
+        text: make(highConsonant, "้"),
+        color: colorHigh,
+      },
+    ]),
+    row(2, make(highConsonant, "่"), colorHigh),
+    row(1, isDead ? "" : make(lowConsonant), colorLow, !isDead),
+  ];
 }
 
 function getSpeechText(item) {
@@ -692,9 +482,6 @@ function Board({
                 — {info.desc}
               </div>
             ))}
-            <div className="analysis-note">
-              รูปที่สร้างจากอักษรคู่/อักษรนำเป็น <strong>รูปเทียบการผัน</strong> เพื่อการเรียนรู้ ไม่ได้ยืนยันว่าเป็นคำศัพท์จริงทุกคำ
-            </div>
           </div>
         );
       })()}
@@ -719,11 +506,7 @@ function Board({
               className={`tone-row ${isActive ? "active" : ""} ${!item.show ? "disabled-tone-row" : ""}`}
               key={item.id}
               onClick={() => onRowClick(item)}
-              title={
-                item.show
-                  ? `${item.isComparison ? "รูปเทียบการผัน • " : ""}คลิกเพื่อขยายและอ่านคำ ${getSpeechText(item)}`
-                  : ""
-              }
+              title={item.show ? `คลิกเพื่อขยายและอ่านคำ ${getSpeechText(item)}` : ""}
             >
               <div
                 className="tone-name"
@@ -811,8 +594,18 @@ export default function App() {
   const [voices, setVoices] = useState([]);
   const [selectedVoiceURI, setSelectedVoiceURI] = useState("");
 
-  const [customApiKey, setCustomApiKey] = useState("");
-  const [tempApiKey, setTempApiKey] = useState("");
+  const [customApiKey, setCustomApiKey] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("gemini_api_key") || "";
+    }
+    return "";
+  });
+  const [tempApiKey, setTempApiKey] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("gemini_api_key") || "";
+    }
+    return "";
+  });
   const [showApiInput, setShowApiInput] = useState(false);
   const [apiSaveStatus, setApiSaveStatus] = useState("");
   const speechRef = useRef(null);
@@ -894,22 +687,26 @@ export default function App() {
       }
       return;
     }
-
+    
     setLastValidInput(word);
 
-    // Rule engine เป็นแหล่งความจริงเดียวของการผันวรรณยุกต์
-    setLinesData(calculateTones(word, mode, colorMid, colorHigh, colorLow));
-    setAnalysisInfo(analyzeSyllable(word, mode));
+    const fallback = () => {
+      setLinesData(calculateTones(word, mode, colorMid, colorHigh, colorLow));
+      setAnalysisInfo(analyzeSyllable(word, mode));
+    };
 
-    // AI ไม่ได้รับอนุญาตให้เปลี่ยนผลการผันที่มาจาก rule engine
     const activeKey = customApiKey.trim() || apiKey;
-    if (!activeKey) return;
+    if (!activeKey) {
+      fallback();
+      return;
+    }
 
     setLoading(true);
-    try {
-      const prompt = `ช่วยอธิบายหลักการผันวรรณยุกต์ของคำว่า "${word}" เป็นข้อความสั้น ๆ โดยห้ามสร้างหรือแก้ผลการผัน และห้ามส่ง JSON`;
 
-      await fetch(
+    try {
+      const prompt = `วิเคราะห์การผันวรรณยุกต์ภาษาไทยของคำว่า "${word}" ส่งคืนเฉพาะ JSON array 5 รายการ เรียง จัตวา ตรี โท เอก สามัญ รูปแบบ [{"word":"...","type":"high"},{"word":"...","type":"low"},{"words":["...","..."],"type":"pair"},{"word":"...","type":"high"},{"word":"...","type":"low"}]`;
+
+      const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${activeKey}`,
         {
           method: "POST",
@@ -919,8 +716,52 @@ export default function App() {
           }),
         },
       );
+
+      const data = await response.json();
+      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const jsonText = rawText.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(jsonText);
+
+      if (!Array.isArray(parsed) || parsed.length !== 5) throw new Error("Invalid AI response");
+
+      const formatted = parsed.map((item, index) => {
+        const base = toneRows[index];
+        const color =
+          item.type === "high"
+            ? colorHigh
+            : item.type === "low"
+              ? colorLow
+              : colorMid;
+
+        if (Array.isArray(item.words)) {
+          return {
+            ...base,
+            word: "",
+            color,
+            isMulti: true,
+            multi: item.words.map((text, itemIndex) => ({
+              text,
+              color: itemIndex === 0 ? colorLow : colorHigh,
+            })),
+            show: item.words.length > 0,
+          };
+        }
+
+        return {
+          ...base,
+          word: item.word || "",
+          color,
+          isMulti: false,
+          multi: [],
+          show: Boolean(item.word),
+        };
+      });
+
+      setLinesData(formatted);
+      setAnalysisInfo(analyzeSyllable(word, mode));
     } catch (err) {
-      console.warn("AI explanation unavailable; rule engine remains authoritative:", err);
+      console.warn("AI Generate fallback:", err);
+      fallback();
     } finally {
       setLoading(false);
     }
@@ -954,8 +795,11 @@ export default function App() {
 
   const handleSaveApiKey = () => {
     const key = tempApiKey.trim();
+    if (typeof window !== "undefined") {
+      localStorage.setItem("gemini_api_key", key);
+    }
     setCustomApiKey(key);
-    setApiSaveStatus("เก็บ API Key ไว้เฉพาะเซสชันนี้แล้ว (ไม่บันทึกลง LocalStorage)");
+    setApiSaveStatus("บันทึก API Key เรียบร้อยแล้ว!");
     window.setTimeout(() => setApiSaveStatus(""), 3000);
   };
 
@@ -1666,15 +1510,6 @@ const styles = `
   }
 
   .analysis-box strong { color: #0284c7; }
-  .analysis-item + .analysis-item { margin-top: 5px; }
-  .analysis-note {
-    margin-top: 8px;
-    padding-top: 7px;
-    border-top: 1px dashed #bae6fd;
-    font-size: 11px;
-    font-weight: 500;
-    color: #64748b;
-  }
   .analysis-tag {
     padding: 2px 7px;
     border-radius: 5px;
@@ -1737,8 +1572,7 @@ const styles = `
     display: flex;
     align-items: center;
     position: relative;
-    transform: none;
-    transition: none;
+    transition: transform .18s ease;
   }
 
   .tone-line {
@@ -1755,7 +1589,8 @@ const styles = `
 
   .tone-circle {
     position: absolute;
-    transform: translate3d(-50%, -50%, 0);
+    transform: translateX(-50%);
+    aspect-ratio: 1 / 1;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -1763,47 +1598,27 @@ const styles = `
     white-space: nowrap;
     font-weight: 700;
     overflow: visible;
-    box-sizing: border-box;
-    padding: 0;
-    flex: 0 0 auto;
-    aspect-ratio: 1 / 1;
     box-shadow: 0 4px 11px rgba(0,0,0,.24);
     transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
   }
 
-  .tone-line-wrap > .tone-circle {
-    top: 50%;
-  }
-
   .tone-row.active .tone-circle {
-    transform: translate3d(-50%, -50%, 0) scale(1.23);
+    transform: translateX(-50%) scale(1.23);
     box-shadow: 0 8px 20px rgba(0,0,0,.34);
     filter: brightness(1.12);
   }
 
   .multi-circles {
     position: absolute;
-    top: 50%;
-    transform: translate3d(-50%, -50%, 0);
+    transform: translateX(-50%);
     display: flex;
     align-items: center;
     gap: 8px;
     transition: transform .18s ease;
   }
 
-  .multi-circles .tone-circle {
-    position: relative;
-    top: auto;
-    transform: none;
-  }
-
-  .tone-row.active .multi-circles {
-    transform: translate3d(-50%, -50%, 0) scale(1.16);
-  }
-
-  .tone-row.active .multi-circles .tone-circle {
-    transform: none;
-  }
+  .tone-row.active .multi-circles { transform: translateX(-50%) scale(1.16); }
+  .tone-row.active .multi-circles .tone-circle { transform: none; }
   .slash { color: #64748b; font-size: 21px; font-weight: 700; }
   .fixed-tone-label { text-align: center; font-size: 16px; font-weight: 700; }
 
@@ -2033,11 +1848,7 @@ const styles = `
       min-width: 39px !important;
       max-width: 39px !important;
       height: 39px !important;
-      min-height: 39px !important;
-      max-height: 39px !important;
       padding: 0 !important;
-      border-radius: 50% !important;
-      aspect-ratio: 1 / 1 !important;
       font-size: 15px !important;
     }
     .multi-circles { gap: 4px; }
