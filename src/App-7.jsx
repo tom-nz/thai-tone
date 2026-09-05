@@ -370,7 +370,6 @@ function Board({
   activeRowId,
   onRowClick,
   circleTextColor,
-  mode,
   isDisplay = false,
   fontSize = 20,
   staffBgColor = "#ffffff",
@@ -412,79 +411,15 @@ function Board({
         <div>และการผันวรรณยุกต์</div>
       </div>
 
-      {(() => {
-        const visibleItems = linesData.filter((item) => item.show);
-        const topItem = visibleItems[0];
-        const bottomItem = visibleItems[visibleItems.length - 1];
-        const isMid = midConsonants.includes(analysisInfo?.primaryConsonant);
-
-        const getTargetWord = (item) => getSpeechText(item);
-        const analyses = [];
-
-        if (isMid) {
-          const word = inputText.trim();
-          if (word) {
-            analyses.push({
-              label: "อักษรกลาง",
-              word,
-              info: analyzeSyllable(word, mode),
-            });
-          }
-        } else if (mode === "full5") {
-          const topWord = getTargetWord(topItem);
-          const bottomWord = getTargetWord(bottomItem);
-
-          if (topWord) {
-            analyses.push({
-              label: "เสียงสูง",
-              word: topWord,
-              info: analyzeSyllable(topWord, "highOnly"),
-            });
-          }
-
-          if (bottomWord && bottomItem?.id !== topItem?.id) {
-            analyses.push({
-              label: "เสียงต่ำ",
-              word: bottomWord,
-              info: analyzeSyllable(bottomWord, "lowOnly"),
-            });
-          }
-        } else if (mode === "highOnly") {
-          const word = getTargetWord(topItem);
-          if (word) {
-            analyses.push({
-              label: "เสียงสูง",
-              word,
-              info: analyzeSyllable(word, "highOnly"),
-            });
-          }
-        } else if (mode === "lowOnly") {
-          const word = getTargetWord(bottomItem);
-          if (word) {
-            analyses.push({
-              label: "เสียงต่ำ",
-              word,
-              info: analyzeSyllable(word, "lowOnly"),
-            });
-          }
-        }
-
-        if (!analyses.length) return null;
-
-        return (
-          <div className="analysis-box">
-            {analyses.map(({ label, word, info }, index) => (
-              <div className="analysis-item" key={`${label}-${word}-${index}`}>
-                📌 ผลวิเคราะห์หลักภาษา ({label}): <strong>"{word}"</strong> เป็น{" "}
-                <span className="analysis-tag">
-                  {info.type} ({info.vowelLen})
-                </span>{" "}
-                — {info.desc}
-              </div>
-            ))}
-          </div>
-        );
-      })()}
+      {inputText && analysisInfo?.desc && (
+        <div className="analysis-box">
+          📌 ผลวิเคราะห์หลักภาษา: <strong>"{inputText}"</strong> เป็น{" "}
+          <span className="analysis-tag">
+            {analysisInfo.type} ({analysisInfo.vowelLen})
+          </span>{" "}
+          — {analysisInfo.desc}
+        </div>
+      )}
 
       <div className="tone-header">
         <span>รูปวรรณยุกต์</span>
@@ -589,7 +524,7 @@ export default function App() {
   const [staffBgColor, setStaffBgColor] = useState("#ffffff");
 
   const [activeRowId, setActiveRowId] = useState(null);
-  const [speechEnabled, setSpeechEnabled] = useState(false);
+  const [speechEnabled, setSpeechEnabled] = useState(true);
   const [speechRate, setSpeechRate] = useState(0.85);
   const [voices, setVoices] = useState([]);
   const [selectedVoiceURI, setSelectedVoiceURI] = useState("");
@@ -1032,7 +967,6 @@ export default function App() {
             activeRowId={activeRowId}
             onRowClick={handleRowClick}
             circleTextColor={circleTextColor}
-            mode={mode}
             isDisplay
             fontSize={labelFontSize}
             staffBgColor={staffBgColor}
@@ -1071,7 +1005,6 @@ export default function App() {
                 activeRowId={activeRowId}
                 onRowClick={handleRowClick}
                 circleTextColor={circleTextColor}
-                mode={mode}
                 fontSize={labelFontSize}
                 staffBgColor={staffBgColor}
               />
@@ -1575,6 +1508,7 @@ const styles = `
     transition: transform .18s ease;
   }
 
+  .tone-row.active .tone-line-wrap { transform: scaleY(1.25); }
   .tone-line {
     width: 100%;
     height: 2px;
@@ -1590,7 +1524,6 @@ const styles = `
   .tone-circle {
     position: absolute;
     transform: translateX(-50%);
-    aspect-ratio: 1 / 1;
     border-radius: 50%;
     display: flex;
     align-items: center;
