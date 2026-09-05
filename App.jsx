@@ -177,7 +177,6 @@ function analyzeSyllable(word, currentMode) {
   const clusterLabel = isCluster ? ` (คำควบกล้ำ "${initial}")` : "";
   let desc = "";
 
-  // แก้ไข Logic การอธิบายตามโหมด (Mode)
   if (midConsonants.includes(primaryConsonant)) {
     if (currentMode === "highOnly") {
       desc = `อักษรกลาง${clusterLabel} เทียบผันเฉพาะเสียงสูง [เอก, โท, จัตวา]`;
@@ -188,23 +187,22 @@ function analyzeSyllable(word, currentMode) {
         ? `อักษรกลาง${clusterLabel} คำตาย (ผันได้เฉพาะ เอก, โท, ตรี, จัตวา)`
         : `อักษรกลาง${clusterLabel} คำเป็น (ผันได้ครบ 5 เสียง)`;
     }
+  } else if (highConsonants.includes(primaryConsonant) || initial.startsWith("ห")) {
+    desc = isDead
+      ? `อักษรสูง${clusterLabel} คำตาย (ผันได้เฉพาะ เสียงเอก และ เสียงโท)`
+      : `อักษรสูง${clusterLabel} คำเป็น (ผันได้เฉพาะ เอก, โท, จัตวา)`;
+  } else if (currentMode === "full5") {
+    desc = isDead
+      ? "ผันคู่ อักษรสูง/ห นำ [เอก, โท] + อักษรต่ำ [โท, ตรี]"
+      : "ผันคู่ อักษรสูง/ห นำ [เอก, โท, จัตวา] + อักษรต่ำ [สามัญ, โท, ตรี] รวมผันได้ครบทั้ง 5 เสียง";
+  } else if (currentMode === "highOnly") {
+    desc = `เทียบผันเป็น เสียงอักษรสูง/ห นำ${clusterLabel} (ผันได้เฉพาะ เอก, โท, จัตวา)`;
   } else {
-    // สำหรับอักษรสูงและต่ำ ผูกคำอธิบายตาม currentMode เป็นหลัก
-    if (currentMode === "full5") {
-      desc = isDead
-        ? "ผันคู่ อักษรสูง/ห นำ [เอก, โท] + อักษรต่ำ [โท, ตรี]"
-        : "ผันคู่ อักษรสูง/ห นำ [เอก, โท, จัตวา] + อักษรต่ำ [สามัญ, โท, ตรี] รวมผันได้ครบทั้ง 5 เสียง";
-    } else if (currentMode === "highOnly") {
-      desc = isDead
-        ? `อักษรสูง/ห นำ${clusterLabel} คำตาย (ผันได้เฉพาะ เสียงเอก และ เสียงโท)`
-        : `อักษรสูง/ห นำ${clusterLabel} คำเป็น (ผันได้เฉพาะ เอก, โท, จัตวา)`;
-    } else if (currentMode === "lowOnly") {
-      desc = isDead
-        ? isShort
-          ? `อักษรต่ำ${clusterLabel} คำตายสระสั้น (พื้นเสียงตรี, ผันเสียงโทและจัตวา)`
-          : `อักษรต่ำ${clusterLabel} คำตายสระยาว (พื้นเสียงโท, ผันเสียงตรี)`
-        : `อักษรต่ำ${clusterLabel} คำเป็น (ผันได้ สามัญ, โท, ตรี)`;
-    }
+    desc = isDead
+      ? isShort
+        ? `อักษรต่ำ${clusterLabel} คำตายสระสั้น (พื้นเสียงตรี, ผันเสียงโทและจัตวา)`
+        : `อักษรต่ำ${clusterLabel} คำตายสระยาว (พื้นเสียงโท, ผันเสียงตรี)`
+      : `อักษรต่ำ${clusterLabel} คำเป็น (ผันได้ สามัญ, โท, ตรี)`;
   }
 
   return {
@@ -377,15 +375,15 @@ function Board({
   return (
     <div
       className={`tone-board ${isDisplay ? "display-board" : ""}`}
-      style={isDisplay ? { backgroundColor: staffBgColor } : { height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}
+      style={isDisplay ? { backgroundColor: staffBgColor } : {}}
     >
-      <div className="board-title" style={{ flexShrink: 0 }}>
+      <div className="board-title">
         <h2>ไตรยางศ์ หรือ อักษร 3 หมู่</h2>
         <div>และการผันวรรณยุกต์</div>
       </div>
 
       {inputText && analysisInfo?.desc && (
-        <div className="analysis-box" style={{ flexShrink: 0 }}>
+        <div className="analysis-box">
           📌 ผลวิเคราะห์หลักภาษา: <strong>"{inputText}"</strong> เป็น{" "}
           <span className="analysis-tag">
             {analysisInfo.type} ({analysisInfo.vowelLen})
@@ -394,7 +392,7 @@ function Board({
         </div>
       )}
 
-      <div className="tone-header" style={{ flexShrink: 0 }}>
+      <div className="tone-header">
         <span>รูปวรรณยุกต์</span>
       </div>
 
@@ -587,6 +585,7 @@ export default function App() {
       return false;
     }
 
+    // ตรวจสอบคำภาษาไทย 1 พยางค์อย่างเคร่งครัด
     if (!STRICT_THAI_SYLLABLE_PATTERN.test(value)) {
       setInputError("กรุณากรอก 1 พยางค์ให้ถูกหลักภาษาไทย (เช่น พยัญชนะ สระ ตัวสะกด วรรณยุกต์)");
       return false;
@@ -794,6 +793,11 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const displayMode = params.get("view") === "display";
     setIsDisplayWindow(displayMode);
+
+    if (displayMode) {
+      document.body.style.margin = "0";
+      document.body.style.overflow = "hidden";
+    }
   }, []);
 
   useEffect(() => {
@@ -901,8 +905,9 @@ export default function App() {
     channel.close();
   };
 
+  // Component สำหรับสร้าง Top Bar แบบใช้ซ้ำ
   const renderTopBar = (extraStyle = {}) => (
-    <section className="top-bar panel" style={{ ...extraStyle, flexShrink: 0 }}>
+    <section className="top-bar panel" style={extraStyle}>
       <div className="view-buttons">
         <strong>🖥️ มุมมอง:</strong>
         {[
@@ -964,10 +969,10 @@ export default function App() {
       <main className="app-page" style={containerBackground}>
         <div className="app-shell">
           
-          {viewLayout === "present" && renderTopBar({ marginBottom: "16px" })}
+          {/* กรณีโหมด present ให้ Top bar ยังคงลอยอยู่บนสุด */}
+          {viewLayout === "present" && renderTopBar({ marginBottom: "20px" })}
 
           <div className={`main-grid ${viewLayout === "split" ? "split-layout" : ""}`}>
-            
             <section
               className="panel"
               style={{
@@ -976,11 +981,6 @@ export default function App() {
                 padding: viewLayout === "present" ? "40px 50px" : "35px 25px",
                 boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
                 backdropFilter: "blur(6px)",
-                height: "100%",
-                minHeight: 0,
-                display: "flex",
-                flexDirection: "column",
-                overflow: "hidden"
               }}
             >
               <Board
@@ -995,23 +995,26 @@ export default function App() {
               />
             </section>
 
+            {/* กรณีที่ไม่ใช่โหมด present ให้ Top bar และแผงควบคุมอยู่ในกล่องด้านขวา */}
             {viewLayout !== "present" && (
               <div
                 className="right-panel-wrapper"
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  gap: "16px",
-                  height: "100%",
-                  minHeight: 0,
-                  overflow: "hidden"
+                  gap: "20px",
+                  maxHeight: "calc(100vh - 42px)",
+                  position: "sticky",
+                  top: "20px"
                 }}
               >
+                {/* เฟรมมุมมองอยู่ด้านบน */}
                 {renderTopBar({ marginBottom: 0 })}
 
+                {/* เฟรมแผงควบคุมอยู่ด้านล่าง และสามารถเลื่อน Scroll ได้อิสระ */}
                 <aside 
                   className="control-panel panel" 
-                  style={{ flex: 1, overflowY: "auto", position: "static", maxHeight: "none", margin: 0, minHeight: 0 }}
+                  style={{ flex: 1, overflowY: "auto", position: "static", maxHeight: "none", margin: 0 }}
                 >
                   <h3>⚙️ แผงควบคุม</h3>
 
@@ -1346,38 +1349,20 @@ export default function App() {
 
 const styles = `
   * { box-sizing: border-box; }
-  
-  html, body { 
-    margin: 0; 
-    padding: 0;
-    width: 100vw;
-    height: 100vh;
-    font-family: "Sarabun", Arial, sans-serif; 
-    overflow: hidden !important; /* ป้องกันแถบเลื่อนหน้าหลักเด็ดขาด */
-  }
-  
+  body { margin: 0; font-family: "Sarabun", Arial, sans-serif; }
   button, input, select { font-family: inherit; }
   button { border: 0; cursor: pointer; }
 
   .app-page {
-    height: 100vh;
-    width: 100vw;
-    padding: 16px 14px;
+    min-height: 100vh;
+    padding: 22px 14px;
     background-size: cover;
     background-position: center;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    box-sizing: border-box;
   }
 
   .app-shell {
     width: min(1280px, 100%);
-    height: 100%;
     margin: 0 auto;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
   }
 
   .panel {
@@ -1418,23 +1403,14 @@ const styles = `
   .danger-btn { background: #ef4444; color: white; }
   .blue-btn:disabled { opacity: .6; cursor: wait; }
 
-  .main-grid { 
-    flex: 1;
-    display: grid; 
-    grid-template-columns: 1fr; 
-    grid-template-rows: minmax(0, 1fr); /* บังคับ Grid ไม่ให้ดันขยายเกิน 100vh */
-    gap: 16px; 
-    align-items: stretch;
-    min-height: 0;
-  }
-  
+  .main-grid { display: grid; grid-template-columns: 1fr; gap: 20px; align-items: start; }
   .main-grid.split-layout { grid-template-columns: minmax(0, 1fr) 410px; }
 
   .board-panel { padding: 30px 22px; min-width: 0; }
   .presentation-panel { padding: 45px 50px; }
 
-  .tone-board { width: 100%; height: 100%; display: flex; flex-direction: column; min-height: 0; }
-  .board-title { text-align: center; color: #ea580c; margin-bottom: 18px; flex-shrink: 0; }
+  .tone-board { width: 100%; }
+  .board-title { text-align: center; color: #ea580c; margin-bottom: 18px; }
   .board-title h2 { margin: 0; font-size: clamp(23px, 2.3vw, 30px); }
   .board-title div { font-size: clamp(16px, 1.5vw, 19px); font-weight: 600; }
 
@@ -1475,12 +1451,9 @@ const styles = `
   .tone-header span { text-align: right; padding-right: 20px; }
 
   .tone-rows {
-    flex: 1;
     display: flex;
     flex-direction: column;
-    justify-content: space-evenly;
-    gap: 1vh;
-    min-height: 0;
+    gap: 24px;
   }
 
   .tone-row {
@@ -1520,7 +1493,7 @@ const styles = `
     transition: transform .18s ease;
   }
 
-  /* ลบ transform: scaleY ออก เพื่อป้องกันวงกลมเบี้ยวเป็นวงรี */
+  .tone-row.active .tone-line-wrap { transform: scaleY(1.25); }
   .tone-line {
     width: 100%;
     height: 2px;
@@ -1548,7 +1521,6 @@ const styles = `
   }
 
   .tone-row.active .tone-circle {
-    /* ขยายเฉพาะวงกลมอย่างสมมาตร */
     transform: translateX(-50%) scale(1.23);
     box-shadow: 0 8px 20px rgba(0,0,0,.34);
     filter: brightness(1.12);
@@ -1777,7 +1749,7 @@ const styles = `
 
   @media (max-width: 980px) {
     .main-grid.split-layout { grid-template-columns: 1fr; }
-    .right-panel-wrapper { position: static; max-height: none; }
+    .control-panel { position: static; max-height: none; }
   }
 
   @media (max-width: 640px) {
@@ -1806,10 +1778,10 @@ const styles = `
   .tone-circle::before {
     content: "";
     position: absolute;
-    right: 0px; 
+    right: 0px; /* ก้านเริ่มจากเส้นรอบวงกึ่งกลางด้านขวาพอดี */
     bottom: 50%;
-    width: 4px; 
-    height: 42px; 
+    width: 4px; /* ความหนาก้าน */
+    height: 42px; /* ความสูงก้าน */
     background-color: var(--note-color, transparent);
     z-index: -1;
   }
@@ -1817,13 +1789,13 @@ const styles = `
   .tone-circle::after {
     content: "";
     position: absolute;
-    right: -12px; 
-    bottom: calc(50% + 18px); 
-    width: 12px; 
-    height: 20px; 
+    right: -12px; /* ยื่นธงออกไปทางขวาให้เชื่อมกับก้าน */
+    bottom: calc(50% + 18px); /* เลื่อนธงขึ้นไปแตะยอดก้านพอดี */
+    width: 12px; /* ความกว้างธง (ไม่ยาวมาก) */
+    height: 20px; /* ความยาวหางธง */
     border-right: 4px solid var(--note-color, transparent);
     border-top: 6px solid var(--note-color, transparent);
-    border-top-right-radius: 20px 22px; 
+    border-top-right-radius: 20px 22px; /* โค้งตวัดเหมือนหางโน้ตดนตรี */
     border-bottom-right-radius: 4px;
     z-index: -1;
   }
