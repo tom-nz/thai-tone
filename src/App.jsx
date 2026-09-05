@@ -292,7 +292,7 @@ function getFinalConsonant(
   }
 
   const consonants = [...finalPart].filter((char) => /[ก-ฮ]/.test(char));
-  return consonants.at(-1) || "";
+  return consonants[consonants.length - 1] || "";
 }
 
 function parseThaiWord(word = "") {
@@ -785,7 +785,7 @@ function getSpeechText(item) {
 function normalizeThaiSpeechText(text = "") {
   return String(text)
     .normalize("NFC")
-    .replace(/\\s+/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
