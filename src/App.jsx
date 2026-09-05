@@ -392,6 +392,7 @@ function Board({
                       left: item.leftPos,
                       backgroundColor: item.color,
                       color: circleTextColor,
+                      "--note-color": item.color,
                       minWidth: circleSize,
                       height: circleSize,
                       fontSize: isDisplay
@@ -416,6 +417,7 @@ function Board({
                             transform: "none",
                             backgroundColor: circle.color,
                             color: circleTextColor,
+                            "--note-color": circle.color,
                             minWidth: circleSize,
                             height: circleSize,
                             fontSize: isDisplay
@@ -500,8 +502,11 @@ export default function App() {
   const speak = (text) => {
     if (!speechEnabled || !text || !("speechSynthesis" in window)) return;
 
+    // สลับตำแหน่งวรรณยุกต์และสระบน/ล่างให้อยู่ในลำดับที่ถูกต้องสำหรับ TTS
+    const normalizedText = text.replace(/([่้๊๋])([ิีึืุูั็ํ])/g, "$2$1");
+
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new SpeechSynthesisUtterance(normalizedText);
     utterance.lang = "th-TH";
     utterance.rate = Number(speechRate);
     utterance.pitch = 1;
@@ -1582,5 +1587,32 @@ const styles = `
     .display-board .analysis-box { font-size: 11px; margin-bottom: 12px; }
     .display-board .tone-header, .display-board .tone-row { grid-template-columns: 104px minmax(100px, 1fr) 48px; }
     .display-tip { font-size: 10px; max-width: 92vw; white-space: normal; text-align: center; }
+  }
+
+  /* ========================================= */
+  /* วาดก้านและธงเขบ็ตชั้นเดียว (Eighth Note)  */
+  /* ========================================= */
+  .tone-circle::before {
+    content: "";
+    position: absolute;
+    right: 8px;
+    bottom: 50%;
+    width: 3px;
+    height: 40px;
+    background-color: var(--note-color, transparent);
+    z-index: -1;
+  }
+
+  .tone-circle::after {
+    content: "";
+    position: absolute;
+    right: -4px;
+    bottom: calc(50% + 15px);
+    width: 12px;
+    height: 25px;
+    border-right: 3px solid var(--note-color, transparent);
+    border-top: 3px solid var(--note-color, transparent);
+    border-top-right-radius: 12px;
+    z-index: -1;
   }
 `;
