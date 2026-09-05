@@ -1,77 +1,91 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useState } from "react";
 
-/* =========================================================
-   ตัวช่วยแปลงคำอ่าน (ใส่คำที่ต้องการให้ TTS อ่านถูกที่นี่)
-========================================================= */
+/** ==========================================
+ *  MODULE 1: ข้อมูลหลัก (Constants & Rules)
+ *  ========================================== */
+const TONE_RULES = {
+  mid: { type: 'mid', label: 'อักษรกลาง' },
+  high: { type: 'high', label: 'อักษรสูง' },
+  low: { type: 'low', label: 'อักษรต่ำ' }
+};
+
+const PRONUNCIATION_MAP = {
+  "จริง": "จิง", "สร้าง": "ส้าง", "ทราย": "ซาย", "เศร้า": "เส้า", "ทราบ": "ซาบ"
+};
+
+/** ==========================================
+ *  MODULE 2: ฟังก์ชันช่วย (Utils)
+ *  ========================================== */
 function getCorrectPronunciation(word) {
-  const rules = {
-    "จริง": "จิง",
-    "สร้าง": "ส้าง",
-    "ทราย": "ซาย",
-    "เศร้า": "เส้า",
-    "ทราบ": "ซาบ",
-    "มื้อ": "มือ", // ตัวอย่างหากต้องการให้ TTS ไม่อ่านเสียงวรรณยุกต์ถ้าเพี้ยน
-  };
-  return rules[word] || word;
+  return PRONUNCIATION_MAP[word] || word;
 }
 
-// ... (ฟังก์ชัน logic เดิม: midConsonants, highConsonants, lowSingleConsonants, ฯลฯ ให้คงไว้เหมือนที่เคยทำงานได้ปกติ)
-
-/* =========================================================
-   ฟังก์ชันเปิดหน้าต่างใหม่ (แก้ไขที่ทำให้ error)
-========================================================= */
-function openSecondScreen() {
-  const baseUrl = window.location.href.split("?")[0];
-  window.open(
-    `${baseUrl}?view=display`,
-    "ThaiToneDisplay",
-    "width=1280,height=860,resizable=yes,scrollbars=yes"
+/** ==========================================
+ *  MODULE 3: คอมโพเนนต์ UI
+ *  ========================================== */
+function Board({ viewLayout }) {
+  return (
+    <div className="board-container" style={{ padding: '20px', border: '1px solid #ccc' }}>
+      <h1>ไตรยางศ์และการผันวรรณยุกต์</h1>
+      <div className="music-staff-box" style={{ height: '200px', background: '#f8f8f8', marginBottom: '20px' }}>
+        {/* บรรทัด 5 เส้น */}
+      </div>
+      <div className="analysis-box">ผลวิเคราะห์หลักภาษา...</div>
+      <div className="tone-rows-display">การผัน 5 เสียง...</div>
+      <div className="thai-guide-box">
+        <strong>หลักการเรียนรู้:</strong> ไตรยางศ์คือการแบ่งพยัญชนะไทย...
+      </div>
+    </div>
   );
 }
 
-/* =========================================================
-   App หลัก
-========================================================= */
+function ControlPanel() {
+  return (
+    <div className="control-panel" style={{ padding: '20px', background: '#eee' }}>
+      <h2>แผงควบคุม</h2>
+      <input type="text" placeholder="พิมพ์คำที่นี่..." />
+    </div>
+  );
+}
+
+/** ==========================================
+ *  MODULE 4: แอปหลัก (Main)
+ *  ========================================== */
 export default function App() {
   const [viewLayout, setViewLayout] = useState("standard");
-  const [inputText, setInputText] = useState("มือ");
-  // ... (state อื่นๆ เหมือนเดิม)
 
-  // ฟังก์ชัน Speak ที่แก้ไขการออกเสียง
-  function speak(text) {
-    if (!("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    
-    const pronunciation = getCorrectPronunciation(text);
-    const utterance = new SpeechSynthesisUtterance(pronunciation);
+  const openSecondScreen = () => {
+    const win = window.open("", "_blank", "width=1000,height=800");
+    win.document.write("<html><head><title>Monitor 2</title></head><body><div id='root'></div></body></html>");
+    // ในโปรเจกต์จริง ต้องมีการ render ตัว Board ลงใน win.document นี้
+  };
+
+  const handleSpeak = (text) => {
+    const cleanText = getCorrectPronunciation(text);
+    const utterance = new SpeechSynthesisUtterance(cleanText);
     utterance.lang = "th-TH";
     window.speechSynthesis.speak(utterance);
-  }
+  };
 
   return (
-    <main className="app-page">
-      {/* 1. แถบมุมมองด้านบน */}
-      <nav className="top-nav panel">
-        <div className="view-buttons">
-          <strong>🖥️ มุมมอง:</strong>
-          <button className={viewLayout === "standard" ? "selected-btn" : ""} onClick={() => setViewLayout("standard")}>ชิดเดียว</button>
-          <button className={viewLayout === "split" ? "selected-btn" : ""} onClick={() => setViewLayout("split")}>แบ่ง 2 จอ</button>
-          <button className={viewLayout === "preview" ? "selected-btn" : ""} onClick={() => setViewLayout("preview")}>โหมดพรีวิว</button>
-        </div>
-        <button className="green-btn" onClick={openSecondScreen}>🚀 แยกหน้าจอที่ 2</button>
+    <div className="app-main">
+      {/* ส่วนควบคุมด้านบน */}
+      <nav className="top-nav" style={{ display: 'flex', gap: '10px', padding: '10px', background: '#333', color: '#fff' }}>
+        <button onClick={() => setViewLayout("standard")}>ชิดเดียว</button>
+        <button onClick={() => setViewLayout("split")}>แบ่ง 2 เฟรม</button>
+        <button onClick={() => setViewLayout("preview")}>โหมดพรีวิว</button>
+        <button onClick={openSecondScreen} style={{ marginLeft: 'auto', background: 'green', color: 'white' }}>แยกจอมอนิเตอร์ 2</button>
       </nav>
 
-      {/* 2. การจัด Frame */}
+      {/* ส่วนแสดงผลหลัก */}
       {viewLayout === "preview" ? (
-        <div className="preview-container"><Board {...props} /></div>
+        <Board viewLayout="preview" />
       ) : (
-        <div className={`main-container ${viewLayout === "split" ? "split-layout" : ""}`}>
-          <div className="left-frame"><Board {...props} /></div>
-          <div className="right-frame"><ControlPanel {...props} /></div>
+        <div style={{ display: 'flex', flexDirection: viewLayout === 'split' ? 'row' : 'column' }}>
+          <div style={{ flex: 1 }}><Board /></div>
+          {viewLayout === 'split' && <div style={{ flex: 1 }}><ControlPanel /></div>}
         </div>
       )}
-    </main>
+    </div>
   );
 }
-
-// ... (เติม style และส่วนประกอบย่อย Board/ControlPanel ให้ครบเหมือนฉบับก่อนหน้า)
