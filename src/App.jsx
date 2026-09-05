@@ -1001,14 +1001,15 @@ export default function App() {
                   flexDirection: "column",
                   gap: "16px",
                   height: "100%",
-                  minHeight: 0
+                  minHeight: 0,
+                  overflow: "hidden"
                 }}
               >
                 {renderTopBar({ marginBottom: 0 })}
 
                 <aside 
                   className="control-panel panel" 
-                  style={{ flex: 1, overflowY: "auto", position: "static", maxHeight: "none", margin: 0 }}
+                  style={{ flex: 1, overflowY: "auto", position: "static", maxHeight: "none", margin: 0, minHeight: 0 }}
                 >
                   <h3>⚙️ แผงควบคุม</h3>
 
@@ -1419,6 +1420,7 @@ const styles = `
     flex: 1;
     display: grid; 
     grid-template-columns: 1fr; 
+    grid-template-rows: minmax(0, 1fr); /* บังคับ Grid ไม่ให้ดันขยายเกิน 100vh */
     gap: 16px; 
     align-items: stretch;
     min-height: 0;
@@ -1429,8 +1431,8 @@ const styles = `
   .board-panel { padding: 30px 22px; min-width: 0; }
   .presentation-panel { padding: 45px 50px; }
 
-  .tone-board { width: 100%; }
-  .board-title { text-align: center; color: #ea580c; margin-bottom: 18px; }
+  .tone-board { width: 100%; height: 100%; display: flex; flex-direction: column; min-height: 0; }
+  .board-title { text-align: center; color: #ea580c; margin-bottom: 18px; flex-shrink: 0; }
   .board-title h2 { margin: 0; font-size: clamp(23px, 2.3vw, 30px); }
   .board-title div { font-size: clamp(16px, 1.5vw, 19px); font-weight: 600; }
 
@@ -1772,7 +1774,7 @@ const styles = `
 
   @media (max-width: 980px) {
     .main-grid.split-layout { grid-template-columns: 1fr; }
-    .control-panel { position: static; max-height: none; }
+    .right-panel-wrapper { position: static; max-height: none; }
   }
 
   @media (max-width: 640px) {
