@@ -360,6 +360,7 @@ function Board({
   circleTextColor,
   isDisplay = false,
   fontSize = 20,
+  staffBgColor = "#ffffff",
 }) {
   const fixedRightLabels = {
     5: { text: "เสียงสูง", color: "#ef4444" },
@@ -367,23 +368,22 @@ function Board({
     1: { text: "เสียงต่ำ", color: "#007bff" },
   };
 
-  // ขนาดไดนามิก เพื่อให้บีบอัดพอดีจอ ไม่เกิด Scrollbar
   const ratio = Math.max(0.8, fontSize / 20);
-  const circleSize = isDisplay ? `min(${9 * ratio}vh, 8vw)` : "clamp(36px, 5vh, 48px)";
-  const textSize = isDisplay ? `min(${3.5 * ratio}vh, 3vw)` : "clamp(13px, 2vh, 17px)";
-  const titleFontSize = isDisplay ? `min(${4.5 * ratio}vh, 4vw)` : "clamp(18px, 3vh, 26px)";
-  const subTitleFontSize = isDisplay ? `min(${2.5 * ratio}vh, 2vw)` : "clamp(13px, 2vh, 16px)";
-  const analysisFontSize = isDisplay ? `min(${2 * ratio}vh, 2vw)` : "14px";
+  const circleSize = isDisplay ? `clamp(42px, ${4.2 * ratio}vw, 70px)` : "48px";
+  const textSize = isDisplay ? `clamp(15px, ${1.5 * ratio}vw, 25px)` : "17px";
 
   return (
-    <div className={`tone-board ${isDisplay ? "display-board" : ""}`}>
+    <div
+      className={`tone-board ${isDisplay ? "display-board" : ""}`}
+      style={isDisplay ? { backgroundColor: staffBgColor } : { height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}
+    >
       <div className="board-title" style={{ flexShrink: 0 }}>
-        <h2 style={{ fontSize: titleFontSize, margin: 0 }}>ไตรยางศ์ หรือ อักษร 3 หมู่</h2>
-        <div style={{ fontSize: subTitleFontSize, fontWeight: 600 }}>และการผันวรรณยุกต์</div>
+        <h2>ไตรยางศ์ หรือ อักษร 3 หมู่</h2>
+        <div>และการผันวรรณยุกต์</div>
       </div>
 
       {inputText && analysisInfo?.desc && (
-        <div className="analysis-box" style={{ flexShrink: 0, fontSize: analysisFontSize, margin: isDisplay ? "1vh auto" : "0 auto 16px" }}>
+        <div className="analysis-box" style={{ flexShrink: 0 }}>
           📌 ผลวิเคราะห์หลักภาษา: <strong>"{inputText}"</strong> เป็น{" "}
           <span className="analysis-tag">
             {analysisInfo.type} ({analysisInfo.vowelLen})
@@ -393,7 +393,7 @@ function Board({
       )}
 
       <div className="tone-header" style={{ flexShrink: 0 }}>
-        <span style={{ fontSize: isDisplay ? `min(${2.2 * ratio}vh, 2vw)` : undefined }}>รูปวรรณยุกต์</span>
+        <span>รูปวรรณยุกต์</span>
       </div>
 
       <div className="tone-rows">
@@ -436,7 +436,9 @@ function Board({
                       "--note-color": item.color,
                       minWidth: circleSize,
                       height: circleSize,
-                      fontSize: isDisplay ? `min(${3.5 * ratio}vh, 3vw)` : "clamp(14px, 2.2vh, 18px)",
+                      fontSize: isDisplay
+                        ? `clamp(16px, ${1.8 * ratio}vw, 27px)`
+                        : "18px",
                     }}
                   >
                     {item.word}
@@ -447,7 +449,7 @@ function Board({
                   <div className="multi-circles" style={{ left: item.leftPos }}>
                     {item.multi.map((circle, index) => (
                       <React.Fragment key={`${circle.text}-${index}`}>
-                        {index > 0 && <span className="slash" style={{ fontSize: isDisplay ? `min(${4 * ratio}vh, 3.5vw)` : "18px" }}>/</span>}
+                        {index > 0 && <span className="slash">/</span>}
                         <div
                           className="tone-circle"
                           style={{
@@ -459,7 +461,9 @@ function Board({
                             "--note-color": circle.color,
                             minWidth: circleSize,
                             height: circleSize,
-                            fontSize: isDisplay ? `min(${3.5 * ratio}vh, 3vw)` : "clamp(14px, 2.2vh, 18px)",
+                            fontSize: isDisplay
+                              ? `clamp(16px, ${1.8 * ratio}vw, 27px)`
+                              : "18px",
                           }}
                         >
                           {circle.text}
@@ -472,7 +476,7 @@ function Board({
 
               <div
                 className="fixed-tone-label"
-                style={{ color: fixedRight?.color || "#94a3b8", fontSize: isDisplay ? `min(${2.8 * ratio}vh, 2.5vw)` : "14px" }}
+                style={{ color: fixedRight?.color || "#94a3b8" }}
               >
                 {fixedRight?.text || ""}
               </div>
@@ -581,7 +585,6 @@ export default function App() {
       return false;
     }
 
-    // ตรวจสอบคำภาษาไทย 1 พยางค์อย่างเคร่งครัด
     if (!STRICT_THAI_SYLLABLE_PATTERN.test(value)) {
       setInputError("กรุณากรอก 1 พยางค์ให้ถูกหลักภาษาไทย (เช่น พยัญชนะ สระ ตัวสะกด วรรณยุกต์)");
       return false;
@@ -896,7 +899,6 @@ export default function App() {
     channel.close();
   };
 
-  // Component สำหรับสร้าง Top Bar แบบใช้ซ้ำ
   const renderTopBar = (extraStyle = {}) => (
     <section className="top-bar panel" style={{ ...extraStyle, flexShrink: 0 }}>
       <div className="view-buttons">
@@ -933,7 +935,7 @@ export default function App() {
         <style>{styles}</style>
         <main
           className="display-page"
-          style={{ ...containerBackground, backgroundColor: staffBgColor }}
+          style={containerBackground}
           onDoubleClick={toggleFullscreen}
         >
           <Board
@@ -945,7 +947,7 @@ export default function App() {
             circleTextColor={circleTextColor}
             isDisplay
             fontSize={labelFontSize}
-            staffBgColor="transparent"
+            staffBgColor={staffBgColor}
           />
           <div className="display-tip">ดับเบิลคลิกพื้นที่ว่างเพื่อสลับเต็มจอ • คลิกบรรทัดเพื่อขยายและอ่านออกเสียง</div>
         </main>
@@ -960,17 +962,23 @@ export default function App() {
       <main className="app-page" style={containerBackground}>
         <div className="app-shell">
           
-          {/* กรณีโหมด present ให้ Top bar ยังคงลอยอยู่บนสุด */}
           {viewLayout === "present" && renderTopBar({ marginBottom: "16px" })}
 
           <div className={`main-grid ${viewLayout === "split" ? "split-layout" : ""}`}>
             
-            {/* ซ้าย: เฟรมมุมมองกระดาน 5 เส้น (ห้ามล้นกรอบ) */}
             <section
-              className="panel board-panel"
+              className="panel"
               style={{
                 backgroundColor: staffBgColor,
-                padding: viewLayout === "present" ? "30px 40px" : "25px 20px",
+                borderRadius: "16px",
+                padding: viewLayout === "present" ? "40px 50px" : "35px 25px",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+                backdropFilter: "blur(6px)",
+                height: "100%",
+                minHeight: 0,
+                display: "flex",
+                flexDirection: "column",
+                overflow: "hidden"
               }}
             >
               <Board
@@ -981,17 +989,27 @@ export default function App() {
                 onRowClick={handleRowClick}
                 circleTextColor={circleTextColor}
                 fontSize={labelFontSize}
+                staffBgColor={staffBgColor}
               />
             </section>
 
-            {/* ขวา: เฟรมแผงควบคุมที่มี TopBar ฝังอยู่ด้านบน */}
             {viewLayout !== "present" && (
-              <div className="right-panel-wrapper">
-                {/* เฟรมมุมมองย้ายมาอยู่ด้านบนเฟรมแผงควบคุม */}
+              <div
+                className="right-panel-wrapper"
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "16px",
+                  height: "100%",
+                  minHeight: 0
+                }}
+              >
                 {renderTopBar({ marginBottom: 0 })}
 
-                {/* แผงควบคุมตั้งค่า (มี Scrollbar แค่ตรงนี้จุดเดียว) */}
-                <aside className="control-panel panel">
+                <aside 
+                  className="control-panel panel" 
+                  style={{ flex: 1, overflowY: "auto", position: "static", maxHeight: "none", margin: 0 }}
+                >
                   <h3>⚙️ แผงควบคุม</h3>
 
                   <section className="control-group">
@@ -1326,22 +1344,20 @@ export default function App() {
 const styles = `
   * { box-sizing: border-box; }
   
-  /* ล็อกหน้าจอทั้งหมดไม่ให้มี Scrollbar ทั้งแนวตั้งแนวนอนเด็ดขาด */
   html, body { 
     margin: 0; 
     padding: 0;
     width: 100vw;
     height: 100vh;
     font-family: "Sarabun", Arial, sans-serif; 
-    overflow: hidden !important; 
+    overflow: hidden !important; /* ป้องกันแถบเลื่อนหน้าหลักเด็ดขาด */
   }
   
   button, input, select { font-family: inherit; }
   button { border: 0; cursor: pointer; }
 
-  /* โครงสร้างหน้าต่างหลักให้เต็มจอเป๊ะๆ */
   .app-page {
-    height: 100vh; 
+    height: 100vh;
     width: 100vw;
     padding: 16px 14px;
     background-size: cover;
@@ -1349,6 +1365,7 @@ const styles = `
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    box-sizing: border-box;
   }
 
   .app-shell {
@@ -1357,7 +1374,7 @@ const styles = `
     margin: 0 auto;
     display: flex;
     flex-direction: column;
-    min-height: 0; /* กุญแจสำคัญให้ Flex ย่อขนาดได้ */
+    min-height: 0;
   }
 
   .panel {
@@ -1404,43 +1421,21 @@ const styles = `
     grid-template-columns: 1fr; 
     gap: 16px; 
     align-items: stretch;
-    min-height: 0; /* ให้ตารางย่อตัวได้ไม่ทะลุ 100vh */
+    min-height: 0;
   }
   
   .main-grid.split-layout { grid-template-columns: minmax(0, 1fr) 410px; }
 
-  .board-panel { 
-    height: 100%;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden; /* ห้ามกระดานฝั่งซ้ายทะลุ */
-  }
-  
-  .right-panel-wrapper {
-    height: 100%;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-
+  .board-panel { padding: 30px 22px; min-width: 0; }
   .presentation-panel { padding: 45px 50px; }
 
-  /* ให้กระดาน 5 เส้น ยืดหยุ่นในพื้นที่ที่เหลือ */
-  .tone-board { 
-    width: 100%; 
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    min-height: 0; 
-  }
-  
+  .tone-board { width: 100%; }
   .board-title { text-align: center; color: #ea580c; margin-bottom: 18px; }
-  .board-title h2 { margin: 0; font-size: clamp(20px, 2.3vw, 30px); }
-  .board-title div { font-size: clamp(14px, 1.5vw, 19px); font-weight: 600; }
+  .board-title h2 { margin: 0; font-size: clamp(23px, 2.3vw, 30px); }
+  .board-title div { font-size: clamp(16px, 1.5vw, 19px); font-weight: 600; }
 
   .analysis-box {
+    margin: 0 auto 22px;
     padding: 10px 14px;
     max-width: 900px;
     text-align: center;
@@ -1462,12 +1457,13 @@ const styles = `
 
   .tone-header, .tone-row {
     display: grid;
-    grid-template-columns: minmax(80px, 25%) 1fr minmax(60px, 15%); /* ยืดหยุ่นตามความกว้าง */
+    grid-template-columns: 215px minmax(190px, 1fr) 100px;
     align-items: center;
   }
 
   .tone-header {
     color: #0284c7;
+    font-size: 14px;
     font-weight: 700;
     margin-bottom: 3px;
   }
@@ -1478,15 +1474,14 @@ const styles = `
     flex: 1;
     display: flex;
     flex-direction: column;
-    justify-content: space-evenly; /* ให้ระยะห่างเฉลี่ยอัตโนมัติ ห้ามล้น */
-    gap: 0; 
+    justify-content: space-evenly;
+    gap: 1vh;
     min-height: 0;
   }
 
   .tone-row {
     width: 100%;
-    padding: 0; /* เอา padding ออกเพื่อให้บีบได้เต็มที่ */
-    margin: 0;
+    padding: 7px 0;
     background: transparent;
     text-align: inherit;
     border-radius: 12px;
@@ -1565,10 +1560,9 @@ const styles = `
 
   .tone-row.active .multi-circles { transform: translateX(-50%) scale(1.16); }
   .tone-row.active .multi-circles .tone-circle { transform: none; }
-  .slash { color: #64748b; font-weight: 700; }
-  .fixed-tone-label { text-align: center; font-weight: 700; }
+  .slash { color: #64748b; font-size: 21px; font-weight: 700; }
+  .fixed-tone-label { text-align: center; font-size: 16px; font-weight: 700; }
 
-  /* แผงควบคุมมี Scrollbar ได้จุดเดียว */
   .control-panel {
     padding: 18px;
     display: flex;
@@ -1727,7 +1721,6 @@ const styles = `
 
   .api-input-box strong { display: block; margin-bottom: 7px; }
 
-  /* CSS สำหรับ Display Page จอ 2 ห้ามล้นจอเด็ดขาด */
   .display-page {
     height: 100vh;
     width: 100vw;
@@ -1737,7 +1730,7 @@ const styles = `
     justify-content: center;
     background-size: cover;
     background-position: center;
-    overflow: hidden !important; 
+    overflow: hidden;
     box-sizing: border-box;
   }
 
@@ -1745,17 +1738,23 @@ const styles = `
     width: 100%;
     max-width: 1200px;
     height: 100%;
-    padding: clamp(15px, 3vh, 44px) 4vw;
+    max-height: 94vh;
+    padding: clamp(15px, 3vh, 44px);
     border-radius: clamp(16px, 2vw, 28px);
+    background: rgba(255,255,255,.96);
     border: 1px solid #cbd5e1;
     box-shadow: 0 16px 42px rgba(0,0,0,.18);
     display: flex;
     flex-direction: column;
-    box-sizing: border-box;
   }
 
-  .display-board .tone-header, .display-board .tone-row {
-    grid-template-columns: 20% 1fr 15%; /* ใช้สัดส่วนแทนการฟิกซ์ px ในจอที่ 2 */
+  .display-board .tone-rows {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    gap: 0;
+    margin-top: 2vh;
   }
 
   .display-tip {
@@ -1773,7 +1772,7 @@ const styles = `
 
   @media (max-width: 980px) {
     .main-grid.split-layout { grid-template-columns: 1fr; }
-    .right-panel-wrapper { position: static; max-height: none; }
+    .control-panel { position: static; max-height: none; }
   }
 
   @media (max-width: 640px) {
@@ -1798,15 +1797,14 @@ const styles = `
 
   /* ========================================= */
   /* วาดก้านและธงเขบ็ตชั้นเดียว (Eighth Note)  */
-  /* ใช้หน่วย em สัมพันธ์กับขนาดฟอนต์วงกลม ยืดหดได้เป๊ะ! */
   /* ========================================= */
   .tone-circle::before {
     content: "";
     position: absolute;
-    right: 0; /* ชิดขอบสัมผัสด้านขวาของวงกลมพอดี */
-    bottom: 50%; /* เริ่มต้นจากศูนย์กลางแนวตั้ง */
-    width: 0.22em; /* ความหนาก้าน */
-    height: 2.6em; /* ความสูงก้าน */
+    right: 0px; 
+    bottom: 50%;
+    width: 4px; 
+    height: 42px; 
     background-color: var(--note-color, transparent);
     z-index: -1;
   }
@@ -1814,14 +1812,14 @@ const styles = `
   .tone-circle::after {
     content: "";
     position: absolute;
-    right: -0.65em; /* ขยับหางออกขวาเชื่อมขอบก้าน */
-    bottom: calc(50% + 1.2em); /* ขยับขึ้นไปด้านบนใกล้ปลายก้าน */
-    width: 0.65em; /* ความกว้างหาง */
-    height: 1.4em; /* ความสูงหางตวัด */
-    border-right: 0.2em solid var(--note-color, transparent);
-    border-top: 0.25em solid var(--note-color, transparent);
-    border-top-right-radius: 1em 1.2em; /* โค้งตวัดเหมือนหางโน้ตดนตรี */
-    border-bottom-right-radius: 0.1em;
+    right: -12px; 
+    bottom: calc(50% + 18px); 
+    width: 12px; 
+    height: 20px; 
+    border-right: 4px solid var(--note-color, transparent);
+    border-top: 6px solid var(--note-color, transparent);
+    border-top-right-radius: 20px 22px; 
+    border-bottom-right-radius: 4px;
     z-index: -1;
   }
 `;
