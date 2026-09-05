@@ -905,37 +905,6 @@ export default function App() {
     channel.close();
   };
 
-  // Component สำหรับสร้าง Top Bar แบบใช้ซ้ำ
-  const renderTopBar = (extraStyle = {}) => (
-    <section className="top-bar panel" style={extraStyle}>
-      <div className="view-buttons">
-        <strong>🖥️ มุมมอง:</strong>
-        {[
-          ["standard", "ชิดเดียว"],
-          ["split", "แบ่ง 2 จอ"],
-          ["present", "โหมดพรีวิว"],
-        ].map(([value, label]) => (
-          <button
-            key={value}
-            className={viewLayout === value ? "selected-btn" : "soft-btn"}
-            onClick={() => setViewLayout(value)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className="monitor-buttons">
-        <button className="blue-btn" onClick={sendFullscreenToDisplay}>
-          ⛶ สลับเต็มจอ จอที่ 2
-        </button>
-        <button className="green-btn" onClick={handleOpenDualMonitor}>
-          🚀 เปิดกระดานแยกขึ้นมอนิเตอร์ที่ 2
-        </button>
-      </div>
-    </section>
-  );
-
   if (isDisplayWindow) {
     return (
       <>
@@ -968,9 +937,33 @@ export default function App() {
 
       <main className="app-page" style={containerBackground}>
         <div className="app-shell">
-          
-          {/* กรณีโหมด present ให้ Top bar ยังคงลอยอยู่บนสุด */}
-          {viewLayout === "present" && renderTopBar({ marginBottom: "20px" })}
+          <section className="top-bar panel">
+            <div className="view-buttons">
+              <strong>🖥️ มุมมอง:</strong>
+              {[
+                ["standard", "ชิดเดียว"],
+                ["split", "แบ่ง 2 จอ"],
+                ["present", "โหมดพรีวิว"],
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  className={viewLayout === value ? "selected-btn" : "soft-btn"}
+                  onClick={() => setViewLayout(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="monitor-buttons">
+              <button className="blue-btn" onClick={sendFullscreenToDisplay}>
+                ⛶ สลับเต็มจอ จอที่ 2
+              </button>
+              <button className="green-btn" onClick={handleOpenDualMonitor}>
+                🚀 เปิดกระดานแยกขึ้นมอนิเตอร์ที่ 2
+              </button>
+            </div>
+          </section>
 
           <div className={`main-grid ${viewLayout === "split" ? "split-layout" : ""}`}>
             <section
@@ -995,350 +988,330 @@ export default function App() {
               />
             </section>
 
-            {/* กรณีที่ไม่ใช่โหมด present ให้ Top bar และแผงควบคุมอยู่ในกล่องด้านขวา */}
             {viewLayout !== "present" && (
-              <div
-                className="right-panel-wrapper"
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "20px",
-                  maxHeight: "calc(100vh - 42px)",
-                  position: "sticky",
-                  top: "20px"
-                }}
-              >
-                {/* เฟรมมุมมองอยู่ด้านบน */}
-                {renderTopBar({ marginBottom: 0 })}
+              <aside className="control-panel panel">
+                <h3>⚙️ แผงควบคุม</h3>
 
-                {/* เฟรมแผงควบคุมอยู่ด้านล่าง และสามารถเลื่อน Scroll ได้อิสระ */}
-                <aside 
-                  className="control-panel panel" 
-                  style={{ flex: 1, overflowY: "auto", position: "static", maxHeight: "none", margin: 0 }}
-                >
-                  <h3>⚙️ แผงควบคุม</h3>
+                <section className="control-group">
+                  <strong>✨ ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ</strong>
 
-                  <section className="control-group">
-                    <strong>✨ ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ</strong>
-
-                    {inputText.trim() !== "" && (
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: "6px",
-                          marginBottom: "12px",
-                          fontSize: "13px",
-                          color: "#334155",
-                        }}
-                      >
-                        <ModeRadio value="full5" checked={mode === "full5"} label="ผันครบทั้ง 5 บรรทัด (อักษรคู่ / ห นำ)" onChange={setMode} />
-                        <ModeRadio value="highOnly" checked={mode === "highOnly"} label="เฉพาะเสียงสูง (เอก, โท, จัตวา)" onChange={setMode} />
-                        <ModeRadio value="lowOnly" checked={mode === "lowOnly"} label="เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)" onChange={setMode} />
-                      </div>
-                    )}
-
-                    <div className="input-row">
-                      <input
-                        value={inputText}
-                        placeholder="พิมพ์ 1 คำ เช่น กอ, เมา, กวาง"
-                        onChange={(event) => {
-                          const val = event.target.value;
-                          setInputText(val);
-                          validateInput(val);
-                          if (!val.trim()) {
-                            setMode("full5");
-                          }
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") handleGenerate();
-                        }}
-                        className={inputError ? "input-error" : ""}
-                      />
-                      <button className="blue-btn" disabled={loading} onClick={handleGenerate}>
-                        {loading ? "..." : "ผันคำ"}
-                      </button>
-                    </div>
-
-                    {inputError && <div className="error-text">{inputError}</div>}
-                  </section>
-
-                  <section>
-                    <div className="section-label">⌨️ เลือกพยัญชนะด่วน (๔๔ ตัว):</div>
-                    <div className="consonant-grid">
-                      {quickConsonants.map((consonant) => (
-                        <button
-                          key={consonant}
-                          className="consonant-btn"
-                          onClick={() => handleQuickConsonantClick(consonant)}
-                          style={{
-                            color: midConsonants.includes(consonant)
-                              ? colorMid
-                              : highConsonants.includes(consonant)
-                                ? colorHigh
-                                : colorLow,
-                          }}
-                        >
-                          {consonant}
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section>
-                    <div className="section-label green-label">🟢 สระเสียงยาว (คำเป็น):</div>
-                    <div className="vowel-list">
-                      {longVowels.map((vowel) => (
-                        <button
-                          key={vowel.label}
-                          className="vowel-btn long-vowel"
-                          onClick={() => handleQuickVowelClick(vowel)}
-                        >
-                          {vowel.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="section-label red-label">🔴 สระเสียงสั้น (คำตาย):</div>
-                    <div className="vowel-list">
-                      {shortVowels.map((vowel) => (
-                        <button
-                          key={vowel.label}
-                          className="vowel-btn short-vowel"
-                          onClick={() => handleQuickVowelClick(vowel)}
-                        >
-                          {vowel.label}
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="control-group">
-                    <strong>🔊 การอ่านออกเสียง</strong>
-
-                    <label className="toggle-label">
-                      <input
-                        type="checkbox"
-                        checked={speechEnabled}
-                        onChange={(event) => setSpeechEnabled(event.target.checked)}
-                      />
-                      เปิดเสียงเมื่อคลิกบรรทัด
-                    </label>
-
-                    <label className="select-label">
-                      เสียงอ่าน
-                      <select
-                        value={selectedVoiceURI}
-                        onChange={(event) => setSelectedVoiceURI(event.target.value)}
-                      >
-                        <option value="">เลือกอัตโนมัติ</option>
-                        {voices.map((voice) => (
-                          <option key={voice.voiceURI} value={voice.voiceURI}>
-                            {voice.name} ({voice.lang})
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <label className="select-label">
-                      ความเร็วอ่าน: {speechRate}x
-                      <input
-                        type="range"
-                        min="0.5"
-                        max="1.4"
-                        step="0.05"
-                        value={speechRate}
-                        onChange={(event) => setSpeechRate(Number(event.target.value))}
-                      />
-                    </label>
-
-                    <button
-                      className="soft-btn"
-                      onClick={() => {
-                        const item = linesData.find((line) => line.show);
-                        speak(item ? getSpeechText(item) : inputText);
-                      }}
-                    >
-                      ▶ ทดลองอ่านคำ
-                    </button>
-                  </section>
-
-                  <section className="control-group">
+                  {inputText.trim() !== "" && (
                     <div
                       style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "6px",
+                        marginBottom: "12px",
                         fontSize: "13px",
-                        fontWeight: "bold",
-                        color: "#4b5563",
-                        marginBottom: "8px",
+                        color: "#334155",
                       }}
                     >
-                      🎼 สีพื้นหลังกระดานบรรทัด 5 เส้น
+                      <ModeRadio value="full5" checked={mode === "full5"} label="ผันครบทั้ง 5 บรรทัด (อักษรคู่ / ห นำ)" onChange={setMode} />
+                      <ModeRadio value="highOnly" checked={mode === "highOnly"} label="เฉพาะเสียงสูง (เอก, โท, จัตวา)" onChange={setMode} />
+                      <ModeRadio value="lowOnly" checked={mode === "lowOnly"} label="เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)" onChange={setMode} />
                     </div>
+                  )}
 
-                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                      {[
-                        { label: "ขาว", value: "#ffffff" },
-                        { label: "ครีม", value: "#fffbeb" },
-                        { label: "ฟ้าอ่อน", value: "#f0f9ff" },
-                        { label: "เขียวอ่อน", value: "#f0fdf4" },
-                        { label: "เทาอ่อน", value: "#f8fafc" },
-                      ].map((item) => (
-                        <button
-                          key={item.value}
-                          onClick={() => setStaffBgColor(item.value)}
-                          style={{
-                            backgroundColor: item.value,
-                            border:
-                              staffBgColor === item.value
-                                ? "2px solid #0284c7"
-                                : "1px solid #cbd5e1",
-                            padding: "6px 10px",
-                            borderRadius: "6px",
-                            fontSize: "11px",
-                            fontWeight: "bold",
-                            cursor: "pointer",
-                            color: "#1e293b",
-                          }}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
+                  <div className="input-row">
+                    <input
+                      value={inputText}
+                      placeholder="พิมพ์ 1 คำ เช่น กอ, เมา, กวาง"
+                      onChange={(event) => {
+                        const val = event.target.value;
+                        setInputText(val);
+                        validateInput(val);
+                        if (!val.trim()) {
+                          setMode("full5");
+                        }
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") handleGenerate();
+                      }}
+                      className={inputError ? "input-error" : ""}
+                    />
+                    <button className="blue-btn" disabled={loading} onClick={handleGenerate}>
+                      {loading ? "..." : "ผันคำ"}
+                    </button>
+                  </div>
 
-                      <input
-                        type="color"
-                        value={staffBgColor}
-                        onChange={(e) => setStaffBgColor(e.target.value)}
-                        title="เลือกสีเอง"
-                        style={{
-                          width: "34px",
-                          height: "30px",
-                          padding: 0,
-                          cursor: "pointer",
-                          border: "1px solid #cbd5e1",
-                          borderRadius: "6px",
-                        }}
-                      />
-                    </div>
-                  </section>
+                  {inputError && <div className="error-text">{inputError}</div>}
+                </section>
 
-                  <section>
-                    <div className="section-label">🎨 ตั้งค่าสีประจำหมู่ และสีตัวอักษร</div>
-                    <div className="color-grid">
-                      {[
-                        ["อักษรกลาง", colorMid, setColorMid],
-                        ["อักษรสูง", colorHigh, setColorHigh],
-                        ["อักษรต่ำ", colorLow, setColorLow],
-                        ["สีตัวอักษร", circleTextColor, setCircleTextColor],
-                      ].map(([label, value, setter]) => (
-                        <label
-                          key={label}
-                          className="color-picker"
-                          style={{
-                            backgroundColor: label === "สีตัวอักษร" ? "#334155" : value,
-                            color: label === "สีตัวอักษร" ? value : "#fff",
-                          }}
-                        >
-                          {label}
-                          <input
-                            type="color"
-                            value={value}
-                            onChange={(event) => setter(event.target.value)}
-                          />
-                        </label>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="control-group">
-                    <strong>🖼️ เลือกสีหรือรูปภาพพื้นหลังจอภาพรวม</strong>
-                    <div className="background-colors">
-                      {[
-                        ["เทา", "#e2e8f0"],
-                        ["สว่าง", "#f1f5f9"],
-                        ["ฟ้าอ่อน", "#e0f2fe"],
-                        ["มินต์", "#dcfce7"],
-                        ["ส้มอ่อน", "#fef3c7"],
-                        ["เข้ม", "#334155"],
-                      ].map(([label, color]) => (
-                        <button
-                          key={color}
-                          onClick={() => {
-                            setBgColor(color);
-                            setBgType("color");
-                          }}
-                          className={bgColor === color && bgType === "color" ? "background-selected" : ""}
-                          style={{
-                            backgroundColor: color,
-                            color: color === "#334155" ? "#fff" : "#1e293b",
-                          }}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-
-                    <label className="upload-btn">
-                      📁 อัปโหลดรูปภาพพื้นหลัง
-                      <input type="file" accept="image/*" onChange={handleImageUpload} />
-                    </label>
-
-                    {bgType === "image" && (
+                <section>
+                  <div className="section-label">⌨️ เลือกพยัญชนะด่วน (๔๔ ตัว):</div>
+                  <div className="consonant-grid">
+                    {quickConsonants.map((consonant) => (
                       <button
-                        className="danger-btn"
-                        onClick={() => {
-                          setBgType("color");
-                          setBgImage("");
+                        key={consonant}
+                        className="consonant-btn"
+                        onClick={() => handleQuickConsonantClick(consonant)}
+                        style={{
+                          color: midConsonants.includes(consonant)
+                            ? colorMid
+                            : highConsonants.includes(consonant)
+                              ? colorHigh
+                              : colorLow,
                         }}
                       >
-                        ยกเลิกรูปภาพ
+                        {consonant}
                       </button>
-                    )}
-                  </section>
+                    ))}
+                  </div>
+                </section>
 
-                  <section className="control-group">
-                    <label className="select-label">
-                      📐 ขนาดตัวหนังสือและวงกลม (จอที่ 2): {labelFontSize}px
-                      <input
-                        type="range"
-                        min="16"
-                        max="32"
-                        value={labelFontSize}
-                        onChange={(event) => setLabelFontSize(Number(event.target.value))}
-                      />
-                    </label>
-                  </section>
+                <section>
+                  <div className="section-label green-label">🟢 สระเสียงยาว (คำเป็น):</div>
+                  <div className="vowel-list">
+                    {longVowels.map((vowel) => (
+                      <button
+                        key={vowel.label}
+                        className="vowel-btn long-vowel"
+                        onClick={() => handleQuickVowelClick(vowel)}
+                      >
+                        {vowel.label}
+                      </button>
+                    ))}
+                  </div>
 
-                  <section className="api-section">
-                    <button
-                      className="api-toggle"
-                      onClick={() => setShowApiInput((value) => !value)}
+                  <div className="section-label red-label">🔴 สระเสียงสั้น (คำตาย):</div>
+                  <div className="vowel-list">
+                    {shortVowels.map((vowel) => (
+                      <button
+                        key={vowel.label}
+                        className="vowel-btn short-vowel"
+                        onClick={() => handleQuickVowelClick(vowel)}
+                      >
+                        {vowel.label}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="control-group">
+                  <strong>🔊 การอ่านออกเสียง</strong>
+
+                  <label className="toggle-label">
+                    <input
+                      type="checkbox"
+                      checked={speechEnabled}
+                      onChange={(event) => setSpeechEnabled(event.target.checked)}
+                    />
+                    เปิดเสียงเมื่อคลิกบรรทัด
+                  </label>
+
+                  <label className="select-label">
+                    เสียงอ่าน
+                    <select
+                      value={selectedVoiceURI}
+                      onChange={(event) => setSelectedVoiceURI(event.target.value)}
                     >
-                      🔑 {customApiKey ? "เปลี่ยน Gemini API Key" : "เชื่อมต่อ AI (API Key)"}
-                    </button>
+                      <option value="">เลือกอัตโนมัติ</option>
+                      {voices.map((voice) => (
+                        <option key={voice.voiceURI} value={voice.voiceURI}>
+                          {voice.name} ({voice.lang})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
 
-                    {showApiInput && (
-                      <div className="api-input-box">
-                        <strong>🔑 เชื่อมต่อ Gemini API Key ส่วนตัว:</strong>
-                        <div className="input-row">
-                          <input
-                            type="password"
-                            value={tempApiKey}
-                            placeholder="วาง Gemini API Key..."
-                            onChange={(event) => setTempApiKey(event.target.value)}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") handleSaveApiKey();
-                            }}
-                          />
-                          <button className="green-btn" onClick={handleSaveApiKey}>
-                            บันทึก
-                          </button>
-                        </div>
-                        {apiSaveStatus && <div className="success-text">✓ {apiSaveStatus}</div>}
+                  <label className="select-label">
+                    ความเร็วอ่าน: {speechRate}x
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="1.4"
+                      step="0.05"
+                      value={speechRate}
+                      onChange={(event) => setSpeechRate(Number(event.target.value))}
+                    />
+                  </label>
+
+                  <button
+                    className="soft-btn"
+                    onClick={() => {
+                      const item = linesData.find((line) => line.show);
+                      speak(item ? getSpeechText(item) : inputText);
+                    }}
+                  >
+                    ▶ ทดลองอ่านคำ
+                  </button>
+                </section>
+
+                <section className="control-group">
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: "bold",
+                      color: "#4b5563",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    🎼 สีพื้นหลังกระดานบรรทัด 5 เส้น
+                  </div>
+
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    {[
+                      { label: "ขาว", value: "#ffffff" },
+                      { label: "ครีม", value: "#fffbeb" },
+                      { label: "ฟ้าอ่อน", value: "#f0f9ff" },
+                      { label: "เขียวอ่อน", value: "#f0fdf4" },
+                      { label: "เทาอ่อน", value: "#f8fafc" },
+                    ].map((item) => (
+                      <button
+                        key={item.value}
+                        onClick={() => setStaffBgColor(item.value)}
+                        style={{
+                          backgroundColor: item.value,
+                          border:
+                            staffBgColor === item.value
+                              ? "2px solid #0284c7"
+                              : "1px solid #cbd5e1",
+                          padding: "6px 10px",
+                          borderRadius: "6px",
+                          fontSize: "11px",
+                          fontWeight: "bold",
+                          cursor: "pointer",
+                          color: "#1e293b",
+                        }}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+
+                    <input
+                      type="color"
+                      value={staffBgColor}
+                      onChange={(e) => setStaffBgColor(e.target.value)}
+                      title="เลือกสีเอง"
+                      style={{
+                        width: "34px",
+                        height: "30px",
+                        padding: 0,
+                        cursor: "pointer",
+                        border: "1px solid #cbd5e1",
+                        borderRadius: "6px",
+                      }}
+                    />
+                  </div>
+                </section>
+
+                <section>
+                  <div className="section-label">🎨 ตั้งค่าสีประจำหมู่ และสีตัวอักษร</div>
+                  <div className="color-grid">
+                    {[
+                      ["อักษรกลาง", colorMid, setColorMid],
+                      ["อักษรสูง", colorHigh, setColorHigh],
+                      ["อักษรต่ำ", colorLow, setColorLow],
+                      ["สีตัวอักษร", circleTextColor, setCircleTextColor],
+                    ].map(([label, value, setter]) => (
+                      <label
+                        key={label}
+                        className="color-picker"
+                        style={{
+                          backgroundColor: label === "สีตัวอักษร" ? "#334155" : value,
+                          color: label === "สีตัวอักษร" ? value : "#fff",
+                        }}
+                      >
+                        {label}
+                        <input
+                          type="color"
+                          value={value}
+                          onChange={(event) => setter(event.target.value)}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="control-group">
+                  <strong>🖼️ เลือกสีหรือรูปภาพพื้นหลังจอภาพรวม</strong>
+                  <div className="background-colors">
+                    {[
+                      ["เทา", "#e2e8f0"],
+                      ["สว่าง", "#f1f5f9"],
+                      ["ฟ้าอ่อน", "#e0f2fe"],
+                      ["มินต์", "#dcfce7"],
+                      ["ส้มอ่อน", "#fef3c7"],
+                      ["เข้ม", "#334155"],
+                    ].map(([label, color]) => (
+                      <button
+                        key={color}
+                        onClick={() => {
+                          setBgColor(color);
+                          setBgType("color");
+                        }}
+                        className={bgColor === color && bgType === "color" ? "background-selected" : ""}
+                        style={{
+                          backgroundColor: color,
+                          color: color === "#334155" ? "#fff" : "#1e293b",
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <label className="upload-btn">
+                    📁 อัปโหลดรูปภาพพื้นหลัง
+                    <input type="file" accept="image/*" onChange={handleImageUpload} />
+                  </label>
+
+                  {bgType === "image" && (
+                    <button
+                      className="danger-btn"
+                      onClick={() => {
+                        setBgType("color");
+                        setBgImage("");
+                      }}
+                    >
+                      ยกเลิกรูปภาพ
+                    </button>
+                  )}
+                </section>
+
+                <section className="control-group">
+                  <label className="select-label">
+                    📐 ขนาดตัวหนังสือและวงกลม (จอที่ 2): {labelFontSize}px
+                    <input
+                      type="range"
+                      min="16"
+                      max="32"
+                      value={labelFontSize}
+                      onChange={(event) => setLabelFontSize(Number(event.target.value))}
+                    />
+                  </label>
+                </section>
+
+                <section className="api-section">
+                  <button
+                    className="api-toggle"
+                    onClick={() => setShowApiInput((value) => !value)}
+                  >
+                    🔑 {customApiKey ? "เปลี่ยน Gemini API Key" : "เชื่อมต่อ AI (API Key)"}
+                  </button>
+
+                  {showApiInput && (
+                    <div className="api-input-box">
+                      <strong>🔑 เชื่อมต่อ Gemini API Key ส่วนตัว:</strong>
+                      <div className="input-row">
+                        <input
+                          type="password"
+                          value={tempApiKey}
+                          placeholder="วาง Gemini API Key..."
+                          onChange={(event) => setTempApiKey(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") handleSaveApiKey();
+                          }}
+                        />
+                        <button className="green-btn" onClick={handleSaveApiKey}>
+                          บันทึก
+                        </button>
                       </div>
-                    )}
-                  </section>
-                </aside>
-              </div>
+                      {apiSaveStatus && <div className="success-text">✓ {apiSaveStatus}</div>}
+                    </div>
+                  )}
+                </section>
+              </aside>
             )}
           </div>
         </div>
@@ -1378,6 +1351,7 @@ const styles = `
     justify-content: space-between;
     gap: 12px;
     padding: 14px 18px;
+    margin-bottom: 20px;
     flex-wrap: wrap;
   }
 
@@ -1541,6 +1515,10 @@ const styles = `
   .fixed-tone-label { text-align: center; font-size: 16px; font-weight: 700; }
 
   .control-panel {
+    max-height: calc(100vh - 42px);
+    overflow-y: auto;
+    position: sticky;
+    top: 20px;
     padding: 18px;
     display: flex;
     flex-direction: column;
@@ -1699,41 +1677,28 @@ const styles = `
   .api-input-box strong { display: block; margin-bottom: 7px; }
 
   .display-page {
-    height: 100vh;
+    min-height: 100vh;
     width: 100vw;
-    padding: 2vh 2vw;
+    padding: 3vh 4vw;
     display: flex;
     align-items: center;
     justify-content: center;
     background-size: cover;
     background-position: center;
     overflow: hidden;
-    box-sizing: border-box;
   }
 
   .display-board {
-    width: 100%;
-    max-width: 1200px;
-    height: 100%;
-    max-height: 94vh;
-    padding: clamp(15px, 3vh, 44px);
+    width: min(1200px, 92vw);
+    min-height: min(760px, 88vh);
+    padding: clamp(20px, 3vw, 44px);
     border-radius: clamp(16px, 2vw, 28px);
     background: rgba(255,255,255,.96);
     border: 1px solid #cbd5e1;
     box-shadow: 0 16px 42px rgba(0,0,0,.18);
-    display: flex;
-    flex-direction: column;
   }
 
-  .display-board .tone-rows {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-evenly;
-    gap: 0;
-    margin-top: 2vh;
-  }
-
+  .display-board .tone-rows { gap: clamp(20px, 3vh, 38px); }
   .display-tip {
     position: fixed;
     bottom: 13px;
@@ -1778,7 +1743,7 @@ const styles = `
   .tone-circle::before {
     content: "";
     position: absolute;
-    right: 0px; /* ก้านเริ่มจากเส้นรอบวงกึ่งกลางด้านขวาพอดี */
+    right: 4px; /* ก้านเริ่มจากเส้นสัมผัสรอบวงขวาพอดี */
     bottom: 50%;
     width: 4px; /* ความหนาก้าน */
     height: 42px; /* ความสูงก้าน */
@@ -1789,10 +1754,10 @@ const styles = `
   .tone-circle::after {
     content: "";
     position: absolute;
-    right: -12px; /* ยื่นธงออกไปทางขวาให้เชื่อมกับก้าน */
+    right: -8px; /* ยื่นธงออกไปทางขวาพอดีกับก้าน */
     bottom: calc(50% + 18px); /* เลื่อนธงขึ้นไปแตะยอดก้านพอดี */
     width: 12px; /* ความกว้างธง (ไม่ยาวมาก) */
-    height: 20px; /* ความยาวหางธง */
+    height: 20px; /* ความยาวหางธง (สั้นลงดูเป็นธรรมชาติ) */
     border-right: 4px solid var(--note-color, transparent);
     border-top: 6px solid var(--note-color, transparent);
     border-top-right-radius: 20px 22px; /* โค้งตวัดเหมือนหางโน้ตดนตรี */
