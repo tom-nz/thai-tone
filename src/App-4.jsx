@@ -598,6 +598,7 @@ export default function App() {
   const handleGenerate = async () => {
     const word = inputText.trim();
     if (!validateInput(word)) {
+      // หากคำผิดหลักภาษา ให้ย้อนกลับไปยังคำล่าสุดที่ถูกต้อง
       if (lastValidInput) {
         setInputText(lastValidInput);
         validateInput(lastValidInput);
@@ -608,6 +609,7 @@ export default function App() {
       return;
     }
     
+    // บันทึกคำที่ตรวจสอบผ่านไว้เป็นตัวย้อนกลับ
     setLastValidInput(word);
 
     const fallback = () => {
@@ -1743,10 +1745,10 @@ const styles = `
   .tone-circle::before {
     content: "";
     position: absolute;
-    right: 4px; /* ก้านเริ่มจากเส้นสัมผัสรอบวงขวาพอดี */
+    right: 5px; /* ก้านเริ่มแนบชิดขอบวงกลมด้านขวา */
     bottom: 50%;
     width: 4px; /* ความหนาก้าน */
-    height: 42px; /* ความสูงก้าน */
+    height: 44px; /* ความสูงก้าน */
     background-color: var(--note-color, transparent);
     z-index: -1;
   }
@@ -1754,14 +1756,16 @@ const styles = `
   .tone-circle::after {
     content: "";
     position: absolute;
-    right: -8px; /* ยื่นธงออกไปทางขวาพอดีกับก้าน */
-    bottom: calc(50% + 18px); /* เลื่อนธงขึ้นไปแตะยอดก้านพอดี */
-    width: 12px; /* ความกว้างธง (ไม่ยาวมาก) */
-    height: 20px; /* ความยาวหางธง (สั้นลงดูเป็นธรรมชาติ) */
+    right: -10px; /* ยื่นธงออกไปทางขวา */
+    bottom: calc(50% + 15px); /* เลื่อนธงขึ้นไปแตะยอดก้านพอดี */
+    width: 15px; /* ความกว้างธง */
+    height: 28px; /* ความยาวหางธง */
+    
+    /* สร้างความโค้งสไตล์ธงเขบ็ต (Musical Flag) */
     border-right: 4px solid var(--note-color, transparent);
     border-top: 6px solid var(--note-color, transparent);
-    border-top-right-radius: 20px 22px; /* โค้งตวัดเหมือนหางโน้ตดนตรี */
-    border-bottom-right-radius: 4px;
+    border-top-right-radius: 24px 18px; /* ปรับให้โค้งลาดลงล่าง */
+    border-bottom-right-radius: 2px;
     z-index: -1;
   }
 `;
