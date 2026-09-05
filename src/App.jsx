@@ -1,8 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 
 const apiKey = "";
 const CHANNEL_NAME = "thai_tone_sync_channel";
 const STORAGE_KEY = "thai_tone_live_sync_data";
+
+// Regex ตรวจสอบเฉพาะภาษาไทย
+const THAI_WORD_PATTERN = /^[\u0E00-\u0E7F]+$/;
 
 const midConsonants = ["ก", "จ", "ด", "ต", "บ", "ป", "อ", "ฎ", "ฏ"];
 const highConsonants = ["ข", "ฃ", "ฉ", "ฐ", "ถ", "ผ", "ฝ", "ศ", "ษ", "ส", "ห"];
@@ -74,6 +77,39 @@ const toneRows = [
   { id: 1, tone: "เสียงสามัญ", mark: "-", leftPos: "28%" },
 ];
 
+// Custom Radio Component
+function ModeRadio({ value, checked, label, onChange }) {
+  return (
+    <label
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "9px",
+        cursor: "pointer",
+      }}
+    >
+      <input
+        type="radio"
+        name="mode"
+        checked={checked}
+        onChange={() => onChange(value)}
+        style={{
+          appearance: "none",
+          width: "18px",
+          height: "18px",
+          borderRadius: "50%",
+          border: "2px solid #475569",
+          backgroundColor: checked ? "#000000" : "#ffffff",
+          cursor: "pointer",
+          margin: 0,
+          flexShrink: 0,
+        }}
+      />
+      {label}
+    </label>
+  );
+}
+
 function parseThaiWord(word = "") {
   let workStr = word.trim();
   let frontVowel = "";
@@ -109,7 +145,6 @@ function parseThaiWord(word = "") {
 }
 
 function buildWord(frontVowel, initial, aboveBelowVowel, tone, rest) {
-  // บังคับจัดเรียง: สระบน/ล่าง ต้องมาก่อนวรรณยุกต์เสมอ และรวมอักขระให้อยู่ในฟอร์มมาตรฐาน
   const rawWord = `${frontVowel}${initial}${aboveBelowVowel}${tone}${rest}`;
   return rawWord.replace(/([่้๊๋])([ิีึืุูั็ํ])/g, "$2$1").normalize("NFC");
 }
@@ -325,6 +360,7 @@ function Board({
   circleTextColor,
   isDisplay = false,
   fontSize = 20,
+  staffBgColor = "#ffffff",
 }) {
   const fixedRightLabels = {
     5: { text: "เสียงสูง", color: "#ef4444" },
@@ -337,7 +373,10 @@ function Board({
   const textSize = isDisplay ? `clamp(15px, ${1.5 * ratio}vw, 25px)` : "17px";
 
   return (
-    <div className={`tone-board ${isDisplay ? "display-board" : ""}`}>
+    <div
+      className={`tone-board ${isDisplay ? "display-board" : ""}`}
+      style={isDisplay ? { backgroundColor: staffBgColor } : {}}
+    >
       <div className="board-title">
         <h2>ไตรยางศ์ หรือ อักษร 3 หมู่</h2>
         <div>และการผันวรรณยุกต์</div>
@@ -466,6 +505,7 @@ export default function App() {
   const [bgType, setBgType] = useState("color");
   const [bgColor, setBgColor] = useState("#e2e8f0");
   const [bgImage, setBgImage] = useState("");
+  const [staffBgColor, setStaffBgColor] = useState("#ffffff");
 
   const [activeRowId, setActiveRowId] = useState(null);
   const [speechEnabled, setSpeechEnabled] = useState(true);
@@ -473,12 +513,18 @@ export default function App() {
   const [voices, setVoices] = useState([]);
   const [selectedVoiceURI, setSelectedVoiceURI] = useState("");
 
-  const [customApiKey, setCustomApiKey] = useState(
-    () => localStorage.getItem("gemini_api_key") || "",
-  );
-  const [tempApiKey, setTempApiKey] = useState(
-    () => localStorage.getItem("gemini_api_key") || "",
-  );
+  const [customApiKey, setCustomApiKey] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("gemini_api_key") || "";
+    }
+    return "";
+  });
+  const [tempApiKey, setTempApiKey] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("gemini_api_key") || "";
+    }
+    return "";
+  });
   const [showApiInput, setShowApiInput] = useState(false);
   const [apiSaveStatus, setApiSaveStatus] = useState("");
   const speechRef = useRef(null);
@@ -502,9 +548,8 @@ export default function App() {
   }, [bgType, bgColor, bgImage]);
 
   const speak = (text) => {
-    if (!speechEnabled || !text || !("speechSynthesis" in window)) return;
+    if (typeof window === "undefined" || !speechEnabled || !text || !("speechSynthesis" in window)) return;
 
-    // เคลียร์ลำดับอักขระอีกชั้นก่อนส่งให้ TTS เพื่อป้องกันการอ่านสะกดคำ
     const normalizedText = text.replace(/([่้๊๋])([ิีึืุูั็ํ])/g, "$2$1").normalize("NFC");
 
     window.speechSynthesis.cancel();
@@ -527,18 +572,28 @@ export default function App() {
   };
 
   const validateInput = (word) => {
-    if (!word?.trim()) {
+    const value = word.trim();
+
+    if (!value) {
       setInputError("กรุณากรอกคำศัพท์");
       return false;
     }
-    if (word.trim().includes(" ")) {
-      setInputError("⚠️ กรุณากรอกเพียง 1 คำเท่านั้น (ห้ามมีเว้นวรรค)");
+
+    if (/\s/.test(value)) {
+      setInputError("กรุณากรอกเพียง 1 คำเท่านั้น ห้ามเว้นวรรค");
       return false;
     }
-    if (word.trim().length > 8) {
-      setInputError("⚠️ คำศัพท์ยาวเกินไป (กรอกได้สูงสุด 1 พยางค์/คำ)");
+
+    if (!THAI_WORD_PATTERN.test(value)) {
+      setInputError("กรุณากรอกด้วยอักษรไทยเท่านั้น");
       return false;
     }
+
+    if (value.length > 8) {
+      setInputError("กรุณากรอกไม่เกิน 1 พยางค์");
+      return false;
+    }
+
     setInputError("");
     return true;
   };
@@ -616,7 +671,8 @@ export default function App() {
 
       setLinesData(formatted);
       setAnalysisInfo(analyzeSyllable(word, mode));
-    } catch {
+    } catch (err) {
+      console.warn("AI Generate fallback:", err);
       fallback();
     } finally {
       setLoading(false);
@@ -625,14 +681,16 @@ export default function App() {
 
   const handleQuickConsonantClick = (consonant) => {
     const { frontVowel, aboveBelowVowel, rest } = parseThaiWord(inputText);
-    setInputText(
-      buildWord(frontVowel || "", consonant, aboveBelowVowel || "", "", rest || "อ"),
-    );
+    const newWord = buildWord(frontVowel || "", consonant, aboveBelowVowel || "", "", rest || "อ");
+    setInputText(newWord);
+    validateInput(newWord);
   };
 
   const handleQuickVowelClick = (vowel) => {
     const { initial } = parseThaiWord(inputText);
-    setInputText(`${vowel.front}${initial || "ก"}${vowel.rear}`);
+    const newWord = `${vowel.front}${initial || "ก"}${vowel.rear}`;
+    setInputText(newWord);
+    validateInput(newWord);
   };
 
   const handleImageUpload = (event) => {
@@ -649,21 +707,29 @@ export default function App() {
 
   const handleSaveApiKey = () => {
     const key = tempApiKey.trim();
-    localStorage.setItem("gemini_api_key", key);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("gemini_api_key", key);
+    }
     setCustomApiKey(key);
     setApiSaveStatus("บันทึก API Key เรียบร้อยแล้ว!");
     window.setTimeout(() => setApiSaveStatus(""), 3000);
   };
 
-  const toggleFullscreen = () => {
+  const toggleFullscreen = useCallback(() => {
+    if (typeof document === "undefined") return;
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen?.().catch(() => {});
+      document.documentElement.requestFullscreen?.().catch((err) => {
+        console.warn("Fullscreen error:", err);
+      });
     } else {
-      document.exitFullscreen?.().catch(() => {});
+      document.exitFullscreen?.().catch((err) => {
+        console.warn("Exit fullscreen error:", err);
+      });
     }
-  };
+  }, []);
 
   const handleOpenDualMonitor = () => {
+    if (typeof window === "undefined") return;
     const currentUrl = window.location.href.split("?")[0];
     window.open(
       `${currentUrl}?view=display`,
@@ -687,6 +753,7 @@ export default function App() {
       bgType,
       bgColor,
       bgImage,
+      staffBgColor,
       mode,
       speechEnabled,
       speechRate,
@@ -705,6 +772,7 @@ export default function App() {
       bgType,
       bgColor,
       bgImage,
+      staffBgColor,
       mode,
       speechEnabled,
       speechRate,
@@ -713,6 +781,7 @@ export default function App() {
   );
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     const displayMode = params.get("view") === "display";
     setIsDisplayWindow(displayMode);
@@ -724,6 +793,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
+
     const updateVoices = () => {
       const thaiFirst = window.speechSynthesis
         .getVoices()
@@ -736,13 +807,11 @@ export default function App() {
       }
     };
 
-    if ("speechSynthesis" in window) {
-      updateVoices();
-      window.speechSynthesis.onvoiceschanged = updateVoices;
-    }
+    updateVoices();
+    window.speechSynthesis.onvoiceschanged = updateVoices;
 
     return () => {
-      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+      window.speechSynthesis.cancel();
     };
   }, [selectedVoiceURI]);
 
@@ -753,10 +822,14 @@ export default function App() {
   }, [inputText, mode, colorMid, colorHigh, colorLow, isDisplayWindow]);
 
   useEffect(() => {
-    if (isDisplayWindow) return;
+    if (isDisplayWindow || typeof window === "undefined" || !("BroadcastChannel" in window)) return;
 
     const channel = new BroadcastChannel(CHANNEL_NAME);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(syncData));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(syncData));
+    } catch (err) {
+      console.warn("Storage sync error:", err);
+    }
     channel.postMessage(syncData);
 
     const listener = (event) => {
@@ -771,7 +844,7 @@ export default function App() {
   }, [isDisplayWindow, syncData]);
 
   useEffect(() => {
-    if (!isDisplayWindow) return;
+    if (!isDisplayWindow || typeof window === "undefined") return;
 
     const apply = (data) => {
       if (!data) return;
@@ -787,6 +860,7 @@ export default function App() {
       if (data.bgType) setBgType(data.bgType);
       if (data.bgColor) setBgColor(data.bgColor);
       if (data.bgImage !== undefined) setBgImage(data.bgImage);
+      if (data.staffBgColor) setStaffBgColor(data.staffBgColor);
       if (data.mode) setMode(data.mode);
       if (data.speechEnabled !== undefined) setSpeechEnabled(data.speechEnabled);
       if (data.speechRate) setSpeechRate(data.speechRate);
@@ -796,8 +870,11 @@ export default function App() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) apply(JSON.parse(saved));
-    } catch {}
+    } catch (err) {
+      console.warn("Read saved state error:", err);
+    }
 
+    if (!("BroadcastChannel" in window)) return;
     const channel = new BroadcastChannel(CHANNEL_NAME);
     const listener = (event) => {
       if (event.data?.type === "SYNC_STATE") apply(event.data);
@@ -811,9 +888,10 @@ export default function App() {
       channel.removeEventListener("message", listener);
       channel.close();
     };
-  }, [isDisplayWindow]);
+  }, [isDisplayWindow, toggleFullscreen]);
 
   const sendFullscreenToDisplay = () => {
+    if (typeof window === "undefined" || !("BroadcastChannel" in window)) return;
     const channel = new BroadcastChannel(CHANNEL_NAME);
     channel.postMessage({ type: "TOGGLE_FULLSCREEN" });
     channel.close();
@@ -837,6 +915,7 @@ export default function App() {
             circleTextColor={circleTextColor}
             isDisplay
             fontSize={labelFontSize}
+            staffBgColor={staffBgColor}
           />
           <div className="display-tip">ดับเบิลคลิกพื้นที่ว่างเพื่อสลับเต็มจอ • คลิกบรรทัดเพื่อขยายและอ่านออกเสียง</div>
         </main>
@@ -879,7 +958,16 @@ export default function App() {
           </section>
 
           <div className={`main-grid ${viewLayout === "split" ? "split-layout" : ""}`}>
-            <section className={`board-panel panel ${viewLayout === "present" ? "presentation-panel" : ""}`}>
+            <section
+              className="panel"
+              style={{
+                backgroundColor: staffBgColor,
+                borderRadius: "16px",
+                padding: viewLayout === "present" ? "40px 50px" : "35px 25px",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+                backdropFilter: "blur(6px)",
+              }}
+            >
               <Board
                 linesData={linesData}
                 analysisInfo={analysisInfo}
@@ -888,6 +976,7 @@ export default function App() {
                 onRowClick={handleRowClick}
                 circleTextColor={circleTextColor}
                 fontSize={labelFontSize}
+                staffBgColor={staffBgColor}
               />
             </section>
 
@@ -898,43 +987,34 @@ export default function App() {
                 <section className="control-group">
                   <strong>✨ ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ</strong>
 
-                  <label className="radio-label">
-                    <input
-                      type="radio"
-                      name="mode"
-                      checked={mode === "full5"}
-                      onChange={() => setMode("full5")}
-                    />
-                    ผันครบทั้ง 5 บรรทัด (อักษรคู่ / ห นำ)
-                  </label>
-
-                  <label className="radio-label">
-                    <input
-                      type="radio"
-                      name="mode"
-                      checked={mode === "highOnly"}
-                      onChange={() => setMode("highOnly")}
-                    />
-                    เฉพาะเสียงสูง (เอก, โท, จัตวา)
-                  </label>
-
-                  <label className="radio-label">
-                    <input
-                      type="radio"
-                      name="mode"
-                      checked={mode === "lowOnly"}
-                      onChange={() => setMode("lowOnly")}
-                    />
-                    เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)
-                  </label>
+                  {inputText.trim() !== "" && (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "6px",
+                        marginBottom: "12px",
+                        fontSize: "13px",
+                        color: "#334155",
+                      }}
+                    >
+                      <ModeRadio value="full5" checked={mode === "full5"} label="ผันครบทั้ง 5 บรรทัด (อักษรคู่ / ห นำ)" onChange={setMode} />
+                      <ModeRadio value="highOnly" checked={mode === "highOnly"} label="เฉพาะเสียงสูง (เอก, โท, จัตวา)" onChange={setMode} />
+                      <ModeRadio value="lowOnly" checked={mode === "lowOnly"} label="เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)" onChange={setMode} />
+                    </div>
+                  )}
 
                   <div className="input-row">
                     <input
                       value={inputText}
                       placeholder="พิมพ์ 1 คำ เช่น กอ, เมา, กวาง"
                       onChange={(event) => {
-                        setInputText(event.target.value);
-                        validateInput(event.target.value);
+                        const val = event.target.value;
+                        setInputText(val);
+                        validateInput(val);
+                        if (!val.trim()) {
+                          setMode("full5");
+                        }
                       }}
                       onKeyDown={(event) => {
                         if (event.key === "Enter") handleGenerate();
@@ -1049,6 +1129,64 @@ export default function App() {
                   </button>
                 </section>
 
+                <section className="control-group">
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      fontWeight: "bold",
+                      color: "#4b5563",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    🎼 สีพื้นหลังกระดานบรรทัด 5 เส้น
+                  </div>
+
+                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                    {[
+                      { label: "ขาว", value: "#ffffff" },
+                      { label: "ครีม", value: "#fffbeb" },
+                      { label: "ฟ้าอ่อน", value: "#f0f9ff" },
+                      { label: "เขียวอ่อน", value: "#f0fdf4" },
+                      { label: "เทาอ่อน", value: "#f8fafc" },
+                    ].map((item) => (
+                      <button
+                        key={item.value}
+                        onClick={() => setStaffBgColor(item.value)}
+                        style={{
+                          backgroundColor: item.value,
+                          border:
+                            staffBgColor === item.value
+                              ? "2px solid #0284c7"
+                              : "1px solid #cbd5e1",
+                          padding: "6px 10px",
+                          borderRadius: "6px",
+                          fontSize: "11px",
+                          fontWeight: "bold",
+                          cursor: "pointer",
+                          color: "#1e293b",
+                        }}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+
+                    <input
+                      type="color"
+                      value={staffBgColor}
+                      onChange={(e) => setStaffBgColor(e.target.value)}
+                      title="เลือกสีเอง"
+                      style={{
+                        width: "34px",
+                        height: "30px",
+                        padding: 0,
+                        cursor: "pointer",
+                        border: "1px solid #cbd5e1",
+                        borderRadius: "6px",
+                      }}
+                    />
+                  </div>
+                </section>
+
                 <section>
                   <div className="section-label">🎨 ตั้งค่าสีประจำหมู่ และสีตัวอักษร</div>
                   <div className="color-grid">
@@ -1078,7 +1216,7 @@ export default function App() {
                 </section>
 
                 <section className="control-group">
-                  <strong>🖼️ เลือกสีหรือรูปภาพพื้นหลังจอภาพ</strong>
+                  <strong>🖼️ เลือกสีหรือรูปภาพพื้นหลังจอภาพรวม</strong>
                   <div className="background-colors">
                     {[
                       ["เทา", "#e2e8f0"],
@@ -1591,16 +1729,14 @@ const styles = `
     .display-tip { font-size: 10px; max-width: 92vw; white-space: normal; text-align: center; }
   }
 
-  /* ========================================= */
-  /* วาดก้านและธงเขบ็ตชั้นเดียว (Eighth Note)  */
-  /* ========================================= */
+  /* เขบ็ตชั้นเดียว */
   .tone-circle::before {
     content: "";
     position: absolute;
-    right: 8px;
+    right: 5px;
     bottom: 50%;
-    width: 5px; /* ปรับก้านให้หนาขึ้น */
-    height: 40px;
+    width: 4px;
+    height: 45px;
     background-color: var(--note-color, transparent);
     z-index: -1;
   }
@@ -1608,13 +1744,14 @@ const styles = `
   .tone-circle::after {
     content: "";
     position: absolute;
-    right: -5px; /* ปรับขยับให้รอยต่อเชื่อมกับก้านที่หนาขึ้นพอดี */
-    bottom: calc(50% + 15px);
-    width: 15px;
+    right: -8px;
+    bottom: calc(50% + 20px);
+    width: 16px;
     height: 25px;
-    border-right: 5px solid var(--note-color, transparent); /* ปรับธงให้หนาขึ้น */
-    border-top: 5px solid var(--note-color, transparent); /* ปรับธงให้หนาขึ้น */
-    border-top-right-radius: 14px;
+    border-right: 5px solid var(--note-color, transparent);
+    border-top: 6px solid var(--note-color, transparent);
+    border-top-right-radius: 18px;
+    border-bottom-right-radius: 5px;
     z-index: -1;
   }
 `;
