@@ -82,6 +82,39 @@ const toneRows = [
   { id: 1, tone: "เสียงสามัญ", mark: "-", leftPos: "28%" },
 ];
 
+// Custom Radio Component
+function ModeRadio({ value, checked, label, onChange }) {
+  return (
+    <label
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "9px",
+        cursor: "pointer",
+      }}
+    >
+      <input
+        type="radio"
+        name="mode"
+        checked={checked}
+        onChange={() => onChange(value)}
+        style={{
+          appearance: "none",
+          width: "18px",
+          height: "18px",
+          borderRadius: "50%",
+          border: "2px solid #475569",
+          backgroundColor: checked ? "#000000" : "#ffffff",
+          cursor: "pointer",
+          margin: 0,
+          flexShrink: 0,
+        }}
+      />
+      {label}
+    </label>
+  );
+}
+
 // ตารางอ้างอิงการผันวรรณยุกต์ตามไตรยางศ์
 // ที่มา: เอกสาร DLTV ระบุว่า
 // - อักษรกลาง: คำเป็น 5 เสียง / คำตาย 4 เสียง
@@ -634,6 +667,108 @@ function calculateTones(word, mode, colorMid, colorHigh, colorLow) {
   return combined;
 }
 
+
+function validateEnteredToneMark(word = "") {
+  const value = word.trim();
+
+  if (!value) {
+    return {
+      status: "idle",
+      toneMark: "",
+      message: "",
+      detail: "",
+    };
+  }
+
+  const parsed = parseThaiWord(value);
+  const analysis = analyzeSyllable(value, "full5");
+  const baseWord = buildWord(
+    parsed.frontVowel,
+    parsed.initial,
+    parsed.aboveBelowVowel,
+    "",
+    parsed.rest,
+  );
+
+  const ruleMode =
+    analysis.consonantClass === "middle"
+      ? "full5"
+      : analysis.consonantClass === "high"
+        ? "highOnly"
+        : "lowOnly";
+
+  const candidates = calculateTones(
+    baseWord,
+    ruleMode,
+    "#22c55e",
+    "#ef4444",
+    "#007bff",
+  );
+
+  const candidateMatches = [];
+
+  for (const row of candidates) {
+    const words = row.isMulti
+      ? row.multi.map((item) => item.text)
+      : row.word
+        ? [row.word]
+        : [];
+
+    if (words.includes(value)) {
+      candidateMatches.push(row);
+    }
+  }
+
+  if (parsed.toneMark) {
+    if (candidateMatches.length > 0) {
+      const toneNames = candidateMatches
+        .map((row) => row.tone)
+        .join(" / ");
+
+      return {
+        status: "valid",
+        toneMark: parsed.toneMark,
+        message: `✅ รูปวรรณยุกต์ถูกต้อง: ${parsed.toneMark}`,
+        detail: `ตรงกับ${toneNames}`,
+      };
+    }
+
+    const available = candidates
+      .filter((row) => row.show)
+      .map((row) => `${row.tone} [${row.mark}]`)
+      .join(", ");
+
+    return {
+      status: "invalid",
+      toneMark: parsed.toneMark,
+      message: `❌ รูปวรรณยุกต์ไม่ถูกต้อง: ${parsed.toneMark}`,
+      detail: available
+        ? `รูปที่ใช้ได้สำหรับคำนี้: ${available}`
+        : "คำนี้ไม่มีกฎการผันที่ตรงกับรูปที่กรอก",
+    };
+  }
+
+  if (candidateMatches.length > 0) {
+    const toneNames = candidateMatches
+      .map((row) => row.tone)
+      .join(" / ");
+
+    return {
+      status: "neutral",
+      toneMark: "",
+      message: "ℹ️ ไม่มีรูปวรรณยุกต์",
+      detail: `เป็นรูปพื้นเสียง/รูปไม่มีไม้ และตรงกับ${toneNames}`,
+    };
+  }
+
+  return {
+    status: "neutral",
+    toneMark: "",
+    message: "ℹ️ ไม่มีรูปวรรณยุกต์",
+    detail: "ยังไม่พบรูปพื้นเสียงที่ตรงกับกฎของคำนี้",
+  };
+}
+
 function getSpeechText(item) {
   if (!item?.show) return "";
 
@@ -907,6 +1042,9 @@ export default function App() {
   const [linesData, setLinesData] = useState(() =>
     calculateTones("", "full5", "#22c55e", "#ef4444", "#007bff"),
   );
+  const [toneValidation, setToneValidation] = useState(() =>
+    validateEnteredToneMark(""),
+  );
 
   const containerBackground = useMemo(() => {
     if (bgType === "image" && bgImage) {
@@ -974,20 +1112,26 @@ export default function App() {
     const value = word.trim();
 
     if (!value) {
+      setToneValidation(validateEnteredToneMark(""));
       setInputError("กรุณากรอกคำศัพท์");
       return false;
     }
 
     if (/\s/.test(value)) {
+      setToneValidation(validateEnteredToneMark(""));
       setInputError("กรุณากรอกเพียง 1 คำเท่านั้น ห้ามเว้นวรรค");
       return false;
     }
 
     // ตรวจสอบคำภาษาไทย 1 พยางค์อย่างเคร่งครัด
     if (!STRICT_THAI_SYLLABLE_PATTERN.test(value)) {
+      setToneValidation(validateEnteredToneMark(""));
       setInputError("กรุณากรอก 1 พยางค์ให้ถูกหลักภาษาไทย (เช่น พยัญชนะ สระ ตัวสะกด วรรณยุกต์)");
       return false;
     }
+
+    const toneResult = validateEnteredToneMark(value);
+    setToneValidation(toneResult);
 
     setInputError("");
     return true;
@@ -1491,6 +1635,17 @@ export default function App() {
                     </div>
 
                     {inputError && <div className="error-text">{inputError}</div>}
+
+                    {toneValidation.status !== "idle" && (
+                      <div
+                        className={`tone-validation tone-validation-${toneValidation.status}`}
+                      >
+                        <strong>{toneValidation.message}</strong>
+                        {toneValidation.detail && (
+                          <span>{toneValidation.detail}</span>
+                        )}
+                      </div>
+                    )}
                   </section>
 
                   <section>
@@ -2136,6 +2291,35 @@ const styles = `
   .input-row .input-error { border: 2px solid #ef4444; }
   .error-text { color: #dc2626; font-size: 12px; font-weight: 700; }
   .success-text { color: #059669; font-size: 12px; font-weight: 700; }
+
+  .tone-validation {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 7px 9px;
+    border-radius: 7px;
+    font-size: 12px;
+    line-height: 1.45;
+    border: 1px solid #cbd5e1;
+  }
+
+  .tone-validation-valid {
+    color: #166534;
+    background: #f0fdf4;
+    border-color: #bbf7d0;
+  }
+
+  .tone-validation-invalid {
+    color: #991b1b;
+    background: #fef2f2;
+    border-color: #fecaca;
+  }
+
+  .tone-validation-neutral {
+    color: #475569;
+    background: #f8fafc;
+    border-color: #e2e8f0;
+  }
 
   .section-label {
     margin-bottom: 6px;
