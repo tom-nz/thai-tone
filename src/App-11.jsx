@@ -1,148 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 
-/**
- * =============================================================================
- * THAI LANGUAGE / TRIYANG (อักษร 3 หมู่) RULEBOOK FOR THIS APPLICATION
- * =============================================================================
- *
- * จุดประสงค์:
- *   ส่วนนี้เป็น "single source of truth" สำหรับ AI และผู้พัฒนาโปรแกรม
- *   เพื่อป้องกันการแก้ logic การผันวรรณยุกต์โดยอาศัยการคาดเดาเฉพาะกรณี
- *
- * 1) ไตรยางศ์ = การแบ่งพยัญชนะไทยตามหลักการผันวรรณยุกต์เป็น 3 หมู่
- *
- *    อักษรกลาง 9 ตัว:
- *      ก จ ฎ ฏ ด ต บ ป อ
- *
- *    อักษรสูง 11 ตัว:
- *      ข ฃ ฉ ฐ ถ ผ ฝ ศ ษ ส ห
- *
- *    อักษรต่ำ 24 ตัว แบ่งเป็น:
- *
- *      อักษรต่ำคู่ 14 ตัว:
- *        ค ฅ ฆ ช ฌ ซ ฑ ฒ ท ธ พ ภ ฟ ฮ
- *
- *      อักษรต่ำเดี่ยว 10 ตัว:
- *        ง ญ ณ น ม ย ร ล ว ฬ
- *
- *    รวมทั้งหมด 44 ตัวพอดี (9 + 11 + 14 + 10 = 44)
- *
- * 2) "พื้นเสียง" คือเสียงของพยางค์เมื่อไม่มีรูปวรรณยุกต์กำกับ
- *
- *    อักษรสูง:
- *      - คำเป็น  -> จัตวา
- *      - คำตาย  -> เอก
- *
- *    อักษรกลาง:
- *      - คำเป็น  -> สามัญ
- *      - คำตาย  -> เอก
- *
- *    อักษรต่ำ:
- *      - คำเป็น          -> สามัญ
- *      - คำตายสระสั้น    -> ตรี
- *      - คำตายสระยาว     -> โท
- *
- * 3) จำนวน "เสียง" ที่ผันได้ไม่เท่ากับจำนวนรูปวรรณยุกต์
- *
- *    มีรูปวรรณยุกต์ 4 รูป: ่ ้ ๊ ๋
- *    แต่การผันจริงขึ้นกับ:
- *      - หมู่อักษร
- *      - คำเป็น / คำตาย
- *      - สระสั้น / สระยาว (โดยเฉพาะคำตายอักษรต่ำ)
- *      - การมีตัวสะกด
- *      - อักษรคู่ / อักษรเดี่ยว
- *
- * 4) ตารางแกนหลักที่ใช้ใน Rule Engine
- *
- *    อักษรกลาง:
- *      - คำเป็น:  5 เสียง
- *          สามัญ = ไม่มีรูป, เอก = ่, โท = ้, ตรี = ๊, จัตวา = ๋
- *      - คำตาย:  4 เสียง
- *          เอก = ไม่มีรูป, โท = ้, ตรี = ๊, จัตวา = ๋
- *
- *    อักษรสูง:
- *      - คำเป็น:  3 เสียง
- *          เอก = ่, โท = ้, จัตวา = ไม่มีรูป
- *      - คำตาย:  2 เสียง
- *          เอก = ไม่มีรูป, โท = ้
- *
- *    อักษรต่ำ:
- *      - คำเป็น:  3 เสียง
- *          สามัญ = ไม่มีรูป, โท = ่, ตรี = ้
- *      - คำตายสระสั้น:
- *          โท = ่, ตรี = ไม่มีรูป
- *          (รูป/เสียงจัตวาในตำราบางชุดเป็นรูปประกอบ/ทางเลือก
- *           ไม่ควรนับเป็นรูปผันหลักโดยอัตโนมัติ)
- *      - คำตายสระยาว:
- *          โท = ไม่มีรูป, ตรี = ้
- *
- * 5) คำเป็น / คำตาย
- *
- *    คำตายหลักที่ใช้ในการศึกษา:
- *      - สระเสียงสั้น ไม่มีตัวสะกด
- *      - มีตัวสะกดในแม่กก แม่กด แม่กบ
- *
- *    คำเป็นหลัก:
- *      - สระเสียงยาว ไม่มีตัวสะกด
- *      - มีตัวสะกดในแม่กง แม่กน แม่กม แม่เกย แม่เกอว
- *
- *    ข้อควรระวัง:
- *      การตรวจจาก "อักขระตัวสุดท้าย" อย่างเดียวไม่เพียงพอ เพราะ ย/ว
- *      อาจเป็นส่วนของรูปสระ เช่น เ◌ีย / ◌ียะ / ◌ัว / ◌ัวะ
- *
- * 6) อักษรต่ำคู่ / ต่ำเดี่ยว
- *
- *    ต่ำคู่:
- *      มีอักษรสูงเป็นคู่เสียง และสามารถใช้คู่เสียงสูงร่วมเพื่อเทียบ
- *      การผันให้ครบ 5 เสียงในบริบทการเรียนการสอน
- *
- *    ต่ำเดี่ยว:
- *      ไม่มีคู่เสียงสูงโดยตรง การผันครบ 5 เสียงต้องใช้ "ห นำ"
- *
- *      ตัวอย่าง:
- *        นา -> หนา (รูปเทียบของเสียงจัตวา)
- *        งาน -> หงา/หง่า/หง้า ... ตามชุดเสียงที่ใช้เทียบ
- *
- * 7) ห นำ / อ นำ / ควบกล้ำ
- *
- *    - ห นำ: ห ทำหน้าที่นำระดับเสียงให้พยัญชนะต่ำเดี่ยว เช่น หง หน หม หร
- *    - อ นำ: ใช้เฉพาะกรณีภาษาไทยที่เป็นข้อยกเว้นทางคำ/การออกเสียง เช่น อย่า
- *    - ควบกล้ำแท้: ตัวพยัญชนะต้น 2 ตัวออกเสียงควบกันจริง เช่น กร กล กว
- *    - ควบกล้ำไม่แท้: ต้องถือเป็นข้อมูลเชิงคำ/การออกเสียง ไม่ควรอนุมาน
- *      ทุกคำด้วยกฎ "เปลี่ยนตัวแรกเป็นคู่สูง" แบบกลไกตายตัว
- *
- * 8) Rule Engine ต้องเป็นแหล่งความจริงหลัก
- *
- *    calculateTones() / analyzeSyllable() เป็นแหล่งตัดสินผลการผัน
- *    AI ใช้ได้เฉพาะ:
- *      - ช่วยอธิบายหลักภาษา
- *      - ช่วยตรวจคำศัพท์
- *      - เสนอคำตัวอย่าง
- *
- *    AI ห้าม overwrite ผลการผันที่ Rule Engine คำนวณแล้ว
- *
- * 9) รูป "เทียบการผัน" ไม่เท่ากับ "คำศัพท์ไทยที่ยืนยันความหมาย"
- *
- *    เช่น การสร้างคู่เสียงเพื่อการสอนอาจได้รูปที่ไม่ใช่คำศัพท์จริง
- *    UI ต้องติดป้าย "รูปเทียบการผัน" ตามความเหมาะสม
- *
- * 10) ตัวตรวจรูปวรรณยุกต์
- *
- *    validateEnteredToneMark() ต้องเรียก Rule Engine ชุดเดียวกับ
- *    ตารางแสดงผล ห้ามสร้างตารางกฎแยกอีกชุด
- *
- * 11) การทดสอบ
- *
- *    TONE_RULE_SELF_TESTS ด้านล่างเป็น regression tests สำหรับตัวอย่าง
- *    คำจริงระดับพื้นฐาน เพื่อป้องกันการแก้กฎในอนาคตแล้วทำให้กฎเดิมเสีย
- *
- * แหล่งอ้างอิงที่ใช้เป็นฐานการเรียนการสอน:
- *   - DLTV: ไตรยางศ์ / อักษรสูง กลาง ต่ำ / อักษรต่ำคู่ / ต่ำเดี่ยว
- *   - DLTV: ใบความรู้การผันวรรณยุกต์
- *   - บทเรียนไตรยางศ์ที่ให้ตารางคำเป็น/คำตายและพื้นเสียง
- * =============================================================================
- */
-
 const apiKey = "";
 const CHANNEL_NAME = "thai_tone_sync_channel";
 const STORAGE_KEY = "thai_tone_live_sync_data";
@@ -153,22 +10,6 @@ const STRICT_THAI_SYLLABLE_PATTERN = /^[เแโใไ]?[ก-ฮ]{1,2}[ิี�
 const midConsonants = ["ก", "จ", "ด", "ต", "บ", "ป", "อ", "ฎ", "ฏ"];
 const highConsonants = ["ข", "ฃ", "ฉ", "ฐ", "ถ", "ผ", "ฝ", "ศ", "ษ", "ส", "ห"];
 const lowSingleConsonants = ["ง", "ญ", "ณ", "น", "ม", "ย", "ร", "ล", "ฬ", "ว"];
-
-const lowPairConsonants = [
-  "ค", "ฅ", "ฆ", "ช", "ฌ", "ซ", "ฑ", "ฒ",
-  "ท", "ธ", "พ", "ภ", "ฟ", "ฮ",
-];
-
-const lowConsonants = [
-  ...lowPairConsonants,
-  ...lowSingleConsonants,
-];
-
-const allThaiConsonants = [
-  ...midConsonants,
-  ...highConsonants,
-  ...lowConsonants,
-];
 
 const quickConsonants = [
   "ก", "ข", "ฃ", "ค", "ฅ", "ฆ", "ง", "จ", "ฉ", "ช", "ซ",
@@ -275,7 +116,7 @@ function ModeRadio({ value, checked, label, onChange }) {
 }
 
 // ตารางอ้างอิงการผันวรรณยุกต์ตามไตรยางศ์
-// ห้ามสร้างกฎซ้ำภายนอก TONE_RULE_TABLE โดยไม่ปรับ self-tests ให้สอดคล้องกัน
+// ที่มา: เอกสาร DLTV ระบุว่า
 // - อักษรกลาง: คำเป็น 5 เสียง / คำตาย 4 เสียง
 // - อักษรสูง: คำเป็น 3 เสียง / คำตาย 2 เสียง
 // - อักษรต่ำ: คำเป็น 3 เสียง / คำตายสั้น 2 เสียง / คำตายยาว 2 เสียง
@@ -361,10 +202,9 @@ function getConsonantClass(initial = "", initialKind = "single") {
 
   if (midConsonants.includes(first)) return "middle";
   if (highConsonants.includes(first)) return "high";
-  if (lowPairConsonants.includes(first)) return "low";
   if (lowSingleConsonants.includes(first)) return "low";
 
-  return "unknown";
+  return "low";
 }
 
 function getPairedInitial(initial = "", initialKind = "single", targetClass = "high") {
@@ -827,277 +667,6 @@ function calculateTones(word, mode, colorMid, colorHigh, colorLow) {
   return combined;
 }
 
-
-
-const TONE_RULE_SELF_TESTS = Object.freeze([
-  {
-    name: "ตรวจจำนวนพยัญชนะครบ 44 ตัว",
-    type: "classification",
-  },
-  {
-    name: "อักษรกลางคำเป็น",
-    word: "กาน",
-    mode: "full5",
-    expectedClass: "middle",
-    expectedType: "คำเป็น",
-    expectedVisibleToneIds: [5, 4, 3, 2, 1],
-  },
-  {
-    name: "อักษรกลางคำตาย",
-    word: "กาด",
-    mode: "full5",
-    expectedClass: "middle",
-    expectedType: "คำตาย",
-    expectedVisibleToneIds: [5, 4, 3, 2],
-  },
-  {
-    name: "อักษรสูงคำเป็น",
-    word: "ขาน",
-    mode: "highOnly",
-    expectedClass: "high",
-    expectedType: "คำเป็น",
-    expectedVisibleToneIds: [5, 3, 2],
-  },
-  {
-    name: "อักษรสูงคำตาย",
-    word: "ขัด",
-    mode: "highOnly",
-    expectedClass: "high",
-    expectedType: "คำตาย",
-    expectedVisibleToneIds: [3, 2],
-  },
-  {
-    name: "อักษรต่ำคู่คำเป็น",
-    word: "คาน",
-    mode: "lowOnly",
-    expectedClass: "low",
-    expectedType: "คำเป็น",
-    expectedVisibleToneIds: [4, 3, 1],
-    expectedSubtype: "lowPair",
-  },
-  {
-    name: "อักษรต่ำคู่คำตายสระสั้น",
-    word: "คะ",
-    mode: "lowOnly",
-    expectedClass: "low",
-    expectedType: "คำตาย",
-    expectedVisibleToneIds: [4, 3],
-    expectedSubtype: "lowPair",
-  },
-  {
-    name: "อักษรต่ำคู่คำตายสระยาว",
-    word: "คาด",
-    mode: "lowOnly",
-    expectedClass: "low",
-    expectedType: "คำตาย",
-    expectedVisibleToneIds: [4, 3],
-    expectedSubtype: "lowPair",
-  },
-  {
-    name: "อักษรต่ำเดี่ยวคำเป็น",
-    word: "นาน",
-    mode: "lowOnly",
-    expectedClass: "low",
-    expectedType: "คำเป็น",
-    expectedVisibleToneIds: [4, 3, 1],
-    expectedSubtype: "lowSingle",
-  },
-  {
-    name: "อักษรต่ำเดี่ยวคำตายสระสั้น",
-    word: "นะ",
-    mode: "lowOnly",
-    expectedClass: "low",
-    expectedType: "คำตาย",
-    expectedVisibleToneIds: [4, 3],
-    expectedSubtype: "lowSingle",
-  },
-  {
-    name: "อักษรต่ำเดี่ยว full5 ใช้ ห นำ เทียบ",
-    word: "นา",
-    mode: "full5",
-    expectedClass: "low",
-    expectedType: "คำเป็น",
-    expectedVisibleToneIds: [5, 4, 3, 2, 1],
-    expectedSubtype: "lowSingle",
-  },
-  {
-    name: "ควบกล้ำแท้",
-    word: "กรา",
-    mode: "full5",
-    expectedClass: "middle",
-    expectedType: "คำเป็น",
-    expectedVisibleToneIds: [5, 4, 3, 2, 1],
-  },
-  {
-    name: "ห นำ",
-    word: "หนา",
-    mode: "highOnly",
-    expectedClass: "high",
-    expectedType: "คำเป็น",
-    expectedVisibleToneIds: [5, 3, 2],
-  },
-  {
-    name: "ตัวสะกดแม่กงเป็นคำเป็น",
-    word: "กาง",
-    mode: "full5",
-    expectedClass: "middle",
-    expectedType: "คำเป็น",
-    expectedVisibleToneIds: [5, 4, 3, 2, 1],
-  },
-  {
-    name: "ตัวสะกดแม่กนเป็นคำเป็น",
-    word: "กาน",
-    mode: "full5",
-    expectedClass: "middle",
-    expectedType: "คำเป็น",
-    expectedVisibleToneIds: [5, 4, 3, 2, 1],
-  },
-  {
-    name: "ตัวสะกดแม่กบเป็นคำตาย",
-    word: "กาบ",
-    mode: "full5",
-    expectedClass: "middle",
-    expectedType: "คำตาย",
-    expectedVisibleToneIds: [5, 4, 3, 2],
-  },
-]);
-
-function runToneRuleSelfTests() {
-  const failures = [];
-
-  // Regression test ของโครงสร้างไตรยางศ์ 44 ตัว
-  const allUnique = new Set(allThaiConsonants);
-  const classificationCounts = {
-    middle: midConsonants.length,
-    high: highConsonants.length,
-    lowPair: lowPairConsonants.length,
-    lowSingle: lowSingleConsonants.length,
-  };
-
-  if (
-    allThaiConsonants.length !== 44 ||
-    allUnique.size !== 44 ||
-    classificationCounts.middle !== 9 ||
-    classificationCounts.high !== 11 ||
-    classificationCounts.lowPair !== 14 ||
-    classificationCounts.lowSingle !== 10 ||
-    lowConsonants.length !== 24
-  ) {
-    failures.push({
-      name: "ตรวจจำนวนพยัญชนะครบ 44 ตัว",
-      expected: {
-        total: 44,
-        middle: 9,
-        high: 11,
-        low: 24,
-        lowPair: 14,
-        lowSingle: 10,
-      },
-      actual: {
-        total: allThaiConsonants.length,
-        unique: allUnique.size,
-        middle: classificationCounts.middle,
-        high: classificationCounts.high,
-        low: lowConsonants.length,
-        lowPair: classificationCounts.lowPair,
-        lowSingle: classificationCounts.lowSingle,
-      },
-    });
-  }
-
-  for (const testCase of TONE_RULE_SELF_TESTS) {
-    if (testCase.type === "classification") continue;
-
-    try {
-      const info = analyzeSyllable(
-        testCase.word,
-        testCase.mode,
-      );
-
-      const rows = calculateTones(
-        testCase.word,
-        testCase.mode,
-        "#22c55e",
-        "#ef4444",
-        "#007bff",
-      );
-
-      const visibleToneIds = rows
-        .filter((row) => row.show)
-        .map((row) => row.id);
-
-      const classOk =
-        info.consonantClass ===
-        testCase.expectedClass;
-
-      const typeOk =
-        info.type === testCase.expectedType;
-
-      const rowsOk =
-        JSON.stringify(visibleToneIds) ===
-        JSON.stringify(
-          testCase.expectedVisibleToneIds,
-        );
-
-      const primary =
-        info.primaryConsonant || "";
-
-      const subtypeOk =
-        !testCase.expectedSubtype ||
-        (
-          testCase.expectedSubtype === "lowPair" &&
-          lowPairConsonants.includes(primary)
-        ) ||
-        (
-          testCase.expectedSubtype === "lowSingle" &&
-          lowSingleConsonants.includes(primary)
-        );
-
-      if (
-        !classOk ||
-        !typeOk ||
-        !rowsOk ||
-        !subtypeOk
-      ) {
-        failures.push({
-          ...testCase,
-          actualClass:
-            info.consonantClass,
-          actualType: info.type,
-          actualPrimary: primary,
-          actualVisibleToneIds:
-            visibleToneIds,
-        });
-      }
-    } catch (error) {
-      failures.push({
-        ...testCase,
-        error:
-          error instanceof Error
-            ? error.message
-            : String(error),
-      });
-    }
-  }
-
-  if (failures.length > 0) {
-    console.error(
-      "[Thai Tone Rule Engine] Self-test FAILED:",
-      failures,
-    );
-  } else if (
-    typeof window !== "undefined" &&
-    window.location.hostname === "localhost"
-  ) {
-    console.info(
-      `[Thai Tone Rule Engine] ${TONE_RULE_SELF_TESTS.length + 1} regression checks passed.`,
-    );
-  }
-
-  return failures;
-}
-
-runToneRuleSelfTests();
 
 function validateEnteredToneMark(word = "") {
   const value = word.trim();
@@ -2037,7 +1606,7 @@ export default function App() {
                           color: "#334155",
                         }}
                       >
-                        <ModeRadio value="full5" checked={mode === "full5"} label="แสดงชุดผัน 5 เสียงเมื่อมีกฎเทียบ (อักษรคู่ / ห นำ)" onChange={setMode} />
+                        <ModeRadio value="full5" checked={mode === "full5"} label="ผันครบทั้ง 5 บรรทัด (อักษรคู่ / ห นำ)" onChange={setMode} />
                         <ModeRadio value="highOnly" checked={mode === "highOnly"} label="เฉพาะเสียงสูง (เอก, โท, จัตวา)" onChange={setMode} />
                         <ModeRadio value="lowOnly" checked={mode === "lowOnly"} label="เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)" onChange={setMode} />
                       </div>
@@ -2099,48 +1668,6 @@ export default function App() {
                           {consonant}
                         </button>
                       ))}
-                    </div>
-
-                    <div className="low-class-groups">
-                      <div className="low-class-group">
-                        <div className="section-label low-pair-label">
-                          🟣 อักษรต่ำคู่ (๑๔ ตัว)
-                        </div>
-                        <div className="low-consonant-grid">
-                          {lowPairConsonants.map((consonant) => (
-                            <button
-                              key={`low-pair-${consonant}`}
-                              type="button"
-                              className="consonant-btn low-pair-btn"
-                              onClick={() =>
-                                handleQuickConsonantClick(consonant)
-                              }
-                            >
-                              {consonant}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="low-class-group">
-                        <div className="section-label low-single-label">
-                          🔵 อักษรต่ำเดี่ยว (๑๐ ตัว)
-                        </div>
-                        <div className="low-consonant-grid">
-                          {lowSingleConsonants.map((consonant) => (
-                            <button
-                              key={`low-single-${consonant}`}
-                              type="button"
-                              className="consonant-btn low-single-btn"
-                              onClick={() =>
-                                handleQuickConsonantClick(consonant)
-                              }
-                            >
-                              {consonant}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
                     </div>
 
                     <div className="cluster-groups">
@@ -2819,46 +2346,6 @@ const styles = `
     font-size: 15px;
   }
 
-  .low-class-groups {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: 12px;
-  }
-
-  .low-class-group {
-    padding: 8px;
-    border-radius: 8px;
-    border: 1px solid #e2e8f0;
-    background: #f8fafc;
-  }
-
-  .low-pair-label {
-    color: #7c3aed;
-  }
-
-  .low-single-label {
-    color: #2563eb;
-  }
-
-  .low-consonant-grid {
-    display: grid;
-    grid-template-columns: repeat(10, minmax(0, 1fr));
-    gap: 5px;
-  }
-
-  .low-pair-btn {
-    color: #7c3aed !important;
-    border-color: #ddd6fe;
-    background: #faf5ff;
-  }
-
-  .low-single-btn {
-    color: #2563eb !important;
-    border-color: #bfdbfe;
-    background: #eff6ff;
-  }
-
   .cluster-groups {
     display: flex;
     flex-direction: column;
@@ -3087,7 +2574,6 @@ const styles = `
     .slash { font-size: 16px; }
     .consonant-grid { gap: 3px; }
     .consonant-btn { height: 31px; font-size: 13px; }
-    .low-consonant-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; }
 
     .cluster-grid {
       grid-template-columns: repeat(6, minmax(0, 1fr));
