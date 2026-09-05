@@ -4,8 +4,8 @@ const apiKey = "";
 const CHANNEL_NAME = "thai_tone_sync_channel";
 const STORAGE_KEY = "thai_tone_live_sync_data";
 
-// Regex ตรวจสอบคำไทย 1 พยางค์อย่างเคร่งครัด
-const STRICT_THAI_SYLLABLE_PATTERN = /^[เแโใไ]?[ก-ฮ]{1,2}[ิีึืุูั็ํ]?[่้๊๋]?[าำยวอ]?[ก-ฮ]?[ะ์]?$/;
+// Regex ตรวจสอบเฉพาะภาษาไทย
+const THAI_WORD_PATTERN = /^[\u0E00-\u0E7F]+$/;
 
 const midConsonants = ["ก", "จ", "ด", "ต", "บ", "ป", "อ", "ฎ", "ฏ"];
 const highConsonants = ["ข", "ฃ", "ฉ", "ฐ", "ถ", "ผ", "ฝ", "ศ", "ษ", "ส", "ห"];
@@ -493,7 +493,6 @@ export default function App() {
   const [mode, setMode] = useState("full5");
   const [viewLayout, setViewLayout] = useState("split");
   const [inputText, setInputText] = useState("");
-  const [lastValidInput, setLastValidInput] = useState("");
   const [inputError, setInputError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -585,9 +584,13 @@ export default function App() {
       return false;
     }
 
-    // ตรวจสอบคำภาษาไทย 1 พยางค์อย่างเคร่งครัด
-    if (!STRICT_THAI_SYLLABLE_PATTERN.test(value)) {
-      setInputError("กรุณากรอก 1 พยางค์ให้ถูกหลักภาษาไทย (เช่น พยัญชนะ สระ ตัวสะกด วรรณยุกต์)");
+    if (!THAI_WORD_PATTERN.test(value)) {
+      setInputError("กรุณากรอกด้วยอักษรไทยเท่านั้น");
+      return false;
+    }
+
+    if (value.length > 8) {
+      setInputError("กรุณากรอกไม่เกิน 1 พยางค์");
       return false;
     }
 
@@ -597,20 +600,7 @@ export default function App() {
 
   const handleGenerate = async () => {
     const word = inputText.trim();
-    if (!validateInput(word)) {
-      // หากคำผิดหลักภาษา ให้ย้อนกลับไปยังคำล่าสุดที่ถูกต้อง
-      if (lastValidInput) {
-        setInputText(lastValidInput);
-        validateInput(lastValidInput);
-      } else {
-        setInputText("");
-        validateInput("");
-      }
-      return;
-    }
-    
-    // บันทึกคำที่ตรวจสอบผ่านไว้เป็นตัวย้อนกลับ
-    setLastValidInput(word);
+    if (!validateInput(word)) return;
 
     const fallback = () => {
       setLinesData(calculateTones(word, mode, colorMid, colorHigh, colorLow));
@@ -1739,16 +1729,14 @@ const styles = `
     .display-tip { font-size: 10px; max-width: 92vw; white-space: normal; text-align: center; }
   }
 
-  /* ========================================= */
-  /* วาดก้านและธงเขบ็ตชั้นเดียว (Eighth Note)  */
-  /* ========================================= */
+  /* เขบ็ตชั้นเดียว */
   .tone-circle::before {
     content: "";
     position: absolute;
-    right: 5px; /* ก้านเริ่มแนบชิดขอบวงกลมด้านขวา */
+    right: 5px;
     bottom: 50%;
-    width: 4px; /* ความหนาก้าน */
-    height: 44px; /* ความสูงก้าน */
+    width: 4px;
+    height: 45px;
     background-color: var(--note-color, transparent);
     z-index: -1;
   }
@@ -1756,16 +1744,14 @@ const styles = `
   .tone-circle::after {
     content: "";
     position: absolute;
-    right: -10px; /* ยื่นธงออกไปทางขวา */
-    bottom: calc(50% + 15px); /* เลื่อนธงขึ้นไปแตะยอดก้านพอดี */
-    width: 15px; /* ความกว้างธง */
-    height: 28px; /* ความยาวหางธง */
-    
-    /* สร้างความโค้งสไตล์ธงเขบ็ต (Musical Flag) */
-    border-right: 4px solid var(--note-color, transparent);
+    right: -8px;
+    bottom: calc(50% + 20px);
+    width: 16px;
+    height: 25px;
+    border-right: 5px solid var(--note-color, transparent);
     border-top: 6px solid var(--note-color, transparent);
-    border-top-right-radius: 24px 18px; /* ปรับให้โค้งลาดลงล่าง */
-    border-bottom-right-radius: 2px;
+    border-top-right-radius: 18px;
+    border-bottom-right-radius: 5px;
     z-index: -1;
   }
 `;
