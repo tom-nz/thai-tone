@@ -146,8 +146,6 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
 const apiKey = "";
 const CHANNEL_NAME = "thai_tone_sync_channel";
 const STORAGE_KEY = "thai_tone_live_sync_data";
-const TTS_API_ENDPOINT = "/api/tts";
-const TTS_VOICE = "th-TH-PremwadeeNeural";
 
 // Regex ตรวจสอบคำไทย 1 พยางค์อย่างเคร่งครัด
 const STRICT_THAI_SYLLABLE_PATTERN = /^[เแโใไ]?[ก-ฮ]{1,2}[ิีึืุูั็ํ]?[่้๊๋]?[าำยวอ]?[ก-ฮ]?[ะ์]?$/;
@@ -1202,47 +1200,6 @@ function validateEnteredToneMark(word = "") {
   };
 }
 
-function escapeXmlText(text = "") {
-  return String(text)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
-function buildAzureTtsSsml(text = "", voice = TTS_VOICE, speechRate = 1) {
-  const safeText = escapeXmlText(
-    String(text).normalize("NFC").replace(/\s+/g, " ").trim(),
-  );
-
-  const rate = Math.max(0.5, Math.min(1.4, Number(speechRate) || 1));
-  const ratePercent = Math.round((rate - 1) * 100);
-  const rateValue = `${ratePercent >= 0 ? "+" : ""}${ratePercent}%`;
-
-  return [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis"',
-    ' xmlns:mstts="http://www.w3.org/2001/mstts" xml:lang="th-TH">',
-    `<voice name="${voice}">`,
-    `<prosody rate="${rateValue}" pitch="0%">${safeText}</prosody>`,
-    '</voice>',
-    '</speak>',
-  ].join("");
-}
-
-function getSpeechFallbackVoice(voices = [], selectedVoiceURI = "") {
-  return (
-    voices.find(
-      (item) =>
-        item.voiceURI === selectedVoiceURI &&
-        item.lang?.toLowerCase().startsWith("th"),
-    ) || voices.find((item) =>
-      item.lang?.toLowerCase().startsWith("th"),
-    )
-  );
-}
-
 function getSpeechText(item) {
   if (!item?.show) return "";
 
@@ -1531,7 +1488,7 @@ export default function App() {
     return { backgroundColor: bgColor };
   }, [bgType, bgColor, bgImage]);
 
-  const speak = async (text) => {
+  const speak = (text) => {
     if (
       typeof window === "undefined" ||
       !speechEnabled ||
@@ -1542,62 +1499,21 @@ export default function App() {
     }
 
     const normalizedText = normalizeThaiSpeechText(text);
-
-    // Primary TTS: Azure Speech ผ่าน Cloudflare Pages Function
-    // ใช้ Thai Neural voice + SSML เพื่อไม่ให้เบราว์เซอร์แยกอ่านเป็นชื่ออักษร
-    try {
-      const response = await fetch(TTS_API_ENDPOINT, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: normalizedText,
-          voice: TTS_VOICE,
-          rate: Number(speechRate),
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Azure TTS HTTP ${response.status}`);
-      }
-
-      const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
-
-      const previousAudio = speechRef.current;
-      if (previousAudio instanceof HTMLAudioElement) {
-        previousAudio.pause();
-        previousAudio.currentTime = 0;
-      }
-
-      speechRef.current = audio;
-
-      audio.onended = () => {
-        URL.revokeObjectURL(audioUrl);
-        if (speechRef.current === audio) {
-          speechRef.current = null;
-        }
-      };
-
-      await audio.play();
-      return;
-    } catch (err) {
-      console.warn(
-        "Azure Thai TTS unavailable; using browser Thai voice fallback:",
-        err,
-      );
-    }
-
-    // Fallback: browser Web Speech API โดยยอมใช้เฉพาะ Thai voice
     const availableVoices = window.speechSynthesis.getVoices();
-    const thaiVoice = getSpeechFallbackVoice(
-      availableVoices,
-      selectedVoiceURI,
-    );
 
-    if (!thaiVoice) {
+    const selectedThaiVoice =
+      availableVoices.find(
+        (item) =>
+          item.voiceURI === selectedVoiceURI &&
+          item.lang?.toLowerCase().startsWith("th"),
+      ) ||
+      availableVoices.find((item) =>
+        item.lang?.toLowerCase().startsWith("th"),
+      );
+
+    // ไม่ใช้ voice ภาษาอื่นกับข้อความไทย เพราะบาง voice จะอ่านเป็นชื่อพยัญชนะ
+    // เช่น "กอ ไม้จัตวา งองู" แทนการออกเสียงเป็นพยางค์
+    if (!selectedThaiVoice) {
       console.warn(
         "ไม่พบเสียงภาษาไทย (th-TH/th-*). กรุณาเลือก/ติดตั้ง Thai TTS voice ในระบบ",
       );
@@ -1608,7 +1524,7 @@ export default function App() {
 
     const utterance = new SpeechSynthesisUtterance(normalizedText);
     utterance.lang = "th-TH";
-    utterance.voice = thaiVoice;
+    utterance.voice = selectedThaiVoice;
     utterance.rate = Number(speechRate);
     utterance.pitch = 1;
     utterance.volume = 1;
@@ -2647,16 +2563,7 @@ const styles = `
   .main-grid > section {
     min-width: 0;
     min-height: 0;
-    overflow-x: hidden;
-    overflow-y: auto;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-  }
-
-  .main-grid > section::-webkit-scrollbar {
-    width: 0;
-    height: 0;
-    display: none;
+    overflow: hidden;
   }
 
   .board-panel { padding: 30px 22px; min-width: 0; }
