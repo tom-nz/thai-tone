@@ -780,23 +780,21 @@ function calculateTones(word, mode, colorMid, colorHigh, colorLow) {
 
     const entries = [];
 
-    // เมื่อมีทั้งอักษรต่ำและอักษรสูงในบรรทัดเดียวกัน
-    // ให้แสดงวงกลมอักษรต่ำก่อนอักษรสูง
-    if (lowMark !== undefined) {
-      entries.push({
-        consonant: pairedLow,
-        mark: lowMark,
-        color: colorLow,
-        isComparison: consonantClass !== "low",
-      });
-    }
-
     if (highMark !== undefined) {
       entries.push({
         consonant: pairedHigh,
         mark: highMark,
         color: colorHigh,
         isComparison: consonantClass !== "high",
+      });
+    }
+
+    if (lowMark !== undefined) {
+      entries.push({
+        consonant: pairedLow,
+        mark: lowMark,
+        color: colorLow,
+        isComparison: consonantClass !== "low",
       });
     }
 
@@ -1248,13 +1246,11 @@ function getSpeechFallbackVoice(voices = [], selectedVoiceURI = "") {
 function getSpeechText(item) {
   if (!item?.show) return "";
 
-  // กรณีมี 2 วงกลม (อักษรสูง/ต่ำที่ให้เสียงเดียวกัน)
-  // ให้ใช้เพียงวงกลมแรกเป็นคำสำหรับ TTS เพื่อไม่ให้ออกเสียงซ้ำ/อ่านสองคำ
   if (item.isMulti) {
-    const firstCircle = item.multi?.find(
-      (circle) => circle.ttsText || circle.text,
-    );
-    return firstCircle?.ttsText || firstCircle?.text || "";
+    return item.multi
+      .map((circle) => circle.ttsText || circle.text)
+      .filter(Boolean)
+      .join(" หรือ ");
   }
 
   return item.ttsText || item.word || "";
@@ -2651,16 +2647,25 @@ const styles = `
   .main-grid > section {
     min-width: 0;
     min-height: 0;
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .main-grid > section::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
   }
 
   .board-panel { padding: 30px 22px; min-width: 0; }
   .presentation-panel { padding: 45px 50px; }
 
   .tone-board { width: 100%; }
-  .board-title { text-align: center; color: #d000ff; margin-bottom: 18px; }
-  .board-title h2 { margin: 0; font-size: clamp(23px, 2.3vw, 30px); color: #d000ff; }
-  .board-title div { font-size: clamp(16px, 1.5vw, 19px); font-weight: 600; color: #d000ff; }
+  .board-title { text-align: center; color: #ea580c; margin-bottom: 18px; }
+  .board-title h2 { margin: 0; font-size: clamp(23px, 2.3vw, 30px); }
+  .board-title div { font-size: clamp(16px, 1.5vw, 19px); font-weight: 600; }
 
   .analysis-box {
     margin: 0 auto 22px;
