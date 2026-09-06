@@ -2657,10 +2657,10 @@ const styles = `
   .board-panel {
     padding: 30px 22px;
     min-width: 0;
-    min-height: 0;
-    height: 100%;
-    box-sizing: border-box;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
 
   .board-panel::-webkit-scrollbar {
@@ -2671,13 +2671,7 @@ const styles = `
 
   .presentation-panel { padding: 45px 50px; }
 
-  .tone-board {
-    width: 100%;
-    height: 100%;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-  }
+  .tone-board { width: 100%; }
   .board-title { text-align: center; color: #d000ff; margin-bottom: 18px; }
   .board-title h2 { margin: 0; font-size: clamp(23px, 2.3vw, 30px); color: #d000ff; }
   .board-title div { font-size: clamp(16px, 1.5vw, 19px); font-weight: 600; color: #d000ff; }
@@ -2722,21 +2716,9 @@ const styles = `
   .tone-header span { text-align: right; padding-right: 20px; }
 
   .tone-rows {
-    flex: 1 1 auto;
-    min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 24px;
-    overflow-y: auto;
-    overflow-x: hidden;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-  }
-
-  .tone-rows::-webkit-scrollbar {
-    width: 0;
-    height: 0;
-    display: none;
   }
 
   .tone-row {
