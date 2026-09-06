@@ -2654,21 +2654,7 @@ const styles = `
     overflow: hidden;
   }
 
-  .board-panel {
-    padding: 30px 22px;
-    min-width: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-  }
-
-  .board-panel::-webkit-scrollbar {
-    width: 0;
-    height: 0;
-    display: none;
-  }
-
+  .board-panel { padding: 30px 22px; min-width: 0; }
   .presentation-panel { padding: 45px 50px; }
 
   .tone-board { width: 100%; }
