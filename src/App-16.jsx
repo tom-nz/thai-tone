@@ -1493,9 +1493,6 @@ export default function App() {
   const [staffBgColor, setStaffBgColor] = useState("#ffffff");
 
   const [activeRowId, setActiveRowId] = useState(null);
-  const [viewPanelHeight, setViewPanelHeight] = useState(118);
-  const [isResizingViewPanel, setIsResizingViewPanel] = useState(false);
-  const viewResizeStartRef = useRef(null);
   const [speechEnabled, setSpeechEnabled] = useState(false);
   const [speechRate, setSpeechRate] = useState(0.85);
   const [voices, setVoices] = useState([]);
@@ -1999,60 +1996,9 @@ export default function App() {
     channel.close();
   };
 
-  const handleViewPanelResizeStart = (event) => {
-    if (typeof window === "undefined") return;
-
-    event.preventDefault();
-    viewResizeStartRef.current = {
-      startY: event.clientY,
-      startHeight: viewPanelHeight,
-    };
-    setIsResizingViewPanel(true);
-  };
-
-  useEffect(() => {
-    if (!isResizingViewPanel || typeof window === "undefined") return;
-
-    const handlePointerMove = (event) => {
-      const start = viewResizeStartRef.current;
-      if (!start) return;
-
-      const deltaY = event.clientY - start.startY;
-      const nextHeight = Math.max(96, Math.min(360, start.startHeight + deltaY));
-      setViewPanelHeight(nextHeight);
-    };
-
-    const handlePointerUp = () => {
-      viewResizeStartRef.current = null;
-      setIsResizingViewPanel(false);
-    };
-
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
-    window.addEventListener("pointercancel", handlePointerUp);
-
-    return () => {
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-      window.removeEventListener("pointercancel", handlePointerUp);
-    };
-  }, [isResizingViewPanel]);
-
   // Component สำหรับสร้าง Top Bar แบบใช้ซ้ำ
   const renderTopBar = (extraStyle = {}) => (
-    <section
-      className={`top-bar panel ${isResizingViewPanel && viewLayout !== "present" ? "resizing-view-panel" : ""}`}
-      style={{
-        ...extraStyle,
-        ...(viewLayout !== "present"
-          ? {
-              height: viewPanelHeight,
-              boxSizing: "border-box",
-              flex: "0 0 auto",
-            }
-          : {}),
-      }}
-    >
+    <section className="top-bar panel" style={extraStyle}>
       <div className="view-buttons">
         <strong>🖥️ มุมมอง:</strong>
         {[
@@ -2078,19 +2024,6 @@ export default function App() {
           🚀 เปิดกระดานแยกขึ้นมอนิเตอร์ที่ 2
         </button>
       </div>
-
-      {viewLayout !== "present" && (
-        <div
-          className="view-panel-resizer"
-          onPointerDown={handleViewPanelResizeStart}
-          role="separator"
-          aria-orientation="horizontal"
-          aria-label="ปรับขนาดเฟรมมุมมอง"
-          title="ลากเพื่อขยาย/ย่อเฟรมมุมมอง"
-        >
-          <span />
-        </div>
-      )}
     </section>
   );
 
@@ -2168,7 +2101,7 @@ export default function App() {
                   top: "20px"
                 }}
               >
-                {/* เฟรมมุมมองอยู่ด้านบนและปรับความสูงด้วยเมาส์/นิ้วได้ */}
+                {/* เฟรมมุมมองอยู่ด้านบน */}
                 {renderTopBar({ marginBottom: 0 })}
 
                 {/* เฟรมแผงควบคุมอยู่ด้านล่าง และสามารถเลื่อน Scroll ได้อิสระ */}
@@ -2678,42 +2611,6 @@ const styles = `
     gap: 12px;
     padding: 14px 18px;
     flex-wrap: wrap;
-    position: relative;
-    overflow: visible;
-    min-height: 96px;
-  }
-
-  .top-bar.resizing-view-panel {
-    user-select: none;
-  }
-
-  .view-panel-resizer {
-    position: absolute;
-    left: 10px;
-    right: 10px;
-    bottom: -10px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: ns-resize;
-    touch-action: none;
-    z-index: 20;
-  }
-
-  .view-panel-resizer span {
-    width: 72px;
-    height: 5px;
-    border-radius: 999px;
-    background: #94a3b8;
-    box-shadow: 0 1px 4px rgba(15,23,42,.18);
-    transition: background .15s ease, transform .15s ease;
-  }
-
-  .view-panel-resizer:hover span,
-  .top-bar.resizing-view-panel .view-panel-resizer span {
-    background: #0284c7;
-    transform: scaleX(1.12);
   }
 
   .view-buttons, .monitor-buttons, .input-row, .vowel-list, .background-colors {
@@ -2749,11 +2646,6 @@ const styles = `
 
   .main-grid.split-layout {
     grid-template-columns: minmax(0, 1fr) 410px;
-  }
-
-  /* โหมดชิดเดียว: แยกกระดานและแผงควบคุมเป็น 2 เฟรมต่อกันลงมา */
-  .main-grid:not(.split-layout) {
-    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   }
 
   .main-grid > section {
@@ -3286,7 +3178,6 @@ const styles = `
 
     .main-grid.split-layout {
       grid-template-columns: 1fr;
-      grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
     }
 
     .control-panel {
