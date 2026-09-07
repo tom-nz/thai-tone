@@ -2048,8 +2048,8 @@ export default function App() {
       <div className="view-buttons">
         <strong>🖥️ มุมมอง:</strong>
         {[
-          ["standard", "ชิดเดียว"],
-          ["split", "แบ่ง 2 จอ"],
+          ["standard", "แสดง 1 คอลัมน์"],
+          ["split", "แสดง 2 คอลัมน์"],
           ["present", "โหมดพรีวิว"],
         ].map(([value, label]) => (
           <button
@@ -2967,22 +2967,37 @@ const styles = `
     flex: 1 1 auto;
   }
 
-  /* โหมดแบ่ง 2 จอ: ลดพื้นที่ปลายเส้นเล็กน้อย เพื่อให้วงกลมที่ตำแหน่ง 80%
-     และสถานะ active ที่ขยาย 1.23 เท่า มีพื้นที่พอดีภายในเฟรมโดยอัตโนมัติ */
-  .main-grid.split-layout .board-frame {
+  /* ให้ Board คำนวณพื้นที่จากขนาดเฟรมจริงทั้งแนวกว้างและแนวสูง
+     เพื่อไม่ให้วงกลม/สถานะขยายถูกตัดในทุกขนาดจอ */
+  .main-grid .board-frame {
     container-type: inline-size;
   }
 
-  .main-grid.split-layout .tone-line-wrap {
-    margin-right: clamp(12px, 3cqw, 30px);
+  .main-grid .tone-line-wrap {
+    min-width: 0;
+    padding-right: clamp(10px, 2.5cqw, 28px);
   }
 
-  .main-grid.split-layout .tone-circle {
-    width: clamp(36px, 8.5cqw, 48px) !important;
-    min-width: clamp(36px, 8.5cqw, 48px) !important;
-    max-width: clamp(36px, 8.5cqw, 48px) !important;
-    height: clamp(36px, 8.5cqw, 48px) !important;
-    flex-basis: clamp(36px, 8.5cqw, 48px) !important;
+  .main-grid .tone-circle {
+    width: clamp(34px, 7.2cqw, 48px) !important;
+    min-width: clamp(34px, 7.2cqw, 48px) !important;
+    max-width: clamp(34px, 7.2cqw, 48px) !important;
+    height: clamp(34px, 7.2cqw, 48px) !important;
+    flex-basis: clamp(34px, 7.2cqw, 48px) !important;
+  }
+
+  /* พื้นที่แสดงผลต้องไม่ถูกตัด แม้แถวสุดท้ายจะเป็นแถว Active */
+  .main-grid .tone-rows {
+    min-height: 0;
+    padding: 2px 0;
+  }
+
+  .main-grid .tone-row.active {
+    transform: scale(1.01);
+  }
+
+  .main-grid .tone-row.active .tone-circle {
+    transform: translate3d(-50%, -50%, 0) scale(1.18);
   }
 
   .right-panel-wrapper {
@@ -3014,6 +3029,17 @@ const styles = `
   .control-panel > .top-bar .view-buttons strong {
     flex: 0 0 auto;
     font-size: 13px;
+  }
+
+  .control-panel > .top-bar .monitor-buttons .blue-btn,
+  .control-panel > .top-bar .monitor-buttons .green-btn {
+    font-size: 11px;
+    padding-left: 5px;
+    padding-right: 5px;
+  }
+
+  .control-panel > .top-bar .monitor-buttons .blue-btn {
+    font-size: 10px;
   }
 
   .board-frame {
@@ -3415,6 +3441,15 @@ const styles = `
   @media (max-width: 640px) {
     .app-page { padding: 10px; }
 
+    .main-grid:not(.split-layout) {
+      grid-template-rows: minmax(0, auto) minmax(0, 1fr) !important;
+    }
+
+    .main-grid:not(.split-layout) .board-frame {
+      min-height: 0;
+      padding: 14px 10px !important;
+    }
+
     .main-grid.split-layout {
       grid-template-columns: 1fr;
       grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
@@ -3433,12 +3468,31 @@ const styles = `
     .fixed-tone-label { font-size: 12px; }
     .tone-rows { gap: 20px; }
     .tone-circle {
-      width: 39px !important;
-      min-width: 39px !important;
-      max-width: 39px !important;
-      height: 39px !important;
+      width: clamp(34px, 8.5vw, 39px) !important;
+      min-width: clamp(34px, 8.5vw, 39px) !important;
+      max-width: clamp(34px, 8.5vw, 39px) !important;
+      height: clamp(34px, 8.5vw, 39px) !important;
       padding: 0 !important;
-      font-size: 15px !important;
+      font-size: clamp(14px, 3.4vw, 15px) !important;
+    }
+
+    .main-grid:not(.split-layout) .board-frame {
+      overflow: visible;
+    }
+
+    .main-grid:not(.split-layout) .tone-board {
+      height: auto;
+      min-height: 0;
+    }
+
+    .main-grid:not(.split-layout) .tone-rows {
+      flex: 0 0 auto;
+      gap: clamp(8px, 1.5vh, 14px);
+      padding: 2px 0;
+    }
+
+    .main-grid:not(.split-layout) .tone-row.active .tone-circle {
+      transform: translate3d(-50%, -50%, 0) scale(1.14);
     }
     .multi-circles { gap: 4px; }
     .slash { font-size: 16px; }
