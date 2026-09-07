@@ -1493,7 +1493,7 @@ export default function App() {
   const [staffBgColor, setStaffBgColor] = useState("#ffffff");
 
   const [activeRowId, setActiveRowId] = useState(null);
-  const [viewPanelHeight, setViewPanelHeight] = useState(420);
+  const [viewPanelHeight, setViewPanelHeight] = useState(560);
   const [isResizingViewPanel, setIsResizingViewPanel] = useState(false);
   const viewResizeStartRef = useRef(null);
   const [speechEnabled, setSpeechEnabled] = useState(false);
@@ -2019,7 +2019,7 @@ export default function App() {
       if (!start) return;
 
       const deltaY = event.clientY - start.startY;
-      const nextHeight = Math.max(260, Math.min(800, start.startHeight + deltaY));
+      const nextHeight = Math.max(520, Math.min(900, start.startHeight + deltaY));
       setViewPanelHeight(nextHeight);
     };
 
@@ -2723,17 +2723,17 @@ const styles = `
   }
 
   .main-grid.split-layout {
-    grid-template-columns: 410px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) 410px;
     grid-template-rows: minmax(0, 1fr);
   }
 
-  /* โหมดแบ่ง 2 จอ: ฝั่งซ้าย = มุมมอง + แผงควบคุม, ฝั่งขวา = การแสดงผล */
-  .main-grid.split-layout .right-panel-wrapper {
+  /* โหมดแบ่ง 2 จอ: ฝั่งซ้าย = การแสดงผล, ฝั่งขวา = มุมมอง + แผงควบคุม */
+  .main-grid.split-layout .board-frame {
     grid-column: 1;
     grid-row: 1;
   }
 
-  .main-grid.split-layout .board-frame {
+  .main-grid.split-layout .right-panel-wrapper {
     grid-column: 2;
     grid-row: 1;
   }
@@ -3313,15 +3313,21 @@ const styles = `
       height: calc(100dvh - 44px);
     }
 
+    /* คงโหมดแบ่ง 2 จอไว้บน Tablet/จอแคบระดับกลาง
+       เพื่อให้เฟรมการแสดงผลอยู่ซ้าย และมุมมอง+แผงควบคุมอยู่ขวา */
     .main-grid.split-layout {
-      grid-template-columns: 1fr;
-      grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr) 410px;
+      grid-template-rows: minmax(0, 1fr);
     }
 
-    .main-grid.split-layout .right-panel-wrapper,
     .main-grid.split-layout .board-frame {
-      grid-column: auto;
-      grid-row: auto;
+      grid-column: 1;
+      grid-row: 1;
+    }
+
+    .main-grid.split-layout .right-panel-wrapper {
+      grid-column: 2;
+      grid-row: 1;
     }
 
     .control-panel {
@@ -3332,6 +3338,17 @@ const styles = `
 
   @media (max-width: 640px) {
     .app-page { padding: 10px; }
+
+    .main-grid.split-layout {
+      grid-template-columns: 1fr;
+      grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .main-grid.split-layout .right-panel-wrapper,
+    .main-grid.split-layout .board-frame {
+      grid-column: auto;
+      grid-row: auto;
+    }
     .top-bar { padding: 12px; }
     .board-panel, .presentation-panel { padding: 22px 10px; }
     .tone-header, .tone-row { grid-template-columns: 112px minmax(125px, 1fr) 52px; }
