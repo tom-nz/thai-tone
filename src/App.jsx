@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
-
+import "./toneBoardPatch.js";   // ✅ เพิ่มบรรทัดนี้บรรทัดเดียว
 /**
  * =============================================================================
  * THAI LANGUAGE / TRIYANG (อักษร 3 หมู่) RULEBOOK FOR THIS APPLICATION
