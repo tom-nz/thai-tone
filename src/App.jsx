@@ -2115,7 +2115,7 @@ export default function App() {
             style={
               viewLayout === "standard"
                 ? {
-                    gridTemplateRows: `${viewPanelHeight}px minmax(0, 1fr)`,
+                    gridTemplateRows: `minmax(${viewPanelHeight}px, max-content) minmax(0, 1fr)`,
                   }
                 : undefined
             }
@@ -2744,6 +2744,17 @@ const styles = `
     grid-template-rows: minmax(260px, auto) minmax(0, 1fr);
   }
 
+  /* โหมดชิดเดียว: ให้เฟรม 5 เส้นขยายตามเนื้อหาที่จำเป็น
+     และไม่ตัดวงกลมหรือเส้นทั้งแนวตั้ง/แนวนอน */
+  .main-grid:not(.split-layout) .board-frame {
+    overflow: visible;
+  }
+
+  .main-grid:not(.split-layout) .tone-rows {
+    overflow: visible;
+    gap: clamp(12px, 2.2vh, 24px);
+  }
+
   .main-grid > section {
     min-width: 0;
     min-height: 0;
@@ -2804,8 +2815,9 @@ const styles = `
 
   .tone-header, .tone-row {
     display: grid;
-    grid-template-columns: 215px minmax(190px, 1fr) 100px;
+    grid-template-columns: minmax(112px, 30%) minmax(0, 1fr) minmax(52px, 14%);
     align-items: center;
+    min-width: 0;
   }
 
   .tone-header {
@@ -2866,11 +2878,13 @@ const styles = `
 
   .tone-line-wrap {
     height: 34px;
+    min-width: 0;
     display: flex;
     align-items: center;
     position: relative;
     transition: none;
     transform: none;
+    overflow: visible;
   }
 
   .tone-line {
@@ -2938,6 +2952,49 @@ const styles = `
     display: flex;
     flex-direction: column;
     gap: 20px;
+  }
+
+  /* เฟรมมุมมองในโหมดแบ่ง 2 จอ: คงความสูงและจัดปุ่มมอนิเตอร์ให้อยู่บรรทัดเดียว */
+  .right-panel-wrapper > .top-bar {
+    min-width: 0;
+    min-height: 118px;
+    height: 118px;
+    flex: 0 0 118px;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 8px;
+    overflow: hidden;
+  }
+
+  .right-panel-wrapper > .top-bar .view-buttons,
+  .right-panel-wrapper > .top-bar .monitor-buttons {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .right-panel-wrapper > .top-bar .view-buttons {
+    flex-wrap: nowrap;
+  }
+
+  .right-panel-wrapper > .top-bar .monitor-buttons {
+    flex-wrap: nowrap;
+  }
+
+  .right-panel-wrapper > .top-bar .soft-btn,
+  .right-panel-wrapper > .top-bar .selected-btn,
+  .right-panel-wrapper > .top-bar .blue-btn,
+  .right-panel-wrapper > .top-bar .green-btn {
+    min-width: 0;
+    flex: 1 1 0;
+    padding: 7px 6px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .right-panel-wrapper > .top-bar .view-buttons strong {
+    flex: 0 0 auto;
+    font-size: 13px;
   }
 
   .board-frame {
