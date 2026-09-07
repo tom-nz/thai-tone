@@ -1493,7 +1493,7 @@ export default function App() {
   const [staffBgColor, setStaffBgColor] = useState("#ffffff");
 
   const [activeRowId, setActiveRowId] = useState(null);
-  const [viewPanelHeight, setViewPanelHeight] = useState(118);
+  const [viewPanelHeight, setViewPanelHeight] = useState(420);
   const [isResizingViewPanel, setIsResizingViewPanel] = useState(false);
   const viewResizeStartRef = useRef(null);
   const [speechEnabled, setSpeechEnabled] = useState(false);
@@ -2000,9 +2000,10 @@ export default function App() {
   };
 
   const handleViewPanelResizeStart = (event) => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || viewLayout !== "standard") return;
 
     event.preventDefault();
+
     viewResizeStartRef.current = {
       startY: event.clientY,
       startHeight: viewPanelHeight,
@@ -2018,7 +2019,7 @@ export default function App() {
       if (!start) return;
 
       const deltaY = event.clientY - start.startY;
-      const nextHeight = Math.max(96, Math.min(360, start.startHeight + deltaY));
+      const nextHeight = Math.max(260, Math.min(800, start.startHeight + deltaY));
       setViewPanelHeight(nextHeight);
     };
 
@@ -2036,22 +2037,13 @@ export default function App() {
       window.removeEventListener("pointerup", handlePointerUp);
       window.removeEventListener("pointercancel", handlePointerUp);
     };
-  }, [isResizingViewPanel]);
+  }, [isResizingViewPanel, viewLayout]);
 
   // Component สำหรับสร้าง Top Bar แบบใช้ซ้ำ
   const renderTopBar = (extraStyle = {}) => (
     <section
-      className={`top-bar panel ${isResizingViewPanel && viewLayout !== "present" ? "resizing-view-panel" : ""}`}
-      style={{
-        ...extraStyle,
-        ...(viewLayout !== "present"
-          ? {
-              height: viewPanelHeight,
-              boxSizing: "border-box",
-              flex: "0 0 auto",
-            }
-          : {}),
-      }}
+      className="top-bar panel"
+      style={extraStyle}
     >
       <div className="view-buttons">
         <strong>🖥️ มุมมอง:</strong>
@@ -2078,19 +2070,6 @@ export default function App() {
           🚀 เปิดกระดานแยกขึ้นมอนิเตอร์ที่ 2
         </button>
       </div>
-
-      {viewLayout !== "present" && (
-        <div
-          className="view-panel-resizer"
-          onPointerDown={handleViewPanelResizeStart}
-          role="separator"
-          aria-orientation="horizontal"
-          aria-label="ปรับขนาดเฟรมมุมมอง"
-          title="ลากเพื่อขยาย/ย่อเฟรมมุมมอง"
-        >
-          <span />
-        </div>
-      )}
     </section>
   );
 
@@ -2131,9 +2110,20 @@ export default function App() {
           {/* กรณีโหมด present ให้ Top bar ยังคงลอยอยู่บนสุด */}
           {viewLayout === "present" && renderTopBar({ marginBottom: "20px" })}
 
-          <div className={`main-grid ${viewLayout === "split" ? "split-layout" : ""}`}>
+          <div
+            className={`main-grid ${viewLayout === "split" ? "split-layout" : ""}`}
+            style={
+              viewLayout === "standard"
+                ? {
+                    gridTemplateRows: `${viewPanelHeight}px minmax(0, 1fr)`,
+                  }
+                : undefined
+            }
+          >
             <section
-              className="panel"
+              className={`panel board-frame ${
+                viewLayout === "standard" ? "board-frame-resizable" : ""
+              } ${isResizingViewPanel ? "resizing-board-frame" : ""}`}
               style={{
                 backgroundColor: staffBgColor,
                 borderRadius: "16px",
@@ -2153,9 +2143,22 @@ export default function App() {
                 fontSize={labelFontSize}
                 staffBgColor={staffBgColor}
               />
+
+              {viewLayout === "standard" && (
+                <div
+                  className="board-frame-resizer"
+                  onPointerDown={handleViewPanelResizeStart}
+                  role="separator"
+                  aria-orientation="horizontal"
+                  aria-label="ปรับขนาดเฟรมหัวเรื่องและบรรทัด 5 เส้น"
+                  title="ลากเพื่อขยายหรือย่อเฟรมการแสดงผล"
+                >
+                  <span />
+                </div>
+              )}
             </section>
 
-            {/* กรณีที่ไม่ใช่โหมด present ให้ Top bar และแผงควบคุมอยู่ในกล่องด้านขวา */}
+            {/* เฟรมมุมมองและแผงควบคุมอยู่ต่อจากเฟรมการแสดงผลเสมอ */}
             {viewLayout !== "present" && (
               <div
                 className="right-panel-wrapper"
@@ -2163,13 +2166,18 @@ export default function App() {
                   display: "flex",
                   flexDirection: "column",
                   gap: "20px",
-                  maxHeight: "calc(100vh - 42px)",
-                  position: "sticky",
-                  top: "20px"
+                  minHeight: 0,
+                  height: "100%",
+                  position: "relative"
                 }}
               >
-                {/* เฟรมมุมมองอยู่ด้านบนและปรับความสูงด้วยเมาส์/นิ้วได้ */}
-                {renderTopBar({ marginBottom: 0 })}
+                {/* เฟรมมุมมองอยู่ด้านบน ขนาดคงที่ ไม่สามารถลากปรับขนาดได้ */}
+                {renderTopBar({
+                  marginBottom: 0,
+                  flex: "0 0 118px",
+                  height: "118px",
+                  boxSizing: "border-box",
+                })}
 
                 {/* เฟรมแผงควบคุมอยู่ด้านล่าง และสามารถเลื่อน Scroll ได้อิสระ */}
                 <aside 
@@ -2683,39 +2691,6 @@ const styles = `
     min-height: 96px;
   }
 
-  .top-bar.resizing-view-panel {
-    user-select: none;
-  }
-
-  .view-panel-resizer {
-    position: absolute;
-    left: 10px;
-    right: 10px;
-    bottom: -10px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: ns-resize;
-    touch-action: none;
-    z-index: 20;
-  }
-
-  .view-panel-resizer span {
-    width: 72px;
-    height: 5px;
-    border-radius: 999px;
-    background: #94a3b8;
-    box-shadow: 0 1px 4px rgba(15,23,42,.18);
-    transition: background .15s ease, transform .15s ease;
-  }
-
-  .view-panel-resizer:hover span,
-  .top-bar.resizing-view-panel .view-panel-resizer span {
-    background: #0284c7;
-    transform: scaleX(1.12);
-  }
-
   .view-buttons, .monitor-buttons, .input-row, .vowel-list, .background-colors {
     display: flex;
     align-items: center;
@@ -2748,12 +2723,25 @@ const styles = `
   }
 
   .main-grid.split-layout {
-    grid-template-columns: minmax(0, 1fr) 410px;
+    grid-template-columns: 410px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
   }
 
-  /* โหมดชิดเดียว: แยกกระดานและแผงควบคุมเป็น 2 เฟรมต่อกันลงมา */
+  /* โหมดแบ่ง 2 จอ: ฝั่งซ้าย = มุมมอง + แผงควบคุม, ฝั่งขวา = การแสดงผล */
+  .main-grid.split-layout .right-panel-wrapper {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .main-grid.split-layout .board-frame {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  /* โหมดชิดเดียว: เฟรมการแสดงผลอยู่ด้านบน และมุมมอง/แผงควบคุมอยู่ด้านล่าง */
   .main-grid:not(.split-layout) {
-    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(260px, auto) minmax(0, 1fr);
   }
 
   .main-grid > section {
@@ -2944,8 +2932,49 @@ const styles = `
   .fixed-tone-label { text-align: center; font-size: 16px; font-weight: 700; }
 
   .right-panel-wrapper {
+    min-width: 0;
     min-height: 0;
     height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .board-frame {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+
+  .board-frame-resizer {
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: 0;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: ns-resize;
+    touch-action: none;
+    z-index: 20;
+  }
+
+  .board-frame-resizer span {
+    width: 72px;
+    height: 5px;
+    border-radius: 999px;
+    background: #94a3b8;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, .18);
+    transition: background .15s ease, transform .15s ease;
+  }
+
+  .board-frame-resizer:hover span,
+  .resizing-board-frame .board-frame-resizer span {
+    background: #0284c7;
+    transform: scaleX(1.12);
   }
 
   .control-panel {
@@ -3287,6 +3316,12 @@ const styles = `
     .main-grid.split-layout {
       grid-template-columns: 1fr;
       grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .main-grid.split-layout .right-panel-wrapper,
+    .main-grid.split-layout .board-frame {
+      grid-column: auto;
+      grid-row: auto;
     }
 
     .control-panel {
