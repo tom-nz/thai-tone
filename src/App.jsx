@@ -2171,15 +2171,7 @@ export default function App() {
                   position: "relative"
                 }}
               >
-                {/* เฟรมมุมมองอยู่ด้านบน ขนาดคงที่ ไม่สามารถลากปรับขนาดได้ */}
-                {renderTopBar({
-                  marginBottom: 0,
-                  flex: "0 0 118px",
-                  height: "118px",
-                  boxSizing: "border-box",
-                })}
-
-                {/* เฟรมแผงควบคุมอยู่ด้านล่าง และสามารถเลื่อน Scroll ได้อิสระ */}
+                {/* แผงควบคุมเป็นพื้นที่หลักเพียงกล่องเดียว และรวมมุมมองไว้ด้านล่าง */}
                 <aside 
                   className="control-panel panel" 
                   style={{ flex: 1, overflowY: "auto", position: "static", maxHeight: "none", margin: 0 }}
@@ -2634,6 +2626,14 @@ export default function App() {
                       </div>
                     )}
                   </section>
+
+                  {/* กล่องมุมมองย้ายมาอยู่ล่างสุดของแผงควบคุม ต่อจาก เชื่อมต่อ AI (API Key) */}
+                  {renderTopBar({
+                    marginBottom: 0,
+                    flex: "0 0 auto",
+                    width: "100%",
+                    boxSizing: "border-box",
+                  })}
                 </aside>
               </div>
             )}
@@ -2945,6 +2945,46 @@ const styles = `
   .slash { color: #64748b; font-size: 21px; font-weight: 700; }
   .fixed-tone-label { text-align: center; font-size: 16px; font-weight: 700; }
 
+  /* กล่องมุมมองถูกย้ายมาเป็นส่วนหนึ่งของแผงควบคุม */
+  .control-panel > .top-bar {
+    width: 100%;
+    flex: 0 0 auto;
+    min-height: 0;
+    margin-top: 0;
+    padding: 12px;
+  }
+
+  .control-panel > .top-bar .view-buttons,
+  .control-panel > .top-bar .monitor-buttons {
+    min-width: 0;
+  }
+
+  .control-panel > .top-bar .view-buttons {
+    flex: 1 1 auto;
+  }
+
+  .control-panel > .top-bar .monitor-buttons {
+    flex: 1 1 auto;
+  }
+
+  /* โหมดแบ่ง 2 จอ: ลดพื้นที่ปลายเส้นเล็กน้อย เพื่อให้วงกลมที่ตำแหน่ง 80%
+     และสถานะ active ที่ขยาย 1.23 เท่า มีพื้นที่พอดีภายในเฟรมโดยอัตโนมัติ */
+  .main-grid.split-layout .board-frame {
+    container-type: inline-size;
+  }
+
+  .main-grid.split-layout .tone-line-wrap {
+    margin-right: clamp(12px, 3cqw, 30px);
+  }
+
+  .main-grid.split-layout .tone-circle {
+    width: clamp(36px, 8.5cqw, 48px) !important;
+    min-width: clamp(36px, 8.5cqw, 48px) !important;
+    max-width: clamp(36px, 8.5cqw, 48px) !important;
+    height: clamp(36px, 8.5cqw, 48px) !important;
+    flex-basis: clamp(36px, 8.5cqw, 48px) !important;
+  }
+
   .right-panel-wrapper {
     min-width: 0;
     min-height: 0;
@@ -2954,37 +2994,16 @@ const styles = `
     gap: 20px;
   }
 
-  /* เฟรมมุมมองในโหมดแบ่ง 2 จอ: คงความสูงและจัดปุ่มมอนิเตอร์ให้อยู่บรรทัดเดียว */
-  .right-panel-wrapper > .top-bar {
-    min-width: 0;
-    min-height: 118px;
-    height: 118px;
-    flex: 0 0 118px;
-    flex-direction: column;
-    align-items: stretch;
-    justify-content: center;
-    gap: 8px;
-    overflow: hidden;
-  }
-
-  .right-panel-wrapper > .top-bar .view-buttons,
-  .right-panel-wrapper > .top-bar .monitor-buttons {
-    min-width: 0;
-    width: 100%;
-  }
-
-  .right-panel-wrapper > .top-bar .view-buttons {
+  /* ปุ่มในกล่องมุมมองด้านล่างต้องไม่ล้นกรอบ โดยปรับขนาดตามพื้นที่แผงควบคุม */
+  .control-panel > .top-bar .view-buttons,
+  .control-panel > .top-bar .monitor-buttons {
     flex-wrap: nowrap;
   }
 
-  .right-panel-wrapper > .top-bar .monitor-buttons {
-    flex-wrap: nowrap;
-  }
-
-  .right-panel-wrapper > .top-bar .soft-btn,
-  .right-panel-wrapper > .top-bar .selected-btn,
-  .right-panel-wrapper > .top-bar .blue-btn,
-  .right-panel-wrapper > .top-bar .green-btn {
+  .control-panel > .top-bar .soft-btn,
+  .control-panel > .top-bar .selected-btn,
+  .control-panel > .top-bar .blue-btn,
+  .control-panel > .top-bar .green-btn {
     min-width: 0;
     flex: 1 1 0;
     padding: 7px 6px;
@@ -2992,7 +3011,7 @@ const styles = `
     white-space: nowrap;
   }
 
-  .right-panel-wrapper > .top-bar .view-buttons strong {
+  .control-panel > .top-bar .view-buttons strong {
     flex: 0 0 auto;
     font-size: 13px;
   }
