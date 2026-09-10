@@ -146,6 +146,8 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
 const apiKey = "";
 const CHANNEL_NAME = "thai_tone_sync_channel";
 const STORAGE_KEY = "thai_tone_live_sync_data";
+const TTS_API_ENDPOINT = "/api/tts";
+const TTS_VOICE = "th-TH-PremwadeeNeural";
 
 // Regex ตรวจสอบคำไทย 1 พยางค์อย่างเคร่งครัด
 const STRICT_THAI_SYLLABLE_PATTERN = /^[เแโใไ]?[ก-ฮ]{1,2}[ิีึืุูั็ํ]?[่้๊๋]?[าำยวอ]?[ก-ฮ]?[ะ์]?$/;
@@ -1200,6 +1202,47 @@ function validateEnteredToneMark(word = "") {
   };
 }
 
+function escapeXmlText(text = "") {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+function buildAzureTtsSsml(text = "", voice = TTS_VOICE, speechRate = 1) {
+  const safeText = escapeXmlText(
+    String(text).normalize("NFC").replace(/\s+/g, " ").trim(),
+  );
+
+  const rate = Math.max(0.5, Math.min(1.4, Number(speechRate) || 1));
+  const ratePercent = Math.round((rate - 1) * 100);
+  const rateValue = `${ratePercent >= 0 ? "+" : ""}${ratePercent}%`;
+
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis"',
+    ' xmlns:mstts="http://www.w3.org/2001/mstts" xml:lang="th-TH">',
+    `<voice name="${voice}">`,
+    `<prosody rate="${rateValue}" pitch="0%">${safeText}</prosody>`,
+    '</voice>',
+    '</speak>',
+  ].join("");
+}
+
+function getSpeechFallbackVoice(voices = [], selectedVoiceURI = "") {
+  return (
+    voices.find(
+      (item) =>
+        item.voiceURI === selectedVoiceURI &&
+        item.lang?.toLowerCase().startsWith("th"),
+    ) || voices.find((item) =>
+      item.lang?.toLowerCase().startsWith("th"),
+    )
+  );
+}
+
 function getSpeechText(item) {
   if (!item?.show) return "";
 
@@ -1231,11 +1274,22 @@ function Board({
   isDisplay = false,
   fontSize = 20,
   staffBgColor = "#ffffff",
+  lang = "th",
 }) {
+  const t = (th, en) => (lang === "en" ? en : th);
+
   const fixedRightLabels = {
-    5: { text: "เสียงสูง", color: "#ef4444" },
-    3: { text: "เสียงกลาง", color: "#22c55e" },
-    1: { text: "เสียงต่ำ", color: "#007bff" },
+    5: { text: t("เสียงสูง", "High Pitch"), color: "#ef4444" },
+    3: { text: t("เสียงกลาง", "Mid Pitch"), color: "#22c55e" },
+    1: { text: t("เสียงต่ำ", "Low Pitch"), color: "#007bff" },
+  };
+
+  const toneNames = {
+    5: { th: "เสียงจัตวา", en: "Rising (Chattawa)" },
+    4: { th: "เสียงตรี", en: "High (Tri)" },
+    3: { th: "เสียงโท", en: "Falling (Tho)" },
+    2: { th: "เสียงเอก", en: "Low (Ek)" },
+    1: { th: "เสียงสามัญ", en: "Mid (Saman)" },
   };
 
   const ratio = Math.max(0.8, fontSize / 20);
@@ -1265,8 +1319,8 @@ function Board({
       style={isDisplay ? { backgroundColor: staffBgColor } : {}}
     >
       <div className="board-title">
-        <h2>ไตรยางศ์ หรือ อักษร 3 หมู่</h2>
-        <div>และการผันวรรณยุกต์</div>
+        <h2>{t("ไตรยางศ์ หรือ อักษร 3 หมู่", "Three Consonant Classes (Triyang)")}</h2>
+        <div>{t("และการผันวรรณยุกต์", "Tone Rules & Musical Staves")}</div>
       </div>
 
       {(() => {
@@ -1328,13 +1382,32 @@ function Board({
 
         if (!analyses.length) return null;
 
+        const getLabelText = (lbl) => {
+          if (lbl === "อักษรกลาง") return t("อักษรกลาง", "Mid Class");
+          if (lbl === "เสียงสูง") return t("เสียงสูง", "High Tone");
+          if (lbl === "เสียงต่ำ") return t("เสียงต่ำ", "Low Tone");
+          return lbl;
+        };
+
+        const translateType = (type) => {
+          if (type === "คำเป็น") return t("คำเป็น", "Live Syllable");
+          if (type === "คำตาย") return t("คำตาย", "Dead Syllable");
+          return type;
+        };
+
+        const translateVowel = (v) => {
+          if (v === "สระเสียงยาว") return t("สระเสียงยาว", "Long Vowel");
+          if (v === "สระเสียงสั้น") return t("สระเสียงสั้น", "Short Vowel");
+          return v;
+        };
+
         return (
           <div className="analysis-box">
             {analyses.map(({ label, word, info }, index) => (
               <div className="analysis-item" key={`${label}-${word}-${index}`}>
-                📌 ผลวิเคราะห์หลักภาษา ({label}): <strong>"{word}"</strong> เป็น{" "}
+                📌 {t("ผลวิเคราะห์หลักภาษา", "Linguistic Analysis")} ({getLabelText(label)}): <strong>"{word}"</strong> {t("เป็น", "is")}{" "}
                 <span className="analysis-tag">
-                  {info.type} ({info.vowelLen})
+                  {translateType(info.type)} ({translateVowel(info.vowelLen)})
                 </span>{" "}
                 — {info.desc}
               </div>
@@ -1344,7 +1417,7 @@ function Board({
       })()}
 
       <div className="tone-header">
-        <span>รูปวรรณยุกต์</span>
+        <span>{t("รูปวรรณยุกต์", "Tone Mark")}</span>
       </div>
 
       <div className="tone-rows">
@@ -1363,7 +1436,7 @@ function Board({
               className={`tone-row ${isActive ? "active" : ""} ${!item.show ? "disabled-tone-row" : ""}`}
               key={item.id}
               onClick={() => onRowClick(item)}
-              title={item.show ? `คลิกเพื่อขยายและอ่านคำ ${getSpeechText(item)}` : ""}
+              title={item.show ? `${t("คลิกเพื่อขยายและอ่านคำ", "Click to zoom and speak")} ${getSpeechText(item)}` : ""}
             >
               <div
                 className="tone-name"
@@ -1372,7 +1445,7 @@ function Board({
                   fontSize: textSize,
                 }}
               >
-                {item.tone} <span>[ {item.mark} ]</span>
+                {t(item.tone, toneNames[item.id]?.en || item.tone)} <span>[ {item.mark} ]</span>
               </div>
 
               <div className="tone-line-wrap">
@@ -1427,6 +1500,20 @@ function Board({
 
 export default function App() {
   const [isDisplayWindow, setIsDisplayWindow] = useState(false);
+  const [lang, setLang] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("thai_tone_lang") || "th";
+    }
+    return "th";
+  });
+
+  const t = (th, en) => (lang === "en" ? en : th);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("thai_tone_lang", lang);
+    }
+  }, [lang]);
   const [mode, setMode] = useState("full5");
   const [viewLayout, setViewLayout] = useState("split");
   const [inputText, setInputText] = useState("");
@@ -1488,7 +1575,7 @@ export default function App() {
     return { backgroundColor: bgColor };
   }, [bgType, bgColor, bgImage]);
 
-  const speak = (text) => {
+  const speak = async (text) => {
     if (
       typeof window === "undefined" ||
       !speechEnabled ||
@@ -1499,21 +1586,62 @@ export default function App() {
     }
 
     const normalizedText = normalizeThaiSpeechText(text);
-    const availableVoices = window.speechSynthesis.getVoices();
 
-    const selectedThaiVoice =
-      availableVoices.find(
-        (item) =>
-          item.voiceURI === selectedVoiceURI &&
-          item.lang?.toLowerCase().startsWith("th"),
-      ) ||
-      availableVoices.find((item) =>
-        item.lang?.toLowerCase().startsWith("th"),
+    // Primary TTS: Azure Speech ผ่าน Cloudflare Pages Function
+    // ใช้ Thai Neural voice + SSML เพื่อไม่ให้เบราว์เซอร์แยกอ่านเป็นชื่ออักษร
+    try {
+      const response = await fetch(TTS_API_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: normalizedText,
+          voice: TTS_VOICE,
+          rate: Number(speechRate),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Azure TTS HTTP ${response.status}`);
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+
+      const previousAudio = speechRef.current;
+      if (previousAudio instanceof HTMLAudioElement) {
+        previousAudio.pause();
+        previousAudio.currentTime = 0;
+      }
+
+      speechRef.current = audio;
+
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+        if (speechRef.current === audio) {
+          speechRef.current = null;
+        }
+      };
+
+      await audio.play();
+      return;
+    } catch (err) {
+      console.warn(
+        "Azure Thai TTS unavailable; using browser Thai voice fallback:",
+        err,
       );
+    }
 
-    // ไม่ใช้ voice ภาษาอื่นกับข้อความไทย เพราะบาง voice จะอ่านเป็นชื่อพยัญชนะ
-    // เช่น "กอ ไม้จัตวา งองู" แทนการออกเสียงเป็นพยางค์
-    if (!selectedThaiVoice) {
+    // Fallback: browser Web Speech API โดยยอมใช้เฉพาะ Thai voice
+    const availableVoices = window.speechSynthesis.getVoices();
+    const thaiVoice = getSpeechFallbackVoice(
+      availableVoices,
+      selectedVoiceURI,
+    );
+
+    if (!thaiVoice) {
       console.warn(
         "ไม่พบเสียงภาษาไทย (th-TH/th-*). กรุณาเลือก/ติดตั้ง Thai TTS voice ในระบบ",
       );
@@ -1524,7 +1652,7 @@ export default function App() {
 
     const utterance = new SpeechSynthesisUtterance(normalizedText);
     utterance.lang = "th-TH";
-    utterance.voice = selectedThaiVoice;
+    utterance.voice = thaiVoice;
     utterance.rate = Number(speechRate);
     utterance.pitch = 1;
     utterance.volume = 1;
@@ -1782,6 +1910,7 @@ export default function App() {
       speechEnabled,
       speechRate,
       selectedVoiceURI,
+      lang,
     ],
   );
 
@@ -1876,6 +2005,7 @@ export default function App() {
       if (data.speechEnabled !== undefined) setSpeechEnabled(data.speechEnabled);
       if (data.speechRate) setSpeechRate(data.speechRate);
       if (data.selectedVoiceURI !== undefined) setSelectedVoiceURI(data.selectedVoiceURI);
+      if (data.lang) setLang(data.lang);
     };
 
     try {
@@ -1912,11 +2042,11 @@ export default function App() {
   const renderTopBar = (extraStyle = {}) => (
     <section className="top-bar panel" style={extraStyle}>
       <div className="view-buttons">
-        <strong>🖥️ มุมมอง:</strong>
+        <strong>{t("🖥️ มุมมอง:", "🖥️ View:")}</strong>
         {[
-          ["standard", "ชิดเดียว"],
-          ["split", "แบ่ง 2 จอ"],
-          ["present", "โหมดพรีวิว"],
+          ["standard", t("ชิดเดียว", "Standard")],
+          ["split", t("แบ่ง 2 จอ", "Split Screen")],
+          ["present", t("โหมดพรีวิว", "Presentation")],
         ].map(([value, label]) => (
           <button
             key={value}
@@ -1930,10 +2060,39 @@ export default function App() {
 
       <div className="monitor-buttons">
         <button className="blue-btn" onClick={sendFullscreenToDisplay}>
-          ⛶ สลับเต็มจอ จอที่ 2
+          {t("⛶ สลับเต็มจอ จอที่ 2", "⛶ Fullscreen Screen 2")}
         </button>
         <button className="green-btn" onClick={handleOpenDualMonitor}>
-          🚀 เปิดกระดานแยกขึ้นมอนิเตอร์ที่ 2
+          {t("🚀 เปิดกระดานแยกขึ้นมอนิเตอร์ที่ 2", "🚀 Open Dual Monitor")}
+        </button>
+        <button
+          type="button"
+          onClick={() => setLang((l) => (l === "th" ? "en" : "th"))}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            padding: "8px 14px",
+            borderRadius: "8px",
+            border: "1.5px solid #0284c7",
+            background: lang === "th" ? "#f0f9ff" : "#f0fdf4",
+            color: "#0369a1",
+            fontWeight: "700",
+            fontSize: "13px",
+            cursor: "pointer",
+            transition: "all .18s ease",
+            boxShadow: "0 2px 6px rgba(2,132,199,.15)",
+          }}
+          title={lang === "th" ? "Switch interface to English" : "เปลี่ยนอินเทอร์เฟซเป็นภาษาไทย"}
+        >
+          <span>🌐</span>
+          <span style={{ color: lang === "th" ? "#0284c7" : "#94a3b8", fontWeight: lang === "th" ? "800" : "500" }}>
+            ไทย
+          </span>
+          <span style={{ color: "#94a3b8" }}>/</span>
+          <span style={{ color: lang === "en" ? "#16a34a" : "#94a3b8", fontWeight: lang === "en" ? "800" : "500" }}>
+            English
+          </span>
         </button>
       </div>
     </section>
@@ -1959,8 +2118,9 @@ export default function App() {
             isDisplay
             fontSize={labelFontSize}
             staffBgColor={staffBgColor}
+            lang={lang}
           />
-          <div className="display-tip">ดับเบิลคลิกพื้นที่ว่างเพื่อสลับเต็มจอ • คลิกบรรทัดเพื่อขยายและอ่านออกเสียง</div>
+          <div className="display-tip">{t("ดับเบิลคลิกพื้นที่ว่างเพื่อสลับเต็มจอ • คลิกบรรทัดเพื่อขยายและอ่านออกเสียง", "Double-click empty space to toggle fullscreen • Click line to zoom & speak")}</div>
         </main>
       </>
     );
@@ -1997,6 +2157,7 @@ export default function App() {
                 mode={mode}
                 fontSize={labelFontSize}
                 staffBgColor={staffBgColor}
+                lang={lang}
               />
             </section>
 
@@ -2021,10 +2182,10 @@ export default function App() {
                   className="control-panel panel" 
                   style={{ flex: 1, overflowY: "auto", position: "static", maxHeight: "none", margin: 0 }}
                 >
-                  <h3>⚙️ แผงควบคุม</h3>
+                  <h3>{t("⚙️ แผงควบคุม", "⚙️ Control Panel")}</h3>
 
                   <section className="control-group">
-                    <strong>✨ ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ</strong>
+                    <strong>{t("✨ ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ", "✨ AI Tone Inflection Assistant")}</strong>
 
                     {inputText.trim() !== "" && (
                       <div
@@ -2037,16 +2198,16 @@ export default function App() {
                           color: "#334155",
                         }}
                       >
-                        <ModeRadio value="full5" checked={mode === "full5"} label="แสดงชุดผัน 5 เสียงเมื่อมีกฎเทียบ (อักษรคู่ / ห นำ)" onChange={setMode} />
-                        <ModeRadio value="highOnly" checked={mode === "highOnly"} label="เฉพาะเสียงสูง (เอก, โท, จัตวา)" onChange={setMode} />
-                        <ModeRadio value="lowOnly" checked={mode === "lowOnly"} label="เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)" onChange={setMode} />
+                        <ModeRadio value="full5" checked={mode === "full5"} label={t("แสดงชุดผัน 5 เสียงเมื่อมีกฎเทียบ (อักษรคู่ / ห นำ)", "Show 5 tones with paired / leading rules")} onChange={setMode} />
+                        <ModeRadio value="highOnly" checked={mode === "highOnly"} label={t("เฉพาะเสียงสูง (เอก, โท, จัตวา)", "High tone set only (Low, Falling, Rising)")} onChange={setMode} />
+                        <ModeRadio value="lowOnly" checked={mode === "lowOnly"} label={t("เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)", "Low tone set only (Mid, Falling, High)")} onChange={setMode} />
                       </div>
                     )}
 
                     <div className="input-row">
                       <input
                         value={inputText}
-                        placeholder="พิมพ์ 1 คำ เช่น กอ, เมา, กวาง"
+                        placeholder={t("พิมพ์ 1 คำ เช่น กอ, เมา, กวาง", "Type 1 word, e.g. กอ, เมา, กวาง")}
                         onChange={(event) => {
                           const val = event.target.value;
                           setInputText(val);
@@ -2080,7 +2241,7 @@ export default function App() {
                   </section>
 
                   <section>
-                    <div className="section-label">⌨️ เลือกพยัญชนะด่วน (๔๔ ตัว):</div>
+                    <div className="section-label">{t("⌨️ เลือกพยัญชนะด่วน (๔๔ ตัว):", "⌨️ Quick Consonants (44 Letters):")}</div>
                     <div className="consonant-grid">
                       {quickConsonants.map((consonant) => (
                         <button
@@ -2104,7 +2265,7 @@ export default function App() {
                     <div className="low-class-groups">
                       <div className="low-class-group">
                         <div className="section-label low-pair-label">
-                          🟣 อักษรต่ำคู่ (๑๔ ตัว)
+                          {t("🟣 อักษรต่ำคู่ (๑๔ ตัว)", "🟣 Paired Low Consonants (14 Letters)")}
                         </div>
                         <div className="low-consonant-grid">
                           {lowPairConsonants.map((consonant) => (
@@ -2124,7 +2285,7 @@ export default function App() {
 
                       <div className="low-class-group">
                         <div className="section-label low-single-label">
-                          🔵 อักษรต่ำเดี่ยว (๑๐ ตัว)
+                          {t("🔵 อักษรต่ำเดี่ยว (๑๐ ตัว)", "🔵 Single Low Consonants (10 Letters)")}
                         </div>
                         <div className="low-consonant-grid">
                           {lowSingleConsonants.map((consonant) => (
@@ -2146,7 +2307,7 @@ export default function App() {
                     <div className="cluster-groups">
                       <div>
                         <div className="section-label cluster-label">
-                          🔗 ควบกล้ำแท้
+                          {t("🔗 ควบกล้ำแท้", "🔗 True Clusters")}
                         </div>
                         <div className="cluster-grid">
                           {trueClusters.map((cluster) => (
@@ -2166,7 +2327,7 @@ export default function App() {
 
                       <div>
                         <div className="section-label cluster-label">
-                          🟣 อักษรนำ ห-นำ
+                          {t("🟣 อักษรนำ ห-นำ", "🟣 Leading ห- Clusters")}
                         </div>
                         <div className="cluster-grid">
                           {leadingHoClusters.map((cluster) => (
@@ -2186,7 +2347,7 @@ export default function App() {
 
                       <div>
                         <div className="section-label cluster-label">
-                          🟠 ควบกล้ำไม่แท้
+                          {t("🟠 ควบกล้ำไม่แท้", "🟠 False Clusters")}
                         </div>
                         <div className="cluster-grid">
                           {falseClusters.map((cluster) => (
@@ -2207,7 +2368,7 @@ export default function App() {
                   </section>
 
                   <section>
-                    <div className="section-label green-label">🟢 สระเสียงยาว (คำเป็น):</div>
+                    <div className="section-label green-label">{t("🟢 สระเสียงยาว (คำเป็น):", "🟢 Long Vowels (Live Syllables):")}</div>
                     <div className="vowel-list">
                       {longVowels.map((vowel) => (
                         <button
@@ -2220,7 +2381,7 @@ export default function App() {
                       ))}
                     </div>
 
-                    <div className="section-label red-label">🔴 สระเสียงสั้น (คำตาย):</div>
+                    <div className="section-label red-label">{t("🔴 สระเสียงสั้น (คำตาย):", "🔴 Short Vowels (Dead Syllables):")}</div>
                     <div className="vowel-list">
                       {shortVowels.map((vowel) => (
                         <button
@@ -2235,7 +2396,7 @@ export default function App() {
                   </section>
 
                   <section className="control-group">
-                    <strong>🔊 การอ่านออกเสียง</strong>
+                    <strong>{t("🔊 การอ่านออกเสียง", "🔊 Speech & Voice")}</strong>
 
                     <label className="toggle-label">
                       <input
@@ -2243,16 +2404,16 @@ export default function App() {
                         checked={speechEnabled}
                         onChange={(event) => setSpeechEnabled(event.target.checked)}
                       />
-                      เปิดเสียงเมื่อคลิกบรรทัด
+                      {t("เปิดเสียงเมื่อคลิกบรรทัด", "Enable voice on row click")}
                     </label>
 
                     <label className="select-label">
-                      เสียงอ่าน
+                      {t("เสียงอ่าน", "Voice")}
                       <select
                         value={selectedVoiceURI}
                         onChange={(event) => setSelectedVoiceURI(event.target.value)}
                       >
-                        <option value="">เลือกอัตโนมัติ</option>
+                        <option value="">{t("เลือกอัตโนมัติ", "Auto Select")}</option>
                         {voices
                           .filter((voice) =>
                             voice.lang?.toLowerCase().startsWith("th"),
@@ -2275,7 +2436,7 @@ export default function App() {
                     )}
 
                     <label className="select-label">
-                      ความเร็วอ่าน: {speechRate}x
+                      {t("ความเร็วอ่าน:", "Speech Rate:")} {speechRate}x
                       <input
                         type="range"
                         min="0.5"
@@ -2293,7 +2454,7 @@ export default function App() {
                         speak(item ? getSpeechText(item) : inputText);
                       }}
                     >
-                      ▶ ทดลองอ่านคำ
+                      ▶ {t("ทดลองอ่านคำ", "Test Voice")}
                     </button>
                   </section>
 
@@ -2306,16 +2467,16 @@ export default function App() {
                         marginBottom: "8px",
                       }}
                     >
-                      🎼 สีพื้นหลังกระดานบรรทัด 5 เส้น
+                      {t("🎼 สีพื้นหลังกระดานบรรทัด 5 เส้น", "🎼 5-Line Staff Background")}
                     </div>
 
                     <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                       {[
-                        { label: "ขาว", value: "#ffffff" },
-                        { label: "ครีม", value: "#fffbeb" },
-                        { label: "ฟ้าอ่อน", value: "#f0f9ff" },
-                        { label: "เขียวอ่อน", value: "#f0fdf4" },
-                        { label: "เทาอ่อน", value: "#f8fafc" },
+                        { label: t("ขาว", "White"), value: "#ffffff" },
+                        { label: t("ครีม", "Cream"), value: "#fffbeb" },
+                        { label: t("ฟ้าอ่อน", "Soft Blue"), value: "#f0f9ff" },
+                        { label: t("เขียวอ่อน", "Soft Green"), value: "#f0fdf4" },
+                        { label: t("เทาอ่อน", "Soft Gray"), value: "#f8fafc" },
                       ].map((item) => (
                         <button
                           key={item.value}
@@ -2356,13 +2517,13 @@ export default function App() {
                   </section>
 
                   <section>
-                    <div className="section-label">🎨 ตั้งค่าสีประจำหมู่ และสีตัวอักษร</div>
+                    <div className="section-label">{t("🎨 ตั้งค่าสีประจำหมู่ และสีตัวอักษร", "🎨 Consonant Class & Text Colors")}</div>
                     <div className="color-grid">
                       {[
-                        ["อักษรกลาง", colorMid, setColorMid],
-                        ["อักษรสูง", colorHigh, setColorHigh],
-                        ["อักษรต่ำ", colorLow, setColorLow],
-                        ["สีตัวอักษร", circleTextColor, setCircleTextColor],
+                        [t("อักษรกลาง", "Mid Class"), colorMid, setColorMid],
+                        [t("อักษรสูง", "High Class"), colorHigh, setColorHigh],
+                        [t("อักษรต่ำ", "Low Class"), colorLow, setColorLow],
+                        [t("สีตัวอักษร", "Text Color"), circleTextColor, setCircleTextColor],
                       ].map(([label, value, setter]) => (
                         <label
                           key={label}
@@ -2384,15 +2545,15 @@ export default function App() {
                   </section>
 
                   <section className="control-group">
-                    <strong>🖼️ เลือกสีหรือรูปภาพพื้นหลังจอภาพรวม</strong>
+                    <strong>{t("🖼️ เลือกสีหรือรูปภาพพื้นหลังจอภาพรวม", "🖼️ Overall Screen Background")}</strong>
                     <div className="background-colors">
                       {[
-                        ["เทา", "#e2e8f0"],
-                        ["สว่าง", "#f1f5f9"],
-                        ["ฟ้าอ่อน", "#e0f2fe"],
-                        ["มินต์", "#dcfce7"],
-                        ["ส้มอ่อน", "#fef3c7"],
-                        ["เข้ม", "#334155"],
+                        [t("เทา", "Gray"), "#e2e8f0"],
+                        [t("สว่าง", "Light"), "#f1f5f9"],
+                        [t("ฟ้าอ่อน", "Soft Blue"), "#e0f2fe"],
+                        [t("มินต์", "Mint"), "#dcfce7"],
+                        [t("ส้มอ่อน", "Soft Orange"), "#fef3c7"],
+                        [t("เข้ม", "Dark"), "#334155"],
                       ].map(([label, color]) => (
                         <button
                           key={color}
@@ -2412,7 +2573,7 @@ export default function App() {
                     </div>
 
                     <label className="upload-btn">
-                      📁 อัปโหลดรูปภาพพื้นหลัง
+                      {t("📁 อัปโหลดรูปภาพพื้นหลัง", "📁 Upload Background Image")}
                       <input type="file" accept="image/*" onChange={handleImageUpload} />
                     </label>
 
@@ -2424,14 +2585,14 @@ export default function App() {
                           setBgImage("");
                         }}
                       >
-                        ยกเลิกรูปภาพ
+                        {t("ยกเลิกรูปภาพ", "Remove Image")}
                       </button>
                     )}
                   </section>
 
                   <section className="control-group">
                     <label className="select-label">
-                      📐 ขนาดตัวหนังสือและวงกลม (จอที่ 2): {labelFontSize}px
+                      {t("📐 ขนาดตัวหนังสือและวงกลม (จอที่ 2):", "📐 Font & Circle Size (Screen 2):")} {labelFontSize}px
                       <input
                         type="range"
                         min="16"
@@ -2447,24 +2608,24 @@ export default function App() {
                       className="api-toggle"
                       onClick={() => setShowApiInput((value) => !value)}
                     >
-                      🔑 {customApiKey ? "เปลี่ยน Gemini API Key" : "เชื่อมต่อ AI (API Key)"}
+                      🔑 {customApiKey ? t("เปลี่ยน Gemini API Key", "Change Gemini API Key") : t("เชื่อมต่อ AI (API Key)", "Connect AI (API Key)")}
                     </button>
 
                     {showApiInput && (
                       <div className="api-input-box">
-                        <strong>🔑 เชื่อมต่อ Gemini API Key ส่วนตัว:</strong>
+                        <strong>{t("🔑 เชื่อมต่อ Gemini API Key ส่วนตัว:", "🔑 Connect Personal Gemini API Key:")}</strong>
                         <div className="input-row">
                           <input
                             type="password"
                             value={tempApiKey}
-                            placeholder="วาง Gemini API Key..."
+                            placeholder={t("วาง Gemini API Key...", "Paste Gemini API Key...")}
                             onChange={(event) => setTempApiKey(event.target.value)}
                             onKeyDown={(event) => {
                               if (event.key === "Enter") handleSaveApiKey();
                             }}
                           />
                           <button className="green-btn" onClick={handleSaveApiKey}>
-                            บันทึก
+                            {t("บันทึก", "Save")}
                           </button>
                         </div>
                         {apiSaveStatus && <div className="success-text">✓ {apiSaveStatus}</div>}
@@ -2608,7 +2769,7 @@ const styles = `
     color: #0284c7;
     font-size: 14px;
     font-weight: 700;
-    margin-bottom: 3px;
+    margin-bottom: 8px;
   }
 
   .tone-header span { text-align: right; padding-right: 20px; }
@@ -2617,6 +2778,8 @@ const styles = `
     display: flex;
     flex-direction: column;
     gap: 24px;
+    padding-top: 28px; /* เว้นระยะด้านบน 28px ป้องกันก้านโน้ต/ไม้จัตวาของคำว่า ก๋อ ชนหรือล้นขอบบน */
+    overflow: visible;
   }
 
   .tone-row {
@@ -2625,6 +2788,7 @@ const styles = `
     background: transparent;
     text-align: inherit;
     border-radius: 12px;
+    overflow: visible; /* ป้องกัน browser ตัดส่วนที่ยื่นออกนอก button */
     transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
   }
 
@@ -2653,6 +2817,7 @@ const styles = `
     display: flex;
     align-items: center;
     position: relative;
+    overflow: visible;
     transition: none;
     transform: none;
   }
@@ -2680,6 +2845,7 @@ const styles = `
     white-space: nowrap;
     font-weight: 700;
     overflow: visible;
+    isolation: isolate; /* จัด Stacking Context ภายใน ไม่ให้ก้านโน้ตมุดหายใต้แถวหรือการ์ด */
     box-sizing: border-box;
     box-shadow: 0 4px 11px rgba(0,0,0,.24);
     transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
@@ -3031,7 +3197,8 @@ const styles = `
     justify-content: space-evenly;
     gap: 0;
     margin-top: 2vh;
-    overflow: hidden;
+    padding-top: 24px;
+    overflow: visible;
   }
 
   .display-tip {
