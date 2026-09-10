@@ -780,21 +780,21 @@ function calculateTones(word, mode, colorMid, colorHigh, colorLow) {
 
     const entries = [];
 
-    if (highMark !== undefined) {
-      entries.push({
-        consonant: pairedHigh,
-        mark: highMark,
-        color: colorHigh,
-        isComparison: consonantClass !== "high",
-      });
-    }
-
     if (lowMark !== undefined) {
       entries.push({
         consonant: pairedLow,
         mark: lowMark,
         color: colorLow,
         isComparison: consonantClass !== "low",
+      });
+    }
+
+    if (highMark !== undefined) {
+      entries.push({
+        consonant: pairedHigh,
+        mark: highMark,
+        color: colorHigh,
+        isComparison: consonantClass !== "high",
       });
     }
 
@@ -1247,10 +1247,8 @@ function getSpeechText(item) {
   if (!item?.show) return "";
 
   if (item.isMulti) {
-    return item.multi
-      .map((circle) => circle.ttsText || circle.text)
-      .filter(Boolean)
-      .join(" หรือ ");
+    // บรรทัดที่ 3 ที่มีอักษรต่ำ-สูงคู่เสียงเดียวกัน ให้ออกเสียงคำในวงกลมเพียงคำเดียว (คำแรก)
+    return item.multi[0]?.ttsText || item.multi[0]?.text || "";
   }
 
   return item.ttsText || item.word || "";
