@@ -2521,7 +2521,7 @@ export default function App() {
                       <ModeRadio value="full5" checked={mode === "full5"} label={t("แสดงชุดผัน 5 เสียงเมื่อมีกฎเทียบ (อักษรคู่ / ห นำ)", "Show 5 tones with paired / leading rules")} onChange={handleModeChange} />
                       <ModeRadio value="highOnly" checked={mode === "highOnly"} label={t("เฉพาะเสียงสูง (เอก, โท, จัตวา)", "High tone set only (Low, Falling, Rising)")} onChange={handleModeChange} />
                       <ModeRadio value="lowOnly" checked={mode === "lowOnly"} label={t("เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)", "Low tone set only (Mid, Falling, High)")} onChange={handleModeChange} />
-                      <ModeRadio value="pair" checked={mode === "pair"} label={t("จับคู่อักษร(เสียง)สูงและต่ำ เพื่อระบุกลุ่มอักษร", "Pair High & Low Class Consonants")} onChange={handleModeChange} />
+                      <ModeRadio value="pair" checked={mode === "pair"} label={t("จับคู่อักษร(เสียง)สูงและอักษร(เสียง)ต่ำ เพื่อระบุกลุ่มอักษร", "Pair High & Low Class Consonants")} onChange={handleModeChange} />
                     </div>
 
                     <div className="input-row">
@@ -3066,7 +3066,8 @@ const styles = `
   .main-grid > section {
     min-width: 0;
     min-height: 0;
-    overflow: hidden;
+    overflow-y: auto; /* เปลียนจาก hidden เป็นเลื่อนแนวตั้งได้ */
+    overflow-x: hidden;
   }
 
   .board-panel { padding: 30px 22px; min-width: 0; }
@@ -3118,7 +3119,7 @@ const styles = `
     70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
     100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
   }
-  .board-title { text-align: center; color: #ea580c; margin-bottom: 18px; }
+  .board-title { text-align: center; color: #6b21a8; margin-bottom: 18px; } /* เปลี่ยนเป็นสีม่วงแก่ */
   .board-title h2 { margin: 0; font-size: clamp(23px, 2.3vw, 30px); }
   .board-title div { font-size: clamp(16px, 1.5vw, 19px); font-weight: 600; }
 
@@ -3180,6 +3181,7 @@ const styles = `
     gap: 24px;
     padding-top: 28px; /* เว้นระยะด้านบน 28px ป้องกันก้านโน้ต/ไม้จัตวาของคำว่า ก๋อ ชนหรือล้นขอบบน */
     overflow: visible;
+    min-height: min-content; /* บังคับให้รักษาความสูงตามเนื้อหาจริง ไม่หดจนทับกัน */
   }
 
   .tone-row {
@@ -3586,7 +3588,8 @@ const styles = `
     box-shadow: 0 16px 42px rgba(0,0,0,.18);
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-y: auto; /* เปลียนจาก hidden เป็นเลื่อนแนวตั้งได้ */
+    overflow-x: hidden;
   }
 
   .display-board .tone-rows {
