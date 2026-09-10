@@ -1273,6 +1273,8 @@ function Board({
   fontSize = 20,
   staffBgColor = "#ffffff",
   lang = "th",
+  onPlayAllTones,
+  isPlayingAll = false,
 }) {
   const t = (th, en) => (lang === "en" ? en : th);
 
@@ -1547,6 +1549,38 @@ function Board({
           );
         })}
       </div>
+
+      <div className="board-footer-actions">
+        <button
+          type="button"
+          className={`auto-play-tones-btn ${isPlayingAll ? "playing" : ""}`}
+          onClick={onPlayAllTones}
+          title={t(
+            isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์อัตโนมัติ 5 เสียง (1 ➔ 5)",
+            isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play 5 tones ascending (1 ➔ 5)"
+          )}
+          aria-label="Auto play ascending tones"
+        >
+          {/* ลำโพงพร้อมลูกศรทะแยงขึ้น (Ascending Pitch Icon 1->5) */}
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polygon points="10 5 5 9 2 9 2 15 5 15 10 19 10 5" fill="currentColor" stroke="none" />
+            <path d="M15 15l6-6" stroke="currentColor" strokeWidth="2.2" />
+            <path d="M16 9h5v5" stroke="currentColor" strokeWidth="2.2" />
+          </svg>
+          <span className="auto-play-label">
+            {isPlayingAll ? t("กำลังออกเสียง...", "Playing...") : t("ผันเสียง 1-5", "Play 1-5")}
+          </span>
+        </button>
+      </div>
     </div>
   );
 }
@@ -1587,6 +1621,8 @@ export default function App() {
   const [staffBgColor, setStaffBgColor] = useState("#ffffff");
 
   const [activeRowId, setActiveRowId] = useState(null);
+  const [isPlayingAll, setIsPlayingAll] = useState(false);
+  const isCancelingAutoPlayRef = useRef(false);
   const [speechEnabled, setSpeechEnabled] = useState(false);
   const [speechRate, setSpeechRate] = useState(0.85);
   const [voices, setVoices] = useState([]);
@@ -1629,12 +1665,11 @@ export default function App() {
     return { backgroundColor: bgColor };
   }, [bgType, bgColor, bgImage]);
 
-  const speak = async (text) => {
+  const speak = async (text, force = false) => {
     if (
       typeof window === "undefined" ||
-      !speechEnabled ||
-      !text ||
-      !("speechSynthesis" in window)
+      (!speechEnabled && !force) ||
+      !text
     ) {
       return;
     }
@@ -1672,14 +1707,20 @@ export default function App() {
 
       speechRef.current = audio;
 
-      audio.onended = () => {
-        URL.revokeObjectURL(audioUrl);
-        if (speechRef.current === audio) {
-          speechRef.current = null;
-        }
-      };
-
-      await audio.play();
+      await new Promise((resolve) => {
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          if (speechRef.current === audio) {
+            speechRef.current = null;
+          }
+          resolve();
+        };
+        audio.onerror = () => {
+          URL.revokeObjectURL(audioUrl);
+          resolve();
+        };
+        audio.play().catch(() => resolve());
+      });
       return;
     } catch (err) {
       console.warn(
@@ -1711,8 +1752,61 @@ export default function App() {
     utterance.pitch = 1;
     utterance.volume = 1;
 
-    speechRef.current = utterance;
-    window.speechSynthesis.speak(utterance);
+    await new Promise((resolve) => {
+      utterance.onend = () => resolve();
+      utterance.onerror = () => resolve();
+      speechRef.current = utterance;
+      window.speechSynthesis.speak(utterance);
+    });
+  };
+
+  const handlePlayAllTones = async () => {
+    if (isDisplayWindow && typeof window !== "undefined" && "BroadcastChannel" in window) {
+      const ch = new BroadcastChannel(CHANNEL_NAME);
+      ch.postMessage({ type: "TRIGGER_PLAY_ALL" });
+      ch.close();
+    }
+
+    if (isPlayingAll) {
+      isCancelingAutoPlayRef.current = true;
+      if (speechRef.current instanceof HTMLAudioElement) {
+        speechRef.current.pause();
+        speechRef.current.currentTime = 0;
+      }
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+      setActiveRowId(null);
+      setIsPlayingAll(false);
+      return;
+    }
+
+    // เรียงลำดับจากเส้น 1 (ล่างสุด/เสียงสามัญ) ขึ้นไปเส้น 5 (บนสุด/เสียงจัตวา)
+    const ascendingIds = [1, 2, 3, 4, 5];
+    const playableItems = ascendingIds
+      .map((id) => linesData.find((item) => item.id === id))
+      .filter((item) => item && item.show && (item.word || (item.isMulti && item.multi.length > 0)));
+
+    if (!playableItems.length) return;
+
+    setIsPlayingAll(true);
+    isCancelingAutoPlayRef.current = false;
+
+    for (const item of playableItems) {
+      if (isCancelingAutoPlayRef.current) break;
+      setActiveRowId(item.id);
+      const textToSpeak = getSpeechText(item);
+      if (textToSpeak) {
+        await speak(textToSpeak, true);
+      }
+      if (isCancelingAutoPlayRef.current) break;
+      // เว้นช่วงสั้นๆ ระหว่างแต่ละเสียงเพื่อให้ฟังชัดเจนและออกเสียงตามได้ทัน
+      await new Promise((resolve) => setTimeout(resolve, 320));
+    }
+
+    setActiveRowId(null);
+    setIsPlayingAll(false);
+    isCancelingAutoPlayRef.current = false;
   };
 
   const handleRowClick = (item) => {
@@ -2036,6 +2130,7 @@ export default function App() {
 
     const listener = (event) => {
       if (event.data?.type === "REQUEST_SYNC") channel.postMessage(syncData);
+      if (event.data?.type === "TRIGGER_PLAY_ALL") handlePlayAllTones();
     };
 
     channel.addEventListener("message", listener);
@@ -2106,8 +2201,8 @@ export default function App() {
       <div className="view-buttons">
         <strong>{t("🖥️ มุมมอง:", "🖥️ View:")}</strong>
         {[
-          ["standard", t("แสดง 1 คอลัมน์", "1 Column")],
-          ["split", t("แสดง 2 คอลัมน์", "2 Columns")],
+          ["standard", t("1 คอลัมน์", "1 Column")],
+          ["split", t("2 คอลัมน์", "2 Columns")],
           ["present", t("พรีวิว", "Preview")],
         ].map(([value, label]) => (
           <button
@@ -2186,6 +2281,8 @@ export default function App() {
             fontSize={labelFontSize}
             staffBgColor={staffBgColor}
             lang={lang}
+            onPlayAllTones={handlePlayAllTones}
+            isPlayingAll={isPlayingAll}
           />
           
         </main>
@@ -2207,7 +2304,7 @@ export default function App() {
               className="preview-switch-btn"
               onClick={() => setViewLayout(previousLayout || "split")}
               title={t(
-                `สลับกลับไปมุมมองก่อนหน้า (${previousLayout === "standard" ? "แสดง 1 คอลัมน์" : "แสดง 2 คอลัมน์"})`,
+                `สลับกลับไปมุมมองก่อนหน้า (${previousLayout === "standard" ? "1 คอลัมน์" : "2 คอลัมน์"})`,
                 `Switch back to previous view (${previousLayout === "standard" ? "1 Column" : "2 Columns"})`
               )}
               aria-label="Switch back view"
@@ -2249,6 +2346,8 @@ export default function App() {
                 fontSize={labelFontSize}
                 staffBgColor={staffBgColor}
                 lang={lang}
+                onPlayAllTones={handlePlayAllTones}
+                isPlayingAll={isPlayingAll}
               />
             </section>
 
@@ -2839,6 +2938,51 @@ const styles = `
   .presentation-panel { padding: 45px 50px; }
 
   .tone-board { width: 100%; }
+
+  .board-footer-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin-top: 14px;
+    padding-right: 6px;
+  }
+
+  .auto-play-tones-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 15px;
+    border-radius: 999px;
+    background: #f0fdf4;
+    border: 1.5px solid #22c55e;
+    color: #15803d;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(34, 197, 94, 0.18);
+    transition: all .18s ease;
+  }
+
+  .auto-play-tones-btn:hover {
+    background: #16a34a;
+    color: #ffffff;
+    border-color: #16a34a;
+    transform: scale(1.04);
+    box-shadow: 0 4px 12px rgba(22, 163, 74, 0.28);
+  }
+
+  .auto-play-tones-btn.playing {
+    background: #15803d;
+    color: #ffffff;
+    border-color: #15803d;
+    animation: tonePulse 1.4s infinite;
+  }
+
+  @keyframes tonePulse {
+    0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }
+    70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+  }
   .board-title { text-align: center; color: #ea580c; margin-bottom: 18px; }
   .board-title h2 { margin: 0; font-size: clamp(23px, 2.3vw, 30px); }
   .board-title div { font-size: clamp(16px, 1.5vw, 19px); font-weight: 600; }
