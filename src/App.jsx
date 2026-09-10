@@ -1569,6 +1569,7 @@ export default function App() {
   }, [lang]);
   const [mode, setMode] = useState("full5");
   const [viewLayout, setViewLayout] = useState("split");
+  const [previousLayout, setPreviousLayout] = useState("split");
   const [inputText, setInputText] = useState("");
   const [lastValidInput, setLastValidInput] = useState("");
   const [inputError, setInputError] = useState("");
@@ -2112,7 +2113,12 @@ export default function App() {
           <button
             key={value}
             className={viewLayout === value ? "selected-btn" : "soft-btn"}
-            onClick={() => setViewLayout(value)}
+            onClick={() => {
+              if (value === "present") {
+                setPreviousLayout(viewLayout !== "present" ? viewLayout : "split");
+              }
+              setViewLayout(value);
+            }}
           >
             {label}
           </button>
@@ -2194,8 +2200,32 @@ export default function App() {
       <main className="app-page" style={containerBackground}>
         <div className="app-shell">
           
-          {/* กรณีโหมด present ให้ Top bar ยังคงลอยอยู่บนสุด */}
-          {viewLayout === "present" && renderTopBar({ marginBottom: "20px" })}
+          {/* ในโหมด present แสดงไอคอนสลับมุมมองที่มุมบนขวา เพื่อให้กระดานขยายเต็มพื้นที่จอ */}
+          {viewLayout === "present" && (
+            <button
+              type="button"
+              className="preview-switch-btn"
+              onClick={() => setViewLayout(previousLayout || "split")}
+              title={t(
+                `สลับกลับไปมุมมองก่อนหน้า (${previousLayout === "standard" ? "แสดง 1 คอลัมน์" : "แสดง 2 คอลัมน์"})`,
+                `Switch back to previous view (${previousLayout === "standard" ? "1 Column" : "2 Columns"})`
+              )}
+              aria-label="Switch back view"
+            >
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M16 3l4 4-4 4M20 7H4M8 21l-4-4 4-4M4 17h16" />
+              </svg>
+            </button>
+          )}
 
           <div className={`main-grid ${viewLayout === "split" ? "split-layout" : ""}`}>
             <section
@@ -2727,6 +2757,32 @@ const styles = `
     border: 1px solid #dbe4ee;
     box-shadow: 0 5px 20px rgba(15,23,42,.09);
     border-radius: 16px;
+  }
+
+  .preview-switch-btn {
+    position: fixed;
+    top: 18px;
+    right: 22px;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1.5px solid #0284c7;
+    color: #0284c7;
+    box-shadow: 0 4px 14px rgba(2, 132, 199, 0.25);
+    cursor: pointer;
+    transition: transform .18s ease, background .18s ease, color .18s ease, box-shadow .18s ease;
+  }
+
+  .preview-switch-btn:hover {
+    background: #0284c7;
+    color: #ffffff;
+    transform: scale(1.08);
+    box-shadow: 0 6px 18px rgba(2, 132, 199, 0.35);
   }
 
   .top-bar {
