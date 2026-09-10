@@ -1555,29 +1555,65 @@ function Board({
           type="button"
           className={`auto-play-tones-btn ${isPlayingAll ? "playing" : ""}`}
           onClick={onPlayAllTones}
-          title={t(
-            isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์อัตโนมัติ 5 เสียง (1 ➔ 5)",
-            isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play 5 tones ascending (1 ➔ 5)"
-          )}
-          aria-label="Auto play ascending tones"
+          title={
+            mode === "highOnly"
+              ? t(
+                  isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์เฉพาะเสียงสูง (5 ➔ 2 ➔ 3)",
+                  isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play high tones (5 ➔ 2 ➔ 3)"
+                )
+              : mode === "lowOnly"
+                ? t(
+                    isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์เฉพาะเสียงต่ำ (1 ➔ 3 ➔ 4)",
+                    isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play low tones (1 ➔ 3 ➔ 4)"
+                  )
+                : t(
+                    isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์อัตโนมัติ 5 เสียง (1 ➔ 5)",
+                    isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play 5 tones ascending (1 ➔ 5)"
+                  )
+          }
+          aria-label="Auto play tones"
         >
-          {/* ลำโพงพร้อมลูกศรทะแยงขึ้น (Ascending Pitch Icon 1->5) */}
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <polygon points="10 5 5 9 2 9 2 15 5 15 10 19 10 5" fill="currentColor" stroke="none" />
-            <path d="M15 15l6-6" stroke="currentColor" strokeWidth="2.2" />
-            <path d="M16 9h5v5" stroke="currentColor" strokeWidth="2.2" />
-          </svg>
+          {mode === "highOnly" ? (
+            /* ลำโพงพร้อมลูกศรลง สำหรับเสียงสูง 5-2-3 */
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polygon points="10 5 5 9 2 9 2 15 5 15 10 19 10 5" fill="currentColor" stroke="none" />
+              <path d="M15 9l6 6" stroke="currentColor" strokeWidth="2.2" />
+              <path d="M16 15h5v-5" stroke="currentColor" strokeWidth="2.2" />
+            </svg>
+          ) : (
+            /* ลำโพงพร้อมลูกศรขึ้น สำหรับเสียงต่ำ 1-3-4 หรือผัน 5 เสียง 1-5 */
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polygon points="10 5 5 9 2 9 2 15 5 15 10 19 10 5" fill="currentColor" stroke="none" />
+              <path d="M15 15l6-6" stroke="currentColor" strokeWidth="2.2" />
+              <path d="M16 9h5v5" stroke="currentColor" strokeWidth="2.2" />
+            </svg>
+          )}
           <span className="auto-play-label">
-            {isPlayingAll ? t("กำลังออกเสียง...", "Playing...") : t("ผันเสียง 1-5", "Play 1-5")}
+            {isPlayingAll
+              ? t("กำลังออกเสียง...", "Playing...")
+              : mode === "highOnly"
+                ? t("ผันเสียง 5-2-3", "Play 5-2-3")
+                : mode === "lowOnly"
+                  ? t("ผันเสียง 1-3-4", "Play 1-3-4")
+                  : t("ผันเสียง 1-5", "Play 1-5")}
           </span>
         </button>
       </div>
@@ -1781,9 +1817,15 @@ export default function App() {
       return;
     }
 
-    // เรียงลำดับจากเส้น 1 (ล่างสุด/เสียงสามัญ) ขึ้นไปเส้น 5 (บนสุด/เสียงจัตวา)
-    const ascendingIds = [1, 2, 3, 4, 5];
-    const playableItems = ascendingIds
+    // กำหนดลำดับการออกเสียงตามโหมดที่เลือก
+    let targetSequence = [1, 2, 3, 4, 5];
+    if (mode === "highOnly") {
+      targetSequence = [5, 2, 3]; // เฉพาะเสียงสูง: 5 -> 2 -> 3
+    } else if (mode === "lowOnly") {
+      targetSequence = [1, 3, 4]; // เฉพาะเสียงต่ำ: 1 -> 3 -> 4
+    }
+
+    const playableItems = targetSequence
       .map((id) => linesData.find((item) => item.id === id))
       .filter((item) => item && item.show && (item.word || (item.isMulti && item.multi.length > 0)));
 
