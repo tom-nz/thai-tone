@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import "./toneBoardPatch.js";   // ✅ เพิ่มบรรทัดนี้บรรทัดเดียว
+
 /**
  * =============================================================================
  * THAI LANGUAGE / TRIYANG (อักษร 3 หมู่) RULEBOOK FOR THIS APPLICATION
@@ -1278,22 +1278,11 @@ function Board({
   isDisplay = false,
   fontSize = 20,
   staffBgColor = "#ffffff",
-  lang = "th",
 }) {
-  const t = (th, en) => (lang === "en" ? en : th);
-
   const fixedRightLabels = {
-    5: { text: t("เสียงสูง", "High Pitch"), color: "#ef4444" },
-    3: { text: t("เสียงกลาง", "Mid Pitch"), color: "#22c55e" },
-    1: { text: t("เสียงต่ำ", "Low Pitch"), color: "#007bff" },
-  };
-
-  const toneNames = {
-    5: { th: "เสียงจัตวา", en: "Rising (Chattawa)" },
-    4: { th: "เสียงตรี", en: "High (Tri)" },
-    3: { th: "เสียงโท", en: "Falling (Tho)" },
-    2: { th: "เสียงเอก", en: "Low (Ek)" },
-    1: { th: "เสียงสามัญ", en: "Mid (Saman)" },
+    5: { text: "เสียงสูง", color: "#ef4444" },
+    3: { text: "เสียงกลาง", color: "#22c55e" },
+    1: { text: "เสียงต่ำ", color: "#007bff" },
   };
 
   const ratio = Math.max(0.8, fontSize / 20);
@@ -1323,8 +1312,8 @@ function Board({
       style={isDisplay ? { backgroundColor: staffBgColor } : {}}
     >
       <div className="board-title">
-        <h2>{t("ไตรยางศ์ หรือ อักษร 3 หมู่", "Three Consonant Classes (Triyang)")}</h2>
-        <div>{t("และการผันวรรณยุกต์", "Tone Rules & Musical Staves")}</div>
+        <h2>ไตรยางศ์ หรือ อักษร 3 หมู่</h2>
+        <div>และการผันวรรณยุกต์</div>
       </div>
 
       {(() => {
@@ -1386,32 +1375,13 @@ function Board({
 
         if (!analyses.length) return null;
 
-        const getLabelText = (lbl) => {
-          if (lbl === "อักษรกลาง") return t("อักษรกลาง", "Mid Class");
-          if (lbl === "เสียงสูง") return t("เสียงสูง", "High Tone");
-          if (lbl === "เสียงต่ำ") return t("เสียงต่ำ", "Low Tone");
-          return lbl;
-        };
-
-        const translateType = (type) => {
-          if (type === "คำเป็น") return t("คำเป็น", "Live Syllable");
-          if (type === "คำตาย") return t("คำตาย", "Dead Syllable");
-          return type;
-        };
-
-        const translateVowel = (v) => {
-          if (v === "สระเสียงยาว") return t("สระเสียงยาว", "Long Vowel");
-          if (v === "สระเสียงสั้น") return t("สระเสียงสั้น", "Short Vowel");
-          return v;
-        };
-
         return (
           <div className="analysis-box">
             {analyses.map(({ label, word, info }, index) => (
               <div className="analysis-item" key={`${label}-${word}-${index}`}>
-                📌 {t("ผลวิเคราะห์หลักภาษา", "Linguistic Analysis")} ({getLabelText(label)}): <strong>"{word}"</strong> {t("เป็น", "is")}{" "}
+                📌 ผลวิเคราะห์หลักภาษา ({label}): <strong>"{word}"</strong> เป็น{" "}
                 <span className="analysis-tag">
-                  {translateType(info.type)} ({translateVowel(info.vowelLen)})
+                  {info.type} ({info.vowelLen})
                 </span>{" "}
                 — {info.desc}
               </div>
@@ -1421,7 +1391,7 @@ function Board({
       })()}
 
       <div className="tone-header">
-        <span>{t("รูปวรรณยุกต์", "Tone Mark")}</span>
+        <span>รูปวรรณยุกต์</span>
       </div>
 
       <div className="tone-rows">
@@ -1440,7 +1410,7 @@ function Board({
               className={`tone-row ${isActive ? "active" : ""} ${!item.show ? "disabled-tone-row" : ""}`}
               key={item.id}
               onClick={() => onRowClick(item)}
-              title={item.show ? `${t("คลิกเพื่อขยายและอ่านคำ", "Click to zoom and speak")} ${getSpeechText(item)}` : ""}
+              title={item.show ? `คลิกเพื่อขยายและอ่านคำ ${getSpeechText(item)}` : ""}
             >
               <div
                 className="tone-name"
@@ -1449,7 +1419,7 @@ function Board({
                   fontSize: textSize,
                 }}
               >
-                {t(item.tone, toneNames[item.id]?.en || item.tone)} <span>[ {item.mark} ]</span>
+                {item.tone} <span>[ {item.mark} ]</span>
               </div>
 
               <div className="tone-line-wrap">
@@ -1504,20 +1474,6 @@ function Board({
 
 export default function App() {
   const [isDisplayWindow, setIsDisplayWindow] = useState(false);
-  const [lang, setLang] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("thai_tone_lang") || "th";
-    }
-    return "th";
-  });
-
-  const t = (th, en) => (lang === "en" ? en : th);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("thai_tone_lang", lang);
-    }
-  }, [lang]);
   const [mode, setMode] = useState("full5");
   const [viewLayout, setViewLayout] = useState("split");
   const [inputText, setInputText] = useState("");
@@ -1537,9 +1493,6 @@ export default function App() {
   const [staffBgColor, setStaffBgColor] = useState("#ffffff");
 
   const [activeRowId, setActiveRowId] = useState(null);
-  const [viewPanelHeight, setViewPanelHeight] = useState(560);
-  const [isResizingViewPanel, setIsResizingViewPanel] = useState(false);
-  const viewResizeStartRef = useRef(null);
   const [speechEnabled, setSpeechEnabled] = useState(false);
   const [speechRate, setSpeechRate] = useState(0.85);
   const [voices, setVoices] = useState([]);
@@ -1917,7 +1870,6 @@ export default function App() {
       speechEnabled,
       speechRate,
       selectedVoiceURI,
-      lang,
     ],
   );
 
@@ -2012,7 +1964,6 @@ export default function App() {
       if (data.speechEnabled !== undefined) setSpeechEnabled(data.speechEnabled);
       if (data.speechRate) setSpeechRate(data.speechRate);
       if (data.selectedVoiceURI !== undefined) setSelectedVoiceURI(data.selectedVoiceURI);
-      if (data.lang) setLang(data.lang);
     };
 
     try {
@@ -2045,54 +1996,11 @@ export default function App() {
     channel.close();
   };
 
-  const handleViewPanelResizeStart = (event) => {
-    if (typeof window === "undefined" || viewLayout !== "standard") return;
-
-    event.preventDefault();
-
-    viewResizeStartRef.current = {
-      startY: event.clientY,
-      startHeight: viewPanelHeight,
-    };
-    setIsResizingViewPanel(true);
-  };
-
-  useEffect(() => {
-    if (!isResizingViewPanel || typeof window === "undefined") return;
-
-    const handlePointerMove = (event) => {
-      const start = viewResizeStartRef.current;
-      if (!start) return;
-
-      const deltaY = event.clientY - start.startY;
-      const nextHeight = Math.max(520, Math.min(900, start.startHeight + deltaY));
-      setViewPanelHeight(nextHeight);
-    };
-
-    const handlePointerUp = () => {
-      viewResizeStartRef.current = null;
-      setIsResizingViewPanel(false);
-    };
-
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
-    window.addEventListener("pointercancel", handlePointerUp);
-
-    return () => {
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-      window.removeEventListener("pointercancel", handlePointerUp);
-    };
-  }, [isResizingViewPanel, viewLayout]);
-
   // Component สำหรับสร้าง Top Bar แบบใช้ซ้ำ
   const renderTopBar = (extraStyle = {}) => (
-    <section
-      className="top-bar panel"
-      style={extraStyle}
-    >
+    <section className="top-bar panel" style={extraStyle}>
       <div className="view-buttons">
-        <strong>{t("🖥️ มุมมอง:", "🖥️ View:")}</strong>
+        <strong>🖥️ มุมมอง:</strong>
         {[
           ["standard", "ชิดเดียว"],
           ["split", "แบ่ง 2 จอ"],
@@ -2110,39 +2018,10 @@ export default function App() {
 
       <div className="monitor-buttons">
         <button className="blue-btn" onClick={sendFullscreenToDisplay}>
-          {t("⛶ สลับเต็มจอ จอที่ 2", "⛶ Fullscreen Screen 2")}
+          ⛶ สลับเต็มจอ จอที่ 2
         </button>
         <button className="green-btn" onClick={handleOpenDualMonitor}>
-          {t("🚀 เปิดกระดานแยกขึ้นมอนิเตอร์ที่ 2", "🚀 Open Dual Monitor")}
-        </button>
-        <button
-          type="button"
-          onClick={() => setLang((l) => (l === "th" ? "en" : "th"))}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "6px",
-            padding: "8px 14px",
-            borderRadius: "8px",
-            border: "1.5px solid #0284c7",
-            background: lang === "th" ? "#f0f9ff" : "#f0fdf4",
-            color: "#0369a1",
-            fontWeight: "700",
-            fontSize: "13px",
-            cursor: "pointer",
-            transition: "all .18s ease",
-            boxShadow: "0 2px 6px rgba(2,132,199,.15)",
-          }}
-          title={lang === "th" ? "Switch interface to English" : "เปลี่ยนอินเทอร์เฟซเป็นภาษาไทย"}
-        >
-          <span>🌐</span>
-          <span style={{ color: lang === "th" ? "#0284c7" : "#94a3b8", fontWeight: lang === "th" ? "800" : "500" }}>
-            ไทย
-          </span>
-          <span style={{ color: "#94a3b8" }}>/</span>
-          <span style={{ color: lang === "en" ? "#16a34a" : "#94a3b8", fontWeight: lang === "en" ? "800" : "500" }}>
-            English
-          </span>
+          🚀 เปิดกระดานแยกขึ้นมอนิเตอร์ที่ 2
         </button>
       </div>
     </section>
@@ -2168,9 +2047,8 @@ export default function App() {
             isDisplay
             fontSize={labelFontSize}
             staffBgColor={staffBgColor}
-            lang={lang}
           />
-          <div className="display-tip">{t("ดับเบิลคลิกพื้นที่ว่างเพื่อสลับเต็มจอ • คลิกบรรทัดเพื่อขยายและอ่านออกเสียง", "Double-click empty space to toggle fullscreen • Click line to zoom & speak")}</div>
+          <div className="display-tip">ดับเบิลคลิกพื้นที่ว่างเพื่อสลับเต็มจอ • คลิกบรรทัดเพื่อขยายและอ่านออกเสียง</div>
         </main>
       </>
     );
@@ -2186,20 +2064,9 @@ export default function App() {
           {/* กรณีโหมด present ให้ Top bar ยังคงลอยอยู่บนสุด */}
           {viewLayout === "present" && renderTopBar({ marginBottom: "20px" })}
 
-          <div
-            className={`main-grid ${viewLayout === "split" ? "split-layout" : ""}`}
-            style={
-              viewLayout === "standard"
-                ? {
-                    gridTemplateRows: `minmax(${viewPanelHeight}px, max-content) minmax(0, 1fr)`,
-                  }
-                : undefined
-            }
-          >
+          <div className={`main-grid ${viewLayout === "split" ? "split-layout" : ""}`}>
             <section
-              className={`panel board-frame ${
-                viewLayout === "standard" ? "board-frame-resizable" : ""
-              } ${isResizingViewPanel ? "resizing-board-frame" : ""}`}
+              className="panel"
               style={{
                 backgroundColor: staffBgColor,
                 borderRadius: "16px",
@@ -2218,24 +2085,10 @@ export default function App() {
                 mode={mode}
                 fontSize={labelFontSize}
                 staffBgColor={staffBgColor}
-                lang={lang}
               />
-
-              {viewLayout === "standard" && (
-                <div
-                  className="board-frame-resizer"
-                  onPointerDown={handleViewPanelResizeStart}
-                  role="separator"
-                  aria-orientation="horizontal"
-                  aria-label="ปรับขนาดเฟรมหัวเรื่องและบรรทัด 5 เส้น"
-                  title="ลากเพื่อขยายหรือย่อเฟรมการแสดงผล"
-                >
-                  <span />
-                </div>
-              )}
             </section>
 
-            {/* เฟรมมุมมองและแผงควบคุมอยู่ต่อจากเฟรมการแสดงผลเสมอ */}
+            {/* กรณีที่ไม่ใช่โหมด present ให้ Top bar และแผงควบคุมอยู่ในกล่องด้านขวา */}
             {viewLayout !== "present" && (
               <div
                 className="right-panel-wrapper"
@@ -2243,20 +2096,23 @@ export default function App() {
                   display: "flex",
                   flexDirection: "column",
                   gap: "20px",
-                  minHeight: 0,
-                  height: "100%",
-                  position: "relative"
+                  maxHeight: "calc(100vh - 42px)",
+                  position: "sticky",
+                  top: "20px"
                 }}
               >
-                {/* แผงควบคุมเป็นพื้นที่หลักเพียงกล่องเดียว และรวมมุมมองไว้ด้านล่าง */}
+                {/* เฟรมมุมมองอยู่ด้านบน */}
+                {renderTopBar({ marginBottom: 0 })}
+
+                {/* เฟรมแผงควบคุมอยู่ด้านล่าง และสามารถเลื่อน Scroll ได้อิสระ */}
                 <aside 
                   className="control-panel panel" 
                   style={{ flex: 1, overflowY: "auto", position: "static", maxHeight: "none", margin: 0 }}
                 >
-                  <h3>{t("⚙️ แผงควบคุม", "⚙️ Control Panel")}</h3>
+                  <h3>⚙️ แผงควบคุม</h3>
 
                   <section className="control-group">
-                    <strong>{t("✨ ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ", "✨ AI Tone Inflection Assistant")}</strong>
+                    <strong>✨ ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ</strong>
 
                     {inputText.trim() !== "" && (
                       <div
@@ -2269,16 +2125,16 @@ export default function App() {
                           color: "#334155",
                         }}
                       >
-                        <ModeRadio value="full5" checked={mode === "full5"} label={t("แสดงชุดผัน 5 เสียงเมื่อมีกฎเทียบ (อักษรคู่ / ห นำ)", "Show 5 tones with paired / leading rules")} onChange={setMode} />
-                        <ModeRadio value="highOnly" checked={mode === "highOnly"} label={t("เฉพาะเสียงสูง (เอก, โท, จัตวา)", "High tone set only (Low, Falling, Rising)")} onChange={setMode} />
-                        <ModeRadio value="lowOnly" checked={mode === "lowOnly"} label={t("เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)", "Low tone set only (Mid, Falling, High)")} onChange={setMode} />
+                        <ModeRadio value="full5" checked={mode === "full5"} label="แสดงชุดผัน 5 เสียงเมื่อมีกฎเทียบ (อักษรคู่ / ห นำ)" onChange={setMode} />
+                        <ModeRadio value="highOnly" checked={mode === "highOnly"} label="เฉพาะเสียงสูง (เอก, โท, จัตวา)" onChange={setMode} />
+                        <ModeRadio value="lowOnly" checked={mode === "lowOnly"} label="เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)" onChange={setMode} />
                       </div>
                     )}
 
                     <div className="input-row">
                       <input
                         value={inputText}
-                        placeholder={t("พิมพ์ 1 คำ เช่น กอ, เมา, กวาง", "Type 1 word, e.g. กอ, เมา, กวาง")}
+                        placeholder="พิมพ์ 1 คำ เช่น กอ, เมา, กวาง"
                         onChange={(event) => {
                           const val = event.target.value;
                           setInputText(val);
@@ -2312,7 +2168,7 @@ export default function App() {
                   </section>
 
                   <section>
-                    <div className="section-label">{t("⌨️ เลือกพยัญชนะด่วน (๔๔ ตัว):", "⌨️ Quick Consonants (44 Letters):")}</div>
+                    <div className="section-label">⌨️ เลือกพยัญชนะด่วน (๔๔ ตัว):</div>
                     <div className="consonant-grid">
                       {quickConsonants.map((consonant) => (
                         <button
@@ -2336,7 +2192,7 @@ export default function App() {
                     <div className="low-class-groups">
                       <div className="low-class-group">
                         <div className="section-label low-pair-label">
-                          {t("🟣 อักษรต่ำคู่ (๑๔ ตัว)", "🟣 Paired Low Consonants (14 Letters)")}
+                          🟣 อักษรต่ำคู่ (๑๔ ตัว)
                         </div>
                         <div className="low-consonant-grid">
                           {lowPairConsonants.map((consonant) => (
@@ -2356,7 +2212,7 @@ export default function App() {
 
                       <div className="low-class-group">
                         <div className="section-label low-single-label">
-                          {t("🔵 อักษรต่ำเดี่ยว (๑๐ ตัว)", "🔵 Single Low Consonants (10 Letters)")}
+                          🔵 อักษรต่ำเดี่ยว (๑๐ ตัว)
                         </div>
                         <div className="low-consonant-grid">
                           {lowSingleConsonants.map((consonant) => (
@@ -2378,7 +2234,7 @@ export default function App() {
                     <div className="cluster-groups">
                       <div>
                         <div className="section-label cluster-label">
-                          {t("🔗 ควบกล้ำแท้", "🔗 True Clusters")}
+                          🔗 ควบกล้ำแท้
                         </div>
                         <div className="cluster-grid">
                           {trueClusters.map((cluster) => (
@@ -2398,7 +2254,7 @@ export default function App() {
 
                       <div>
                         <div className="section-label cluster-label">
-                          {t("🟣 อักษรนำ ห-นำ", "🟣 Leading ห- Clusters")}
+                          🟣 อักษรนำ ห-นำ
                         </div>
                         <div className="cluster-grid">
                           {leadingHoClusters.map((cluster) => (
@@ -2418,7 +2274,7 @@ export default function App() {
 
                       <div>
                         <div className="section-label cluster-label">
-                          {t("🟠 ควบกล้ำไม่แท้", "🟠 False Clusters")}
+                          🟠 ควบกล้ำไม่แท้
                         </div>
                         <div className="cluster-grid">
                           {falseClusters.map((cluster) => (
@@ -2439,7 +2295,7 @@ export default function App() {
                   </section>
 
                   <section>
-                    <div className="section-label green-label">{t("🟢 สระเสียงยาว (คำเป็น):", "🟢 Long Vowels (Live Syllables):")}</div>
+                    <div className="section-label green-label">🟢 สระเสียงยาว (คำเป็น):</div>
                     <div className="vowel-list">
                       {longVowels.map((vowel) => (
                         <button
@@ -2452,7 +2308,7 @@ export default function App() {
                       ))}
                     </div>
 
-                    <div className="section-label red-label">{t("🔴 สระเสียงสั้น (คำตาย):", "🔴 Short Vowels (Dead Syllables):")}</div>
+                    <div className="section-label red-label">🔴 สระเสียงสั้น (คำตาย):</div>
                     <div className="vowel-list">
                       {shortVowels.map((vowel) => (
                         <button
@@ -2467,7 +2323,7 @@ export default function App() {
                   </section>
 
                   <section className="control-group">
-                    <strong>{t("🔊 การอ่านออกเสียง", "🔊 Speech & Voice")}</strong>
+                    <strong>🔊 การอ่านออกเสียง</strong>
 
                     <label className="toggle-label">
                       <input
@@ -2475,16 +2331,16 @@ export default function App() {
                         checked={speechEnabled}
                         onChange={(event) => setSpeechEnabled(event.target.checked)}
                       />
-                      {t("เปิดเสียงเมื่อคลิกบรรทัด", "Enable voice on row click")}
+                      เปิดเสียงเมื่อคลิกบรรทัด
                     </label>
 
                     <label className="select-label">
-                      {t("เสียงอ่าน", "Voice")}
+                      เสียงอ่าน
                       <select
                         value={selectedVoiceURI}
                         onChange={(event) => setSelectedVoiceURI(event.target.value)}
                       >
-                        <option value="">{t("เลือกอัตโนมัติ", "Auto Select")}</option>
+                        <option value="">เลือกอัตโนมัติ</option>
                         {voices
                           .filter((voice) =>
                             voice.lang?.toLowerCase().startsWith("th"),
@@ -2507,7 +2363,7 @@ export default function App() {
                     )}
 
                     <label className="select-label">
-                      {t("ความเร็วอ่าน:", "Speech Rate:")} {speechRate}x
+                      ความเร็วอ่าน: {speechRate}x
                       <input
                         type="range"
                         min="0.5"
@@ -2525,7 +2381,7 @@ export default function App() {
                         speak(item ? getSpeechText(item) : inputText);
                       }}
                     >
-                      ▶ {t("ทดลองอ่านคำ", "Test Voice")}
+                      ▶ ทดลองอ่านคำ
                     </button>
                   </section>
 
@@ -2538,16 +2394,16 @@ export default function App() {
                         marginBottom: "8px",
                       }}
                     >
-                      {t("🎼 สีพื้นหลังกระดานบรรทัด 5 เส้น", "🎼 5-Line Staff Background")}
+                      🎼 สีพื้นหลังกระดานบรรทัด 5 เส้น
                     </div>
 
                     <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                       {[
-                        { label: t("ขาว", "White"), value: "#ffffff" },
-                        { label: t("ครีม", "Cream"), value: "#fffbeb" },
-                        { label: t("ฟ้าอ่อน", "Soft Blue"), value: "#f0f9ff" },
-                        { label: t("เขียวอ่อน", "Soft Green"), value: "#f0fdf4" },
-                        { label: t("เทาอ่อน", "Soft Gray"), value: "#f8fafc" },
+                        { label: "ขาว", value: "#ffffff" },
+                        { label: "ครีม", value: "#fffbeb" },
+                        { label: "ฟ้าอ่อน", value: "#f0f9ff" },
+                        { label: "เขียวอ่อน", value: "#f0fdf4" },
+                        { label: "เทาอ่อน", value: "#f8fafc" },
                       ].map((item) => (
                         <button
                           key={item.value}
@@ -2588,13 +2444,13 @@ export default function App() {
                   </section>
 
                   <section>
-                    <div className="section-label">{t("🎨 ตั้งค่าสีประจำหมู่ และสีตัวอักษร", "🎨 Consonant Class & Text Colors")}</div>
+                    <div className="section-label">🎨 ตั้งค่าสีประจำหมู่ และสีตัวอักษร</div>
                     <div className="color-grid">
                       {[
-                        [t("อักษรกลาง", "Mid Class"), colorMid, setColorMid],
-                        [t("อักษรสูง", "High Class"), colorHigh, setColorHigh],
-                        [t("อักษรต่ำ", "Low Class"), colorLow, setColorLow],
-                        [t("สีตัวอักษร", "Text Color"), circleTextColor, setCircleTextColor],
+                        ["อักษรกลาง", colorMid, setColorMid],
+                        ["อักษรสูง", colorHigh, setColorHigh],
+                        ["อักษรต่ำ", colorLow, setColorLow],
+                        ["สีตัวอักษร", circleTextColor, setCircleTextColor],
                       ].map(([label, value, setter]) => (
                         <label
                           key={label}
@@ -2616,15 +2472,15 @@ export default function App() {
                   </section>
 
                   <section className="control-group">
-                    <strong>{t("🖼️ เลือกสีหรือรูปภาพพื้นหลังจอภาพรวม", "🖼️ Overall Screen Background")}</strong>
+                    <strong>🖼️ เลือกสีหรือรูปภาพพื้นหลังจอภาพรวม</strong>
                     <div className="background-colors">
                       {[
-                        [t("เทา", "Gray"), "#e2e8f0"],
-                        [t("สว่าง", "Light"), "#f1f5f9"],
-                        [t("ฟ้าอ่อน", "Soft Blue"), "#e0f2fe"],
-                        [t("มินต์", "Mint"), "#dcfce7"],
-                        [t("ส้มอ่อน", "Soft Orange"), "#fef3c7"],
-                        [t("เข้ม", "Dark"), "#334155"],
+                        ["เทา", "#e2e8f0"],
+                        ["สว่าง", "#f1f5f9"],
+                        ["ฟ้าอ่อน", "#e0f2fe"],
+                        ["มินต์", "#dcfce7"],
+                        ["ส้มอ่อน", "#fef3c7"],
+                        ["เข้ม", "#334155"],
                       ].map(([label, color]) => (
                         <button
                           key={color}
@@ -2644,7 +2500,7 @@ export default function App() {
                     </div>
 
                     <label className="upload-btn">
-                      {t("📁 อัปโหลดรูปภาพพื้นหลัง", "📁 Upload Background Image")}
+                      📁 อัปโหลดรูปภาพพื้นหลัง
                       <input type="file" accept="image/*" onChange={handleImageUpload} />
                     </label>
 
@@ -2656,14 +2512,14 @@ export default function App() {
                           setBgImage("");
                         }}
                       >
-                        {t("ยกเลิกรูปภาพ", "Remove Image")}
+                        ยกเลิกรูปภาพ
                       </button>
                     )}
                   </section>
 
                   <section className="control-group">
                     <label className="select-label">
-                      {t("📐 ขนาดตัวหนังสือและวงกลม (จอที่ 2):", "📐 Font & Circle Size (Screen 2):")} {labelFontSize}px
+                      📐 ขนาดตัวหนังสือและวงกลม (จอที่ 2): {labelFontSize}px
                       <input
                         type="range"
                         min="16"
@@ -2679,38 +2535,30 @@ export default function App() {
                       className="api-toggle"
                       onClick={() => setShowApiInput((value) => !value)}
                     >
-                      🔑 {customApiKey ? t("เปลี่ยน Gemini API Key", "Change Gemini API Key") : t("เชื่อมต่อ AI (API Key)", "Connect AI (API Key)")}
+                      🔑 {customApiKey ? "เปลี่ยน Gemini API Key" : "เชื่อมต่อ AI (API Key)"}
                     </button>
 
                     {showApiInput && (
                       <div className="api-input-box">
-                        <strong>{t("🔑 เชื่อมต่อ Gemini API Key ส่วนตัว:", "🔑 Connect Personal Gemini API Key:")}</strong>
+                        <strong>🔑 เชื่อมต่อ Gemini API Key ส่วนตัว:</strong>
                         <div className="input-row">
                           <input
                             type="password"
                             value={tempApiKey}
-                            placeholder={t("วาง Gemini API Key...", "Paste Gemini API Key...")}
+                            placeholder="วาง Gemini API Key..."
                             onChange={(event) => setTempApiKey(event.target.value)}
                             onKeyDown={(event) => {
                               if (event.key === "Enter") handleSaveApiKey();
                             }}
                           />
                           <button className="green-btn" onClick={handleSaveApiKey}>
-                            {t("บันทึก", "Save")}
+                            บันทึก
                           </button>
                         </div>
                         {apiSaveStatus && <div className="success-text">✓ {apiSaveStatus}</div>}
                       </div>
                     )}
                   </section>
-
-                  {/* กล่องมุมมองย้ายมาอยู่ล่างสุดของแผงควบคุม ต่อจาก เชื่อมต่อ AI (API Key) */}
-                  {renderTopBar({
-                    marginBottom: 0,
-                    flex: "0 0 auto",
-                    width: "100%",
-                    boxSizing: "border-box",
-                  })}
                 </aside>
               </div>
             )}
@@ -2763,9 +2611,6 @@ const styles = `
     gap: 12px;
     padding: 14px 18px;
     flex-wrap: wrap;
-    position: relative;
-    overflow: visible;
-    min-height: 96px;
   }
 
   .view-buttons, .monitor-buttons, .input-row, .vowel-list, .background-colors {
@@ -2801,35 +2646,6 @@ const styles = `
 
   .main-grid.split-layout {
     grid-template-columns: minmax(0, 1fr) 410px;
-    grid-template-rows: minmax(0, 1fr);
-  }
-
-  /* โหมดแบ่ง 2 จอ: ฝั่งซ้าย = การแสดงผล, ฝั่งขวา = มุมมอง + แผงควบคุม */
-  .main-grid.split-layout .board-frame {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .main-grid.split-layout .right-panel-wrapper {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  /* โหมดชิดเดียว: เฟรมการแสดงผลอยู่ด้านบน และมุมมอง/แผงควบคุมอยู่ด้านล่าง */
-  .main-grid:not(.split-layout) {
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(260px, auto) minmax(0, 1fr);
-  }
-
-  /* โหมดชิดเดียว: ให้เฟรม 5 เส้นขยายตามเนื้อหาที่จำเป็น
-     และไม่ตัดวงกลมหรือเส้นทั้งแนวตั้ง/แนวนอน */
-  .main-grid:not(.split-layout) .board-frame {
-    overflow: visible;
-  }
-
-  .main-grid:not(.split-layout) .tone-rows {
-    overflow: visible;
-    gap: clamp(12px, 2.2vh, 24px);
   }
 
   .main-grid > section {
@@ -2892,16 +2708,15 @@ const styles = `
 
   .tone-header, .tone-row {
     display: grid;
-    grid-template-columns: minmax(112px, 30%) minmax(0, 1fr) minmax(52px, 14%);
+    grid-template-columns: 215px minmax(190px, 1fr) 100px;
     align-items: center;
-    min-width: 0;
   }
 
   .tone-header {
     color: #0284c7;
     font-size: 14px;
     font-weight: 700;
-    margin-bottom: 8px;
+    margin-bottom: 3px;
   }
 
   .tone-header span { text-align: right; padding-right: 20px; }
@@ -2912,6 +2727,16 @@ const styles = `
     display: flex;
     flex-direction: column;
     gap: 24px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .tone-rows::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
   }
 
   .tone-row {
@@ -2920,7 +2745,6 @@ const styles = `
     background: transparent;
     text-align: inherit;
     border-radius: 12px;
-    overflow: visible; /* ป้องกัน browser ตัดส่วนที่ยื่นออกนอก button */
     transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
   }
 
@@ -2946,14 +2770,11 @@ const styles = `
 
   .tone-line-wrap {
     height: 34px;
-    min-width: 0;
     display: flex;
     align-items: center;
     position: relative;
-    overflow: visible;
     transition: none;
     transform: none;
-    overflow: visible;
   }
 
   .tone-line {
@@ -2979,7 +2800,6 @@ const styles = `
     white-space: nowrap;
     font-weight: 700;
     overflow: visible;
-    isolation: isolate; /* จัด Stacking Context ภายใน ไม่ให้ก้านโน้ตมุดหายใต้แถวหรือการ์ด */
     box-sizing: border-box;
     box-shadow: 0 4px 11px rgba(0,0,0,.24);
     transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
@@ -3015,138 +2835,9 @@ const styles = `
   .slash { color: #64748b; font-size: 21px; font-weight: 700; }
   .fixed-tone-label { text-align: center; font-size: 16px; font-weight: 700; }
 
-  /* กล่องมุมมองถูกย้ายมาเป็นส่วนหนึ่งของแผงควบคุม */
-  .control-panel > .top-bar {
-    width: 100%;
-    flex: 0 0 auto;
-    min-height: 0;
-    margin-top: 0;
-    padding: 12px;
-  }
-
-  .control-panel > .top-bar .view-buttons,
-  .control-panel > .top-bar .monitor-buttons {
-    min-width: 0;
-  }
-
-  .control-panel > .top-bar .view-buttons {
-    flex: 1 1 auto;
-  }
-
-  .control-panel > .top-bar .monitor-buttons {
-    flex: 1 1 auto;
-  }
-
-  /* ให้ Board คำนวณพื้นที่จากขนาดเฟรมจริงทั้งแนวกว้างและแนวสูง
-     เพื่อไม่ให้วงกลม/สถานะขยายถูกตัดในทุกขนาดจอ */
-  .main-grid .board-frame {
-    container-type: inline-size;
-  }
-
-  .main-grid .tone-line-wrap {
-    min-width: 0;
-    padding-right: clamp(10px, 2.5cqw, 28px);
-  }
-
-  .main-grid .tone-circle {
-    width: clamp(34px, 7.2cqw, 48px) !important;
-    min-width: clamp(34px, 7.2cqw, 48px) !important;
-    max-width: clamp(34px, 7.2cqw, 48px) !important;
-    height: clamp(34px, 7.2cqw, 48px) !important;
-    flex-basis: clamp(34px, 7.2cqw, 48px) !important;
-  }
-
-  /* พื้นที่แสดงผลต้องไม่ถูกตัด แม้แถวสุดท้ายจะเป็นแถว Active */
-  .main-grid .tone-rows {
-    min-height: 0;
-    padding: 2px 0;
-  }
-
-  .main-grid .tone-row.active {
-    transform: scale(1.01);
-  }
-
-  .main-grid .tone-row.active .tone-circle {
-    transform: translate3d(-50%, -50%, 0) scale(1.18);
-  }
-
   .right-panel-wrapper {
-    min-width: 0;
     min-height: 0;
     height: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-
-  /* ปุ่มในกล่องมุมมองด้านล่างต้องไม่ล้นกรอบ โดยปรับขนาดตามพื้นที่แผงควบคุม */
-  .control-panel > .top-bar .view-buttons,
-  .control-panel > .top-bar .monitor-buttons {
-    flex-wrap: nowrap;
-  }
-
-  .control-panel > .top-bar .soft-btn,
-  .control-panel > .top-bar .selected-btn,
-  .control-panel > .top-bar .blue-btn,
-  .control-panel > .top-bar .green-btn {
-    min-width: 0;
-    flex: 1 1 0;
-    padding: 7px 6px;
-    font-size: 12px;
-    white-space: nowrap;
-  }
-
-  .control-panel > .top-bar .view-buttons strong {
-    flex: 0 0 auto;
-    font-size: 13px;
-  }
-
-  .control-panel > .top-bar .monitor-buttons .blue-btn,
-  .control-panel > .top-bar .monitor-buttons .green-btn {
-    font-size: 11px;
-    padding-left: 5px;
-    padding-right: 5px;
-  }
-
-  .control-panel > .top-bar .monitor-buttons .blue-btn {
-    font-size: 10px;
-  }
-
-  .board-frame {
-    position: relative;
-    min-width: 0;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-
-  .board-frame-resizer {
-    position: absolute;
-    left: 10px;
-    right: 10px;
-    bottom: 0;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: ns-resize;
-    touch-action: none;
-    z-index: 20;
-  }
-
-  .board-frame-resizer span {
-    width: 72px;
-    height: 5px;
-    border-radius: 999px;
-    background: #94a3b8;
-    box-shadow: 0 1px 4px rgba(15, 23, 42, .18);
-    transition: background .15s ease, transform .15s ease;
-  }
-
-  .board-frame-resizer:hover span,
-  .resizing-board-frame .board-frame-resizer span {
-    background: #0284c7;
-    transform: scaleX(1.12);
   }
 
   .control-panel {
@@ -3460,8 +3151,7 @@ const styles = `
     justify-content: space-evenly;
     gap: 0;
     margin-top: 2vh;
-    padding-top: 24px;
-    overflow: visible;
+    overflow: hidden;
   }
 
   .display-tip {
@@ -3486,21 +3176,8 @@ const styles = `
       height: calc(100dvh - 44px);
     }
 
-    /* คงโหมดแบ่ง 2 จอไว้บน Tablet/จอแคบระดับกลาง
-       เพื่อให้เฟรมการแสดงผลอยู่ซ้าย และมุมมอง+แผงควบคุมอยู่ขวา */
     .main-grid.split-layout {
-      grid-template-columns: minmax(0, 1fr) 410px;
-      grid-template-rows: minmax(0, 1fr);
-    }
-
-    .main-grid.split-layout .board-frame {
-      grid-column: 1;
-      grid-row: 1;
-    }
-
-    .main-grid.split-layout .right-panel-wrapper {
-      grid-column: 2;
-      grid-row: 1;
+      grid-template-columns: 1fr;
     }
 
     .control-panel {
@@ -3511,26 +3188,6 @@ const styles = `
 
   @media (max-width: 640px) {
     .app-page { padding: 10px; }
-
-    .main-grid:not(.split-layout) {
-      grid-template-rows: minmax(0, auto) minmax(0, 1fr) !important;
-    }
-
-    .main-grid:not(.split-layout) .board-frame {
-      min-height: 0;
-      padding: 14px 10px !important;
-    }
-
-    .main-grid.split-layout {
-      grid-template-columns: 1fr;
-      grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-    }
-
-    .main-grid.split-layout .right-panel-wrapper,
-    .main-grid.split-layout .board-frame {
-      grid-column: auto;
-      grid-row: auto;
-    }
     .top-bar { padding: 12px; }
     .board-panel, .presentation-panel { padding: 22px 10px; }
     .tone-header, .tone-row { grid-template-columns: 112px minmax(125px, 1fr) 52px; }
@@ -3539,31 +3196,12 @@ const styles = `
     .fixed-tone-label { font-size: 12px; }
     .tone-rows { gap: 20px; }
     .tone-circle {
-      width: clamp(34px, 8.5vw, 39px) !important;
-      min-width: clamp(34px, 8.5vw, 39px) !important;
-      max-width: clamp(34px, 8.5vw, 39px) !important;
-      height: clamp(34px, 8.5vw, 39px) !important;
+      width: 39px !important;
+      min-width: 39px !important;
+      max-width: 39px !important;
+      height: 39px !important;
       padding: 0 !important;
-      font-size: clamp(14px, 3.4vw, 15px) !important;
-    }
-
-    .main-grid:not(.split-layout) .board-frame {
-      overflow: visible;
-    }
-
-    .main-grid:not(.split-layout) .tone-board {
-      height: auto;
-      min-height: 0;
-    }
-
-    .main-grid:not(.split-layout) .tone-rows {
-      flex: 0 0 auto;
-      gap: clamp(8px, 1.5vh, 14px);
-      padding: 2px 0;
-    }
-
-    .main-grid:not(.split-layout) .tone-row.active .tone-circle {
-      transform: translate3d(-50%, -50%, 0) scale(1.14);
+      font-size: 15px !important;
     }
     .multi-circles { gap: 4px; }
     .slash { font-size: 16px; }
