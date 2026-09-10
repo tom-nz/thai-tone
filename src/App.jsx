@@ -2521,7 +2521,7 @@ export default function App() {
                       <ModeRadio value="full5" checked={mode === "full5"} label={t("แสดงชุดผัน 5 เสียงเมื่อมีกฎเทียบ (อักษรคู่ / ห นำ)", "Show 5 tones with paired / leading rules")} onChange={handleModeChange} />
                       <ModeRadio value="highOnly" checked={mode === "highOnly"} label={t("เฉพาะเสียงสูง (เอก, โท, จัตวา)", "High tone set only (Low, Falling, Rising)")} onChange={handleModeChange} />
                       <ModeRadio value="lowOnly" checked={mode === "lowOnly"} label={t("เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)", "Low tone set only (Mid, Falling, High)")} onChange={handleModeChange} />
-                      <ModeRadio value="pair" checked={mode === "pair"} label={t("จับคู่อักษร(เสียง)สูงและอักษร(เสียง)ต่ำ เพื่อระบุกลุ่มอักษร", "Pair High & Low Class Consonants")} onChange={handleModeChange} />
+                      <ModeRadio value="pair" checked={mode === "pair"} label={t("จับคู่อักษร(เสียง)สูงและต่ำ เพื่อระบุกลุ่มอักษร", "Pair High & Low Class Consonants")} onChange={handleModeChange} />
                     </div>
 
                     <div className="input-row">
