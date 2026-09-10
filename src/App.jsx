@@ -2050,8 +2050,14 @@ export default function App() {
   const handleModeChange = (newMode) => {
     setMode(newMode);
     if (newMode === "pair") {
-      // บังคับเริ่มที่ "กอ" เมื่อคลิกโหมดนี้ครั้งแรก
-      const pairWord = "กอ";
+      // หากมีคำอยู่แล้ว ให้ดึงพยัญชนะตัวแรกมาประสมสระออ หากไม่มีให้เริ่มที่ "ขอ"
+      let pairWord = "ขอ";
+      if (inputText.trim() !== "") {
+        const match = inputText.match(/([ก-ฮ])/);
+        if (match) {
+          pairWord = `${match[1]}อ`;
+        }
+      }
       setInputText(pairWord);
       validateInput(pairWord);
     }
@@ -2515,7 +2521,7 @@ export default function App() {
                       <ModeRadio value="full5" checked={mode === "full5"} label={t("แสดงชุดผัน 5 เสียงเมื่อมีกฎเทียบ (อักษรคู่ / ห นำ)", "Show 5 tones with paired / leading rules")} onChange={handleModeChange} />
                       <ModeRadio value="highOnly" checked={mode === "highOnly"} label={t("เฉพาะเสียงสูง (เอก, โท, จัตวา)", "High tone set only (Low, Falling, Rising)")} onChange={handleModeChange} />
                       <ModeRadio value="lowOnly" checked={mode === "lowOnly"} label={t("เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)", "Low tone set only (Mid, Falling, High)")} onChange={handleModeChange} />
-                      <ModeRadio value="pair" checked={mode === "pair"} label={t("จับคู่อักษรสูงและอักษรต่ำ", "Pair High & Low Class Consonants")} onChange={handleModeChange} />
+                      <ModeRadio value="pair" checked={mode === "pair"} label={t("จับคู่อักษร(เสียง)สูงและอักษร(เสียง)ต่ำ เพื่อระบุกลุ่มอักษร", "Pair High & Low Class Consonants")} onChange={handleModeChange} />
                     </div>
 
                     <div className="input-row">
@@ -2525,9 +2531,9 @@ export default function App() {
                         onChange={(event) => {
                           let val = event.target.value;
                           if (mode === "pair") {
-                            // บังคับให้เป็นพยัญชนะไทย 1 ตัว แล้วตามด้วยสระออ เท่านั้น
+                            // บังคับให้เป็นพยัญชนะไทย 1 ตัวตามด้วยสระออ หากลบข้อความหมดให้กลับไปเริ่มที่ "ขอ"
                             const match = val.match(/([ก-ฮ])/);
-                            val = match ? `${match[1]}อ` : "";
+                            val = match ? `${match[1]}อ` : "ขอ";
                           }
                           setInputText(val);
                           validateInput(val);
