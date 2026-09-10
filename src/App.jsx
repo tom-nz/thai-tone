@@ -3119,9 +3119,11 @@ const styles = `
     70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
     100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
   }
-  .board-title { text-align: center; color: #6b21a8; margin-bottom: 18px; } /* เปลี่ยนเป็นสีม่วงแก่ */
-  .board-title h2 { margin: 0; font-size: clamp(23px, 2.3vw, 30px); }
-  .board-title div { font-size: clamp(16px, 1.5vw, 19px); font-weight: 600; }
+  
+  .board-title { text-align: center; margin-bottom: 18px; }
+  /* ระบุสีม่วงแก่เจาะจงลงไปที่แท็ก h2 และ div โดยตรง เพื่อป้องกันการโดนทับด้วย Default Browser CSS */
+  .board-title h2 { margin: 0; font-size: clamp(23px, 2.3vw, 30px); color: #6b21a8; }
+  .board-title div { font-size: clamp(16px, 1.5vw, 19px); font-weight: 600; color: #6b21a8; }
 
   .analysis-box {
     margin: 0 auto 22px;
