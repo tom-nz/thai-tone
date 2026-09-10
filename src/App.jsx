@@ -730,6 +730,13 @@ function calculateTones(word, mode, colorMid, colorHigh, colorLow) {
       }));
     }
 
+    if (mode === "pair") {
+      return fullRows.map((row) => ({
+        ...row,
+        show: [5, 1].includes(row.id),
+      }));
+    }
+
     return fullRows;
   }
 
@@ -825,6 +832,13 @@ function calculateTones(word, mode, colorMid, colorHigh, colorLow) {
 
     return multiToneRow(toneRow.id, uniqueEntries);
   });
+
+  if (mode === "pair") {
+    return combined.map((row) => ({
+      ...row,
+      show: [5, 1].includes(row.id),
+    }));
+  }
 
   return combined;
 }
@@ -1332,6 +1346,46 @@ function Board({
         const getTargetWord = (item) => getSpeechText(item);
         const analyses = [];
 
+        if (mode === "pair") {
+          const topWord = getTargetWord(topItem);
+          const bottomWord = getTargetWord(bottomItem);
+          const pConsonant = analysisInfo?.primaryConsonant || "";
+          const isSingle = lowSingleConsonants.includes(pConsonant);
+
+          let pairTitle = "";
+          let pairDesc = "";
+
+          if (isMid) {
+            pairTitle = t("อักษรกลาง (Soloist / ศิลปินเดี่ยว)", "Mid Class (Soloist)");
+            pairDesc = t(
+              `มีเอกลักษณ์เฉพาะตัว สามารถผันได้ครบทั้ง 5 เสียงด้วยตัวเองโดยไม่ต้องจับคู่กับพยัญชนะอื่น (พื้นเสียงสามัญ "${bottomWord}" ➔ เสียงจัตวา "${topWord}")`,
+              `Self-sufficient — inflects all 5 tones on its own without needing a partner (Base mid tone "${bottomWord}" ➔ Rising tone "${topWord}")`
+            );
+          } else if (isSingle) {
+            pairTitle = t("อักษรต่ำเดี่ยว (Solo with Leading ห- / ยืม ห-นำ)", "Single Low Class (With Leading ห-)");
+            pairDesc = t(
+              `"${bottomWord}" (อักษรต่ำเดี่ยว) ไม่มีคู่เสียงสูงในตัวเอง จึงผันเสียงจัตวาโดย "ยืม ห-นำ" มาเป็น "${topWord}" เพื่อให้ผันครบ 5 เสียง (เสียงจัตวา "${topWord}" ➔ เสียงสามัญ "${bottomWord}")`,
+              `"${bottomWord}" has no natural high partner, so it borrows "Leading ห-" ("${topWord}") to produce the rising tone and achieve all 5 tones (Rising "${topWord}" ➔ Mid "${bottomWord}")`
+            );
+          } else {
+            pairTitle = t("คู่เสียงสูง-ต่ำคู่ (Duo / คู่หู)", "High & Paired Low Duo");
+            pairDesc = t(
+              `"${topWord}" (อักษรสูง) จับคู่กับ "${bottomWord}" (อักษรต่ำคู่) ช่วยกันผันให้ครบ 5 เสียง โดยทั้งคู่มีเสียงโทตรงกัน (เสียงจัตวา "${topWord}" ➔ เสียงสามัญ "${bottomWord}")`,
+              `"${topWord}" (High Class) pairs with "${bottomWord}" (Paired Low Class) to complement all 5 tones together, sharing the falling tone (Rising "${topWord}" ➔ Mid "${bottomWord}")`
+            );
+          }
+
+          if (!topWord && !bottomWord) return null;
+
+          return (
+            <div className="analysis-box">
+              <div className="analysis-item">
+                📌 <strong>{pairTitle}</strong>: {pairDesc}
+              </div>
+            </div>
+          );
+        }
+
         if (isMid) {
           const word = inputText.trim();
           if (word) {
@@ -1550,73 +1604,83 @@ function Board({
         })}
       </div>
 
-      <div className="board-footer-actions">
-        <button
-          type="button"
-          className={`auto-play-tones-btn ${isPlayingAll ? "playing" : ""}`}
-          onClick={onPlayAllTones}
-          title={
-            mode === "highOnly"
-              ? t(
-                  isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์เฉพาะเสียงสูง (5 ➔ 2 ➔ 3)",
-                  isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play high tones (5 ➔ 2 ➔ 3)"
-                )
-              : mode === "lowOnly"
+      {/* เพิ่มการเช็ค inputText ว่าง เพื่อซ่อนปุ่ม */}
+      {inputText.trim() !== "" && linesData.some((item) => item.show && (item.word || (item.isMulti && item.multi.length > 0))) && (
+        <div className="board-footer-actions">
+          <button
+            type="button"
+            className={`auto-play-tones-btn ${isPlayingAll ? "playing" : ""}`}
+            onClick={onPlayAllTones}
+            title={
+              mode === "pair"
                 ? t(
-                    isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์เฉพาะเสียงต่ำ (1 ➔ 3 ➔ 4)",
-                    isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play low tones (1 ➔ 3 ➔ 4)"
+                    isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์คู่เสียงสูง-ต่ำ (5 ➔ 1)",
+                    isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play paired tones (5 ➔ 1)"
                   )
-                : t(
-                    isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์อัตโนมัติ 5 เสียง (1 ➔ 5)",
-                    isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play 5 tones ascending (1 ➔ 5)"
-                  )
-          }
-          aria-label="Auto play tones"
-        >
-          {mode === "highOnly" ? (
-            /* ลำโพงพร้อมลูกศรลง สำหรับเสียงสูง 5-2-3 */
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polygon points="10 5 5 9 2 9 2 15 5 15 10 19 10 5" fill="currentColor" stroke="none" />
-              <path d="M15 9l6 6" stroke="currentColor" strokeWidth="2.2" />
-              <path d="M16 15h5v-5" stroke="currentColor" strokeWidth="2.2" />
-            </svg>
-          ) : (
-            /* ลำโพงพร้อมลูกศรขึ้น สำหรับเสียงต่ำ 1-3-4 หรือผัน 5 เสียง 1-5 */
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polygon points="10 5 5 9 2 9 2 15 5 15 10 19 10 5" fill="currentColor" stroke="none" />
-              <path d="M15 15l6-6" stroke="currentColor" strokeWidth="2.2" />
-              <path d="M16 9h5v5" stroke="currentColor" strokeWidth="2.2" />
-            </svg>
-          )}
-          <span className="auto-play-label">
-            {isPlayingAll
-              ? t("กำลังออกเสียง...", "Playing...")
-              : mode === "highOnly"
-                ? t("ผันเสียง 5-2-3", "Play 5-2-3")
-                : mode === "lowOnly"
-                  ? t("ผันเสียง 1-3-4", "Play 1-3-4")
-                  : t("ผันเสียง 1-5", "Play 1-5")}
-          </span>
-        </button>
-      </div>
+                : mode === "highOnly"
+                  ? t(
+                      isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์เฉพาะเสียงสูง (5 ➔ 2 ➔ 3)",
+                      isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play high tones (5 ➔ 2 ➔ 3)"
+                    )
+                  : mode === "lowOnly"
+                    ? t(
+                        isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์เฉพาะเสียงต่ำ (1 ➔ 3 ➔ 4)",
+                        isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play low tones (1 ➔ 3 ➔ 4)"
+                      )
+                    : t(
+                        isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์อัตโนมัติ 5 เสียง (1 ➔ 5)",
+                        isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play 5 tones ascending (1 ➔ 5)"
+                      )
+            }
+            aria-label="Auto play tones"
+          >
+            {mode === "pair" || mode === "highOnly" ? (
+              /* ลำโพงพร้อมลูกศรลง สำหรับเสียงสูง 5-2-3 หรือคู่เสียงสูง-ต่ำ 5+1 */
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polygon points="10 5 5 9 2 9 2 15 5 15 10 19 10 5" fill="currentColor" stroke="none" />
+                <path d="M15 9l6 6" stroke="currentColor" strokeWidth="2.2" />
+                <path d="M16 15h5v-5" stroke="currentColor" strokeWidth="2.2" />
+              </svg>
+            ) : (
+              /* ลำโพงพร้อมลูกศรขึ้น สำหรับเสียงต่ำ 1-3-4 หรือผัน 5 เสียง 1-5 */
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polygon points="10 5 5 9 2 9 2 15 5 15 10 19 10 5" fill="currentColor" stroke="none" />
+                <path d="M15 15l6-6" stroke="currentColor" strokeWidth="2.2" />
+                <path d="M16 9h5v5" stroke="currentColor" strokeWidth="2.2" />
+              </svg>
+            )}
+            <span className="auto-play-label">
+              {isPlayingAll
+                ? t("กำลังออกเสียง...", "Playing...")
+                : mode === "pair"
+                  ? t("ผันเสียง 5+1", "Play 5+1")
+                  : mode === "highOnly"
+                    ? t("ผันเสียง 5-2-3", "Play 5-2-3")
+                    : mode === "lowOnly"
+                      ? t("ผันเสียง 1-3-4", "Play 1-3-4")
+                      : t("ผันเสียง 1-5", "Play 1-5")}
+            </span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1819,7 +1883,9 @@ export default function App() {
 
     // กำหนดลำดับการออกเสียงตามโหมดที่เลือก
     let targetSequence = [1, 2, 3, 4, 5];
-    if (mode === "highOnly") {
+    if (mode === "pair") {
+      targetSequence = [5, 1]; // จับคู่อักษรสูง-ต่ำ: เส้น 5 -> เส้น 1
+    } else if (mode === "highOnly") {
       targetSequence = [5, 2, 3]; // เฉพาะเสียงสูง: 5 -> 2 -> 3
     } else if (mode === "lowOnly") {
       targetSequence = [1, 3, 4]; // เฉพาะเสียงต่ำ: 1 -> 3 -> 4
@@ -1981,7 +2047,23 @@ export default function App() {
     }
   };
 
+  const handleModeChange = (newMode) => {
+    setMode(newMode);
+    if (newMode === "pair") {
+      // บังคับเริ่มที่ "กอ" เมื่อคลิกโหมดนี้ครั้งแรก
+      const pairWord = "กอ";
+      setInputText(pairWord);
+      validateInput(pairWord);
+    }
+  };
+
   const handleQuickConsonantClick = (consonant) => {
+    if (mode === "pair") {
+      const newWord = `${consonant}อ`;
+      setInputText(newWord);
+      validateInput(newWord);
+      return;
+    }
     const { frontVowel, aboveBelowVowel, rest } = parseThaiWord(inputText);
     const newWord = buildWord(frontVowel || "", consonant, aboveBelowVowel || "", "", rest || "อ");
     setInputText(newWord);
@@ -1989,6 +2071,7 @@ export default function App() {
   };
 
   const handleQuickVowelClick = (vowel) => {
+    if (mode === "pair") return; // ป้องกันไม่ให้กดเปลี่ยนสระในโหมดจับคู่
     const { initial } = parseThaiWord(inputText);
     const newWord = `${vowel.front}${initial || "ก"}${vowel.rear}`;
     setInputText(newWord);
@@ -2419,32 +2502,36 @@ export default function App() {
                   <section className="control-group">
                     <strong>{t("✨ ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ", "✨ AI Tone Inflection Assistant")}</strong>
 
-                    {inputText.trim() !== "" && (
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: "6px",
-                          marginBottom: "12px",
-                          fontSize: "13px",
-                          color: "#334155",
-                        }}
-                      >
-                        <ModeRadio value="full5" checked={mode === "full5"} label={t("แสดงชุดผัน 5 เสียงเมื่อมีกฎเทียบ (อักษรคู่ / ห นำ)", "Show 5 tones with paired / leading rules")} onChange={setMode} />
-                        <ModeRadio value="highOnly" checked={mode === "highOnly"} label={t("เฉพาะเสียงสูง (เอก, โท, จัตวา)", "High tone set only (Low, Falling, Rising)")} onChange={setMode} />
-                        <ModeRadio value="lowOnly" checked={mode === "lowOnly"} label={t("เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)", "Low tone set only (Mid, Falling, High)")} onChange={setMode} />
-                      </div>
-                    )}
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "6px",
+                        marginBottom: "12px",
+                        fontSize: "13px",
+                        color: "#334155",
+                      }}
+                    >
+                      <ModeRadio value="full5" checked={mode === "full5"} label={t("แสดงชุดผัน 5 เสียงเมื่อมีกฎเทียบ (อักษรคู่ / ห นำ)", "Show 5 tones with paired / leading rules")} onChange={handleModeChange} />
+                      <ModeRadio value="highOnly" checked={mode === "highOnly"} label={t("เฉพาะเสียงสูง (เอก, โท, จัตวา)", "High tone set only (Low, Falling, Rising)")} onChange={handleModeChange} />
+                      <ModeRadio value="lowOnly" checked={mode === "lowOnly"} label={t("เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)", "Low tone set only (Mid, Falling, High)")} onChange={handleModeChange} />
+                      <ModeRadio value="pair" checked={mode === "pair"} label={t("จับคู่อักษรสูงและอักษรต่ำ", "Pair High & Low Class Consonants")} onChange={handleModeChange} />
+                    </div>
 
                     <div className="input-row">
                       <input
                         value={inputText}
                         placeholder={t("พิมพ์ 1 คำ เช่น กอ, เมา, กวาง", "Type 1 word, e.g. กอ, เมา, กวาง")}
                         onChange={(event) => {
-                          const val = event.target.value;
+                          let val = event.target.value;
+                          if (mode === "pair") {
+                            // บังคับให้เป็นพยัญชนะไทย 1 ตัว แล้วตามด้วยสระออ เท่านั้น
+                            const match = val.match(/([ก-ฮ])/);
+                            val = match ? `${match[1]}อ` : "";
+                          }
                           setInputText(val);
                           validateInput(val);
-                          if (!val.trim()) {
+                          if (!val.trim() && mode !== "pair") {
                             setMode("full5");
                           }
                         }}
