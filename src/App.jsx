@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import "./toneBoardPatch.js";   // ✅ เพิ่มบรรทัดนี้บรรทัดเดียว
+
 /**
  * =============================================================================
  * THAI LANGUAGE / TRIYANG (อักษร 3 หมู่) RULEBOOK FOR THIS APPLICATION
@@ -780,23 +780,21 @@ function calculateTones(word, mode, colorMid, colorHigh, colorLow) {
 
     const entries = [];
 
-    // เมื่อมีทั้งอักษรต่ำและอักษรสูงในบรรทัดเดียวกัน
-    // ให้แสดงวงกลมอักษรต่ำก่อนอักษรสูง
-    if (lowMark !== undefined) {
-      entries.push({
-        consonant: pairedLow,
-        mark: lowMark,
-        color: colorLow,
-        isComparison: consonantClass !== "low",
-      });
-    }
-
     if (highMark !== undefined) {
       entries.push({
         consonant: pairedHigh,
         mark: highMark,
         color: colorHigh,
         isComparison: consonantClass !== "high",
+      });
+    }
+
+    if (lowMark !== undefined) {
+      entries.push({
+        consonant: pairedLow,
+        mark: lowMark,
+        color: colorLow,
+        isComparison: consonantClass !== "low",
       });
     }
 
@@ -1248,13 +1246,11 @@ function getSpeechFallbackVoice(voices = [], selectedVoiceURI = "") {
 function getSpeechText(item) {
   if (!item?.show) return "";
 
-  // กรณีมี 2 วงกลม (อักษรสูง/ต่ำที่ให้เสียงเดียวกัน)
-  // ให้ใช้เพียงวงกลมแรกเป็นคำสำหรับ TTS เพื่อไม่ให้ออกเสียงซ้ำ/อ่านสองคำ
   if (item.isMulti) {
-    const firstCircle = item.multi?.find(
-      (circle) => circle.ttsText || circle.text,
-    );
-    return firstCircle?.ttsText || firstCircle?.text || "";
+    return item.multi
+      .map((circle) => circle.ttsText || circle.text)
+      .filter(Boolean)
+      .join(" หรือ ");
   }
 
   return item.ttsText || item.word || "";
@@ -1405,6 +1401,54 @@ function Board({
           return v;
         };
 
+        const getAnalysisDesc = (inf) => {
+          if (lang !== "en") return inf.desc;
+
+          const cClass = inf.consonantClass;
+          const pConsonant = inf.primaryConsonant || "";
+          const init = inf.initial || "";
+          const initKind = inf.initialKind || "single";
+          const dead = inf.isDead;
+          const short = inf.isShort;
+
+          let cLabel = "";
+          if (initKind === "trueCluster") {
+            cLabel = ` (True Cluster "${init}")`;
+          } else if (initKind === "leadingHo") {
+            cLabel = ` (Leading ห- "${init}")`;
+          } else if (initKind === "leadingO") {
+            cLabel = ` (Leading อ- "${init}")`;
+          } else if (initKind === "falseCluster") {
+            cLabel = ` (False Cluster "${init}")`;
+          }
+
+          if (cClass === "middle") {
+            return dead
+              ? `Mid Class${cLabel} Dead Syllable (Inflects 4 tones: Low, Falling, High, Rising; Natural pitch: Low)`
+              : `Mid Class${cLabel} Live Syllable (Inflects all 5 tones; Natural pitch: Mid)`;
+          }
+
+          if (cClass === "high") {
+            return dead
+              ? `High Class${cLabel} Dead Syllable (Inflects 2 tones: Low, Falling; Natural pitch: Low)`
+              : `High Class${cLabel} Live Syllable (Inflects 3 tones: Low, Falling, Rising; Natural pitch: Rising)`;
+          }
+
+          if (cClass === "low") {
+            const subtype = lowSingleConsonants.includes(pConsonant)
+              ? "Single Low Class"
+              : "Paired Low Class";
+
+            return dead
+              ? short
+                ? `${subtype}${cLabel} Dead Syllable (Short Vowel) (Inflects 2 tones: Falling, High; Natural pitch: High)`
+                : `${subtype}${cLabel} Dead Syllable (Long Vowel) (Inflects 2 tones: Falling, High; Natural pitch: Falling)`
+              : `${subtype}${cLabel} Live Syllable (Inflects 3 tones: Mid, Falling, High; Natural pitch: Mid)`;
+          }
+
+          return inf.desc;
+        };
+
         return (
           <div className="analysis-box">
             {analyses.map(({ label, word, info }, index) => (
@@ -1413,7 +1457,7 @@ function Board({
                 <span className="analysis-tag">
                   {translateType(info.type)} ({translateVowel(info.vowelLen)})
                 </span>{" "}
-                — {info.desc}
+                — {getAnalysisDesc(info)}
               </div>
             ))}
           </div>
@@ -1489,6 +1533,13 @@ function Board({
               </div>
 
               <div
+                className="tone-line-number"
+                style={{ color: item.show ? (item.isMulti ? item.multi[0]?.color : item.color) : "#94a3b8" }}
+              >
+                {item.id}
+              </div>
+
+              <div
                 className="fixed-tone-label"
                 style={{ color: fixedRight?.color || "#94a3b8" }}
               >
@@ -1537,9 +1588,6 @@ export default function App() {
   const [staffBgColor, setStaffBgColor] = useState("#ffffff");
 
   const [activeRowId, setActiveRowId] = useState(null);
-  const [viewPanelHeight, setViewPanelHeight] = useState(560);
-  const [isResizingViewPanel, setIsResizingViewPanel] = useState(false);
-  const viewResizeStartRef = useRef(null);
   const [speechEnabled, setSpeechEnabled] = useState(false);
   const [speechRate, setSpeechRate] = useState(0.85);
   const [voices, setVoices] = useState([]);
@@ -1670,8 +1718,11 @@ export default function App() {
 
   const handleRowClick = (item) => {
     if (!item.show) return;
-    setActiveRowId((previous) => (previous === item.id ? null : item.id));
-    speak(getSpeechText(item));
+    const isExpanding = activeRowId !== item.id;
+    setActiveRowId(isExpanding ? item.id : null);
+    if (isExpanding) {
+      speak(getSpeechText(item));
+    }
   };
 
   const validateInput = (word) => {
@@ -1864,7 +1915,7 @@ export default function App() {
     const popupTop = Math.max(0, Math.floor((screenHeight - popupHeight) / 2));
 
     window.open(
-      `${currentUrl}?view=display`,
+      `${currentUrl}?view=display&lang=${lang}`,
       "ThaiToneDisplayWindow",
       [
         `width=${popupWidth}`,
@@ -1926,6 +1977,11 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const displayMode = params.get("view") === "display";
     setIsDisplayWindow(displayMode);
+
+    const initialLang = params.get("lang");
+    if (initialLang === "en" || initialLang === "th") {
+      setLang(initialLang);
+    }
 
     if (displayMode) {
       document.body.style.margin = "0";
@@ -2045,58 +2101,15 @@ export default function App() {
     channel.close();
   };
 
-  const handleViewPanelResizeStart = (event) => {
-    if (typeof window === "undefined" || viewLayout !== "standard") return;
-
-    event.preventDefault();
-
-    viewResizeStartRef.current = {
-      startY: event.clientY,
-      startHeight: viewPanelHeight,
-    };
-    setIsResizingViewPanel(true);
-  };
-
-  useEffect(() => {
-    if (!isResizingViewPanel || typeof window === "undefined") return;
-
-    const handlePointerMove = (event) => {
-      const start = viewResizeStartRef.current;
-      if (!start) return;
-
-      const deltaY = event.clientY - start.startY;
-      const nextHeight = Math.max(520, Math.min(900, start.startHeight + deltaY));
-      setViewPanelHeight(nextHeight);
-    };
-
-    const handlePointerUp = () => {
-      viewResizeStartRef.current = null;
-      setIsResizingViewPanel(false);
-    };
-
-    window.addEventListener("pointermove", handlePointerMove);
-    window.addEventListener("pointerup", handlePointerUp);
-    window.addEventListener("pointercancel", handlePointerUp);
-
-    return () => {
-      window.removeEventListener("pointermove", handlePointerMove);
-      window.removeEventListener("pointerup", handlePointerUp);
-      window.removeEventListener("pointercancel", handlePointerUp);
-    };
-  }, [isResizingViewPanel, viewLayout]);
-
   // Component สำหรับสร้าง Top Bar แบบใช้ซ้ำ
   const renderTopBar = (extraStyle = {}) => (
-    <section
-      className="top-bar panel"
-      style={extraStyle}
-    >
+    <section className="top-bar panel" style={extraStyle}>
       <div className="view-buttons">
         <strong>{t("🖥️ มุมมอง:", "🖥️ View:")}</strong>
         {[
-          ["standard", "ชิดเดียว"],
-          ["split", "แบ่ง 2 จอ"],
-          ["present", "โหมดพรีวิว"],
+          ["standard", t("แสดง 1 คอลัมน์", "1 Column")],
+          ["split", t("แสดง 2 คอลัมน์", "2 Columns")],
+          ["present", t("พรีวิว", "Preview")],
         ].map(([value, label]) => (
           <button
             key={value}
@@ -2110,10 +2123,10 @@ export default function App() {
 
       <div className="monitor-buttons">
         <button className="blue-btn" onClick={sendFullscreenToDisplay}>
-          {t("⛶ สลับเต็มจอ จอที่ 2", "⛶ Fullscreen Screen 2")}
+          {t("⛶ สลับเต็มจอ 2", "⛶ Fullscreen 2")}
         </button>
         <button className="green-btn" onClick={handleOpenDualMonitor}>
-          {t("🚀 เปิดกระดานแยกขึ้นมอนิเตอร์ที่ 2", "🚀 Open Dual Monitor")}
+          {t("🚀 เปิดจอ 2", "🚀 Open Screen 2")}
         </button>
         <button
           type="button"
@@ -2170,7 +2183,7 @@ export default function App() {
             staffBgColor={staffBgColor}
             lang={lang}
           />
-          <div className="display-tip">{t("ดับเบิลคลิกพื้นที่ว่างเพื่อสลับเต็มจอ • คลิกบรรทัดเพื่อขยายและอ่านออกเสียง", "Double-click empty space to toggle fullscreen • Click line to zoom & speak")}</div>
+          
         </main>
       </>
     );
@@ -2186,20 +2199,9 @@ export default function App() {
           {/* กรณีโหมด present ให้ Top bar ยังคงลอยอยู่บนสุด */}
           {viewLayout === "present" && renderTopBar({ marginBottom: "20px" })}
 
-          <div
-            className={`main-grid ${viewLayout === "split" ? "split-layout" : ""}`}
-            style={
-              viewLayout === "standard"
-                ? {
-                    gridTemplateRows: `minmax(${viewPanelHeight}px, max-content) minmax(0, 1fr)`,
-                  }
-                : undefined
-            }
-          >
+          <div className={`main-grid ${viewLayout === "split" ? "split-layout" : ""}`}>
             <section
-              className={`panel board-frame ${
-                viewLayout === "standard" ? "board-frame-resizable" : ""
-              } ${isResizingViewPanel ? "resizing-board-frame" : ""}`}
+              className="panel"
               style={{
                 backgroundColor: staffBgColor,
                 borderRadius: "16px",
@@ -2220,22 +2222,9 @@ export default function App() {
                 staffBgColor={staffBgColor}
                 lang={lang}
               />
-
-              {viewLayout === "standard" && (
-                <div
-                  className="board-frame-resizer"
-                  onPointerDown={handleViewPanelResizeStart}
-                  role="separator"
-                  aria-orientation="horizontal"
-                  aria-label="ปรับขนาดเฟรมหัวเรื่องและบรรทัด 5 เส้น"
-                  title="ลากเพื่อขยายหรือย่อเฟรมการแสดงผล"
-                >
-                  <span />
-                </div>
-              )}
             </section>
 
-            {/* เฟรมมุมมองและแผงควบคุมอยู่ต่อจากเฟรมการแสดงผลเสมอ */}
+            {/* กรณีที่ไม่ใช่โหมด present ให้ Top bar และแผงควบคุมอยู่ในกล่องด้านขวา */}
             {viewLayout !== "present" && (
               <div
                 className="right-panel-wrapper"
@@ -2243,12 +2232,15 @@ export default function App() {
                   display: "flex",
                   flexDirection: "column",
                   gap: "20px",
-                  minHeight: 0,
-                  height: "100%",
-                  position: "relative"
+                  maxHeight: "calc(100vh - 42px)",
+                  position: "sticky",
+                  top: "20px"
                 }}
               >
-                {/* แผงควบคุมเป็นพื้นที่หลักเพียงกล่องเดียว และรวมมุมมองไว้ด้านล่าง */}
+                {/* เฟรมมุมมองอยู่ด้านบน */}
+                {renderTopBar({ marginBottom: 0 })}
+
+                {/* เฟรมแผงควบคุมอยู่ด้านล่าง และสามารถเลื่อน Scroll ได้อิสระ */}
                 <aside 
                   className="control-panel panel" 
                   style={{ flex: 1, overflowY: "auto", position: "static", maxHeight: "none", margin: 0 }}
@@ -2293,22 +2285,13 @@ export default function App() {
                         className={inputError ? "input-error" : ""}
                       />
                       <button className="blue-btn" disabled={loading} onClick={handleGenerate}>
-                        {loading ? "..." : "ผันคำ"}
+                        {loading ? "..." : t("ผันคำ", "Analyze")}
                       </button>
                     </div>
 
                     {inputError && <div className="error-text">{inputError}</div>}
 
-                    {toneValidation.status !== "idle" && (
-                      <div
-                        className={`tone-validation tone-validation-${toneValidation.status}`}
-                      >
-                        <strong>{toneValidation.message}</strong>
-                        {toneValidation.detail && (
-                          <span>{toneValidation.detail}</span>
-                        )}
-                      </div>
-                    )}
+
                   </section>
 
                   <section>
@@ -2703,14 +2686,6 @@ export default function App() {
                       </div>
                     )}
                   </section>
-
-                  {/* กล่องมุมมองย้ายมาอยู่ล่างสุดของแผงควบคุม ต่อจาก เชื่อมต่อ AI (API Key) */}
-                  {renderTopBar({
-                    marginBottom: 0,
-                    flex: "0 0 auto",
-                    width: "100%",
-                    boxSizing: "border-box",
-                  })}
                 </aside>
               </div>
             )}
@@ -2763,9 +2738,6 @@ const styles = `
     gap: 12px;
     padding: 14px 18px;
     flex-wrap: wrap;
-    position: relative;
-    overflow: visible;
-    min-height: 96px;
   }
 
   .view-buttons, .monitor-buttons, .input-row, .vowel-list, .background-colors {
@@ -2801,35 +2773,6 @@ const styles = `
 
   .main-grid.split-layout {
     grid-template-columns: minmax(0, 1fr) 410px;
-    grid-template-rows: minmax(0, 1fr);
-  }
-
-  /* โหมดแบ่ง 2 จอ: ฝั่งซ้าย = การแสดงผล, ฝั่งขวา = มุมมอง + แผงควบคุม */
-  .main-grid.split-layout .board-frame {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .main-grid.split-layout .right-panel-wrapper {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  /* โหมดชิดเดียว: เฟรมการแสดงผลอยู่ด้านบน และมุมมอง/แผงควบคุมอยู่ด้านล่าง */
-  .main-grid:not(.split-layout) {
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(260px, auto) minmax(0, 1fr);
-  }
-
-  /* โหมดชิดเดียว: ให้เฟรม 5 เส้นขยายตามเนื้อหาที่จำเป็น
-     และไม่ตัดวงกลมหรือเส้นทั้งแนวตั้ง/แนวนอน */
-  .main-grid:not(.split-layout) .board-frame {
-    overflow: visible;
-  }
-
-  .main-grid:not(.split-layout) .tone-rows {
-    overflow: visible;
-    gap: clamp(12px, 2.2vh, 24px);
   }
 
   .main-grid > section {
@@ -2838,33 +2781,13 @@ const styles = `
     overflow: hidden;
   }
 
-  .board-panel {
-    padding: 30px 22px;
-    min-width: 0;
-    min-height: 0;
-    height: 100%;
-    box-sizing: border-box;
-    overflow: hidden;
-  }
-
-  .board-panel::-webkit-scrollbar {
-    width: 0;
-    height: 0;
-    display: none;
-  }
-
+  .board-panel { padding: 30px 22px; min-width: 0; }
   .presentation-panel { padding: 45px 50px; }
 
-  .tone-board {
-    width: 100%;
-    height: 100%;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-  }
-  .board-title { text-align: center; color: #d000ff; margin-bottom: 18px; }
-  .board-title h2 { margin: 0; font-size: clamp(23px, 2.3vw, 30px); color: #d000ff; }
-  .board-title div { font-size: clamp(16px, 1.5vw, 19px); font-weight: 600; color: #d000ff; }
+  .tone-board { width: 100%; }
+  .board-title { text-align: center; color: #ea580c; margin-bottom: 18px; }
+  .board-title h2 { margin: 0; font-size: clamp(23px, 2.3vw, 30px); }
+  .board-title div { font-size: clamp(16px, 1.5vw, 19px); font-weight: 600; }
 
   .analysis-box {
     margin: 0 auto 22px;
@@ -2892,9 +2815,21 @@ const styles = `
 
   .tone-header, .tone-row {
     display: grid;
-    grid-template-columns: minmax(112px, 30%) minmax(0, 1fr) minmax(52px, 14%);
+    grid-template-columns: 215px minmax(180px, 1fr) 32px 100px;
     align-items: center;
-    min-width: 0;
+  }
+
+  .tone-line-number {
+    text-align: center;
+    font-size: 16px;
+    font-weight: 800;
+    line-height: 1;
+    user-select: none;
+    transition: transform .18s ease, color .18s ease;
+  }
+
+  .tone-row.active .tone-line-number {
+    transform: scale(1.18);
   }
 
   .tone-header {
@@ -2907,11 +2842,11 @@ const styles = `
   .tone-header span { text-align: right; padding-right: 20px; }
 
   .tone-rows {
-    flex: 1 1 auto;
-    min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 24px;
+    padding-top: 28px; /* เว้นระยะด้านบน 28px ป้องกันก้านโน้ต/ไม้จัตวาของคำว่า ก๋อ ชนหรือล้นขอบบน */
+    overflow: visible;
   }
 
   .tone-row {
@@ -2946,14 +2881,12 @@ const styles = `
 
   .tone-line-wrap {
     height: 34px;
-    min-width: 0;
     display: flex;
     align-items: center;
     position: relative;
     overflow: visible;
     transition: none;
     transform: none;
-    overflow: visible;
   }
 
   .tone-line {
@@ -3015,138 +2948,9 @@ const styles = `
   .slash { color: #64748b; font-size: 21px; font-weight: 700; }
   .fixed-tone-label { text-align: center; font-size: 16px; font-weight: 700; }
 
-  /* กล่องมุมมองถูกย้ายมาเป็นส่วนหนึ่งของแผงควบคุม */
-  .control-panel > .top-bar {
-    width: 100%;
-    flex: 0 0 auto;
-    min-height: 0;
-    margin-top: 0;
-    padding: 12px;
-  }
-
-  .control-panel > .top-bar .view-buttons,
-  .control-panel > .top-bar .monitor-buttons {
-    min-width: 0;
-  }
-
-  .control-panel > .top-bar .view-buttons {
-    flex: 1 1 auto;
-  }
-
-  .control-panel > .top-bar .monitor-buttons {
-    flex: 1 1 auto;
-  }
-
-  /* ให้ Board คำนวณพื้นที่จากขนาดเฟรมจริงทั้งแนวกว้างและแนวสูง
-     เพื่อไม่ให้วงกลม/สถานะขยายถูกตัดในทุกขนาดจอ */
-  .main-grid .board-frame {
-    container-type: inline-size;
-  }
-
-  .main-grid .tone-line-wrap {
-    min-width: 0;
-    padding-right: clamp(10px, 2.5cqw, 28px);
-  }
-
-  .main-grid .tone-circle {
-    width: clamp(34px, 7.2cqw, 48px) !important;
-    min-width: clamp(34px, 7.2cqw, 48px) !important;
-    max-width: clamp(34px, 7.2cqw, 48px) !important;
-    height: clamp(34px, 7.2cqw, 48px) !important;
-    flex-basis: clamp(34px, 7.2cqw, 48px) !important;
-  }
-
-  /* พื้นที่แสดงผลต้องไม่ถูกตัด แม้แถวสุดท้ายจะเป็นแถว Active */
-  .main-grid .tone-rows {
-    min-height: 0;
-    padding: 2px 0;
-  }
-
-  .main-grid .tone-row.active {
-    transform: scale(1.01);
-  }
-
-  .main-grid .tone-row.active .tone-circle {
-    transform: translate3d(-50%, -50%, 0) scale(1.18);
-  }
-
   .right-panel-wrapper {
-    min-width: 0;
     min-height: 0;
     height: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-
-  /* ปุ่มในกล่องมุมมองด้านล่างต้องไม่ล้นกรอบ โดยปรับขนาดตามพื้นที่แผงควบคุม */
-  .control-panel > .top-bar .view-buttons,
-  .control-panel > .top-bar .monitor-buttons {
-    flex-wrap: nowrap;
-  }
-
-  .control-panel > .top-bar .soft-btn,
-  .control-panel > .top-bar .selected-btn,
-  .control-panel > .top-bar .blue-btn,
-  .control-panel > .top-bar .green-btn {
-    min-width: 0;
-    flex: 1 1 0;
-    padding: 7px 6px;
-    font-size: 12px;
-    white-space: nowrap;
-  }
-
-  .control-panel > .top-bar .view-buttons strong {
-    flex: 0 0 auto;
-    font-size: 13px;
-  }
-
-  .control-panel > .top-bar .monitor-buttons .blue-btn,
-  .control-panel > .top-bar .monitor-buttons .green-btn {
-    font-size: 11px;
-    padding-left: 5px;
-    padding-right: 5px;
-  }
-
-  .control-panel > .top-bar .monitor-buttons .blue-btn {
-    font-size: 10px;
-  }
-
-  .board-frame {
-    position: relative;
-    min-width: 0;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-
-  .board-frame-resizer {
-    position: absolute;
-    left: 10px;
-    right: 10px;
-    bottom: 0;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: ns-resize;
-    touch-action: none;
-    z-index: 20;
-  }
-
-  .board-frame-resizer span {
-    width: 72px;
-    height: 5px;
-    border-radius: 999px;
-    background: #94a3b8;
-    box-shadow: 0 1px 4px rgba(15, 23, 42, .18);
-    transition: background .15s ease, transform .15s ease;
-  }
-
-  .board-frame-resizer:hover span,
-  .resizing-board-frame .board-frame-resizer span {
-    background: #0284c7;
-    transform: scaleX(1.12);
   }
 
   .control-panel {
@@ -3486,21 +3290,8 @@ const styles = `
       height: calc(100dvh - 44px);
     }
 
-    /* คงโหมดแบ่ง 2 จอไว้บน Tablet/จอแคบระดับกลาง
-       เพื่อให้เฟรมการแสดงผลอยู่ซ้าย และมุมมอง+แผงควบคุมอยู่ขวา */
     .main-grid.split-layout {
-      grid-template-columns: minmax(0, 1fr) 410px;
-      grid-template-rows: minmax(0, 1fr);
-    }
-
-    .main-grid.split-layout .board-frame {
-      grid-column: 1;
-      grid-row: 1;
-    }
-
-    .main-grid.split-layout .right-panel-wrapper {
-      grid-column: 2;
-      grid-row: 1;
+      grid-template-columns: 1fr;
     }
 
     .control-panel {
@@ -3511,59 +3302,21 @@ const styles = `
 
   @media (max-width: 640px) {
     .app-page { padding: 10px; }
-
-    .main-grid:not(.split-layout) {
-      grid-template-rows: minmax(0, auto) minmax(0, 1fr) !important;
-    }
-
-    .main-grid:not(.split-layout) .board-frame {
-      min-height: 0;
-      padding: 14px 10px !important;
-    }
-
-    .main-grid.split-layout {
-      grid-template-columns: 1fr;
-      grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-    }
-
-    .main-grid.split-layout .right-panel-wrapper,
-    .main-grid.split-layout .board-frame {
-      grid-column: auto;
-      grid-row: auto;
-    }
     .top-bar { padding: 12px; }
     .board-panel, .presentation-panel { padding: 22px 10px; }
-    .tone-header, .tone-row { grid-template-columns: 112px minmax(125px, 1fr) 52px; }
+    .tone-header, .tone-row { grid-template-columns: 112px minmax(115px, 1fr) 22px 52px; }
+    .tone-line-number { font-size: 13px; }
     .tone-header span, .tone-name { padding-right: 8px; }
     .tone-name { font-size: 13px !important; white-space: normal; }
     .fixed-tone-label { font-size: 12px; }
     .tone-rows { gap: 20px; }
     .tone-circle {
-      width: clamp(34px, 8.5vw, 39px) !important;
-      min-width: clamp(34px, 8.5vw, 39px) !important;
-      max-width: clamp(34px, 8.5vw, 39px) !important;
-      height: clamp(34px, 8.5vw, 39px) !important;
+      width: 39px !important;
+      min-width: 39px !important;
+      max-width: 39px !important;
+      height: 39px !important;
       padding: 0 !important;
-      font-size: clamp(14px, 3.4vw, 15px) !important;
-    }
-
-    .main-grid:not(.split-layout) .board-frame {
-      overflow: visible;
-    }
-
-    .main-grid:not(.split-layout) .tone-board {
-      height: auto;
-      min-height: 0;
-    }
-
-    .main-grid:not(.split-layout) .tone-rows {
-      flex: 0 0 auto;
-      gap: clamp(8px, 1.5vh, 14px);
-      padding: 2px 0;
-    }
-
-    .main-grid:not(.split-layout) .tone-row.active .tone-circle {
-      transform: translate3d(-50%, -50%, 0) scale(1.14);
+      font-size: 15px !important;
     }
     .multi-circles { gap: 4px; }
     .slash { font-size: 16px; }
@@ -3589,7 +3342,7 @@ const styles = `
       padding: 14px 8px;
     }
     .display-board .analysis-box { font-size: 11px; margin-bottom: 12px; }
-    .display-board .tone-header, .display-board .tone-row { grid-template-columns: 104px minmax(100px, 1fr) 48px; }
+    .display-board .tone-header, .display-board .tone-row { grid-template-columns: 104px minmax(100px, 1fr) 22px 48px; }
     .display-tip { font-size: 10px; max-width: 92vw; white-space: normal; text-align: center; }
   }
 
