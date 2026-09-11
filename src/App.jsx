@@ -1,4 +1,9 @@
+
+thai-tone-app-v8.jsx
+
+100%
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import audioService, { playThaiAudio, stopAudio, getSpeechFallbackVoice } from "./utils/audioService";
 
 /**
  * =============================================================================
@@ -1604,8 +1609,7 @@ function Board({
         })}
       </div>
 
-      {/* เพิ่มการเช็ค inputText ว่าง เพื่อซ่อนปุ่ม */}
-      {inputText.trim() !== "" && linesData.some((item) => item.show && (item.word || (item.isMulti && item.multi.length > 0))) && (
+      {linesData.some((item) => item.show && (item.word || (item.isMulti && item.multi.length > 0))) && (
         <div className="board-footer-actions">
           <button
             type="button"
@@ -1774,90 +1778,17 @@ export default function App() {
       return;
     }
 
-    const normalizedText = normalizeThaiSpeechText(text);
-
-    // Primary TTS: Azure Speech ผ่าน Cloudflare Pages Function
-    // ใช้ Thai Neural voice + SSML เพื่อไม่ให้เบราว์เซอร์แยกอ่านเป็นชื่ออักษร
     try {
-      const response = await fetch(TTS_API_ENDPOINT, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: normalizedText,
-          voice: TTS_VOICE,
-          rate: Number(speechRate),
-        }),
+      // เรียกใช้ฐานเสียงภาษาไทยผ่าน audioService (รองรับ Azure TTS + Web Speech Fallback + Audio Caching)
+      await playThaiAudio(text, {
+        rate: Number(speechRate),
+        voice: TTS_VOICE,
+        selectedVoiceURI,
+        voices,
       });
-
-      if (!response.ok) {
-        throw new Error(`Azure TTS HTTP ${response.status}`);
-      }
-
-      const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
-
-      const previousAudio = speechRef.current;
-      if (previousAudio instanceof HTMLAudioElement) {
-        previousAudio.pause();
-        previousAudio.currentTime = 0;
-      }
-
-      speechRef.current = audio;
-
-      await new Promise((resolve) => {
-        audio.onended = () => {
-          URL.revokeObjectURL(audioUrl);
-          if (speechRef.current === audio) {
-            speechRef.current = null;
-          }
-          resolve();
-        };
-        audio.onerror = () => {
-          URL.revokeObjectURL(audioUrl);
-          resolve();
-        };
-        audio.play().catch(() => resolve());
-      });
-      return;
     } catch (err) {
-      console.warn(
-        "Azure Thai TTS unavailable; using browser Thai voice fallback:",
-        err,
-      );
+      console.warn("audioService playback error:", err);
     }
-
-    // Fallback: browser Web Speech API โดยยอมใช้เฉพาะ Thai voice
-    const availableVoices = window.speechSynthesis.getVoices();
-    const thaiVoice = getSpeechFallbackVoice(
-      availableVoices,
-      selectedVoiceURI,
-    );
-
-    if (!thaiVoice) {
-      console.warn(
-        "ไม่พบเสียงภาษาไทย (th-TH/th-*). กรุณาเลือก/ติดตั้ง Thai TTS voice ในระบบ",
-      );
-      return;
-    }
-
-    window.speechSynthesis.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(normalizedText);
-    utterance.lang = "th-TH";
-    utterance.voice = thaiVoice;
-    utterance.rate = Number(speechRate);
-    utterance.pitch = 1;
-    utterance.volume = 1;
-
-    await new Promise((resolve) => {
-      utterance.onend = () => resolve();
-      utterance.onerror = () => resolve();
-      speechRef.current = utterance;
-      window.speechSynthesis.speak(utterance);
-    });
   };
 
   const handlePlayAllTones = async () => {
@@ -1869,13 +1800,7 @@ export default function App() {
 
     if (isPlayingAll) {
       isCancelingAutoPlayRef.current = true;
-      if (speechRef.current instanceof HTMLAudioElement) {
-        speechRef.current.pause();
-        speechRef.current.currentTime = 0;
-      }
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-      }
+      stopAudio();
       setActiveRowId(null);
       setIsPlayingAll(false);
       return;
@@ -2050,14 +1975,8 @@ export default function App() {
   const handleModeChange = (newMode) => {
     setMode(newMode);
     if (newMode === "pair") {
-      // หากมีคำอยู่แล้ว ให้ดึงพยัญชนะตัวแรกมาประสมสระออ หากไม่มีให้เริ่มที่ "ขอ"
-      let pairWord = "ขอ";
-      if (inputText.trim() !== "") {
-        const match = inputText.match(/([ก-ฮ])/);
-        if (match) {
-          pairWord = `${match[1]}อ`;
-        }
-      }
+      const { initial } = parseThaiWord(inputText);
+      const pairWord = `${initial || "ก"}อ`;
       setInputText(pairWord);
       validateInput(pairWord);
     }
@@ -2077,7 +1996,6 @@ export default function App() {
   };
 
   const handleQuickVowelClick = (vowel) => {
-    if (mode === "pair") return; // ป้องกันไม่ให้กดเปลี่ยนสระในโหมดจับคู่
     const { initial } = parseThaiWord(inputText);
     const newWord = `${vowel.front}${initial || "ก"}${vowel.rear}`;
     setInputText(newWord);
@@ -2521,7 +2439,7 @@ export default function App() {
                       <ModeRadio value="full5" checked={mode === "full5"} label={t("แสดงชุดผัน 5 เสียงเมื่อมีกฎเทียบ (อักษรคู่ / ห นำ)", "Show 5 tones with paired / leading rules")} onChange={handleModeChange} />
                       <ModeRadio value="highOnly" checked={mode === "highOnly"} label={t("เฉพาะเสียงสูง (เอก, โท, จัตวา)", "High tone set only (Low, Falling, Rising)")} onChange={handleModeChange} />
                       <ModeRadio value="lowOnly" checked={mode === "lowOnly"} label={t("เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)", "Low tone set only (Mid, Falling, High)")} onChange={handleModeChange} />
-                      <ModeRadio value="pair" checked={mode === "pair"} label={t("จับคู่อักษร(เสียง)สูงและอักษร(เสียง)ต่ำ เพื่อระบุกลุ่มอักษร", "Pair High & Low Class Consonants")} onChange={handleModeChange} />
+                      <ModeRadio value="pair" checked={mode === "pair"} label={t("จับคู่อักษรสูงและอักษรต่ำ", "Pair High & Low Class Consonants")} onChange={handleModeChange} />
                     </div>
 
                     <div className="input-row">
@@ -2530,10 +2448,8 @@ export default function App() {
                         placeholder={t("พิมพ์ 1 คำ เช่น กอ, เมา, กวาง", "Type 1 word, e.g. กอ, เมา, กวาง")}
                         onChange={(event) => {
                           let val = event.target.value;
-                          if (mode === "pair") {
-                            // บังคับให้เป็นพยัญชนะไทย 1 ตัวตามด้วยสระออ หากลบข้อความหมดให้กลับไปเริ่มที่ "ขอ"
-                            const match = val.match(/([ก-ฮ])/);
-                            val = match ? `${match[1]}อ` : "ขอ";
+                          if (mode === "pair" && val.length === 1 && /[ก-ฮ]/.test(val)) {
+                            val = `${val}อ`;
                           }
                           setInputText(val);
                           validateInput(val);
@@ -3066,8 +2982,7 @@ const styles = `
   .main-grid > section {
     min-width: 0;
     min-height: 0;
-    overflow-y: auto; /* เปลียนจาก hidden เป็นเลื่อนแนวตั้งได้ */
-    overflow-x: hidden;
+    overflow: hidden;
   }
 
   .board-panel { padding: 30px 22px; min-width: 0; }
@@ -3119,11 +3034,9 @@ const styles = `
     70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
     100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
   }
-  
-  .board-title { text-align: center; margin-bottom: 18px; }
-  /* ระบุสีม่วงแก่เจาะจงลงไปที่แท็ก h2 และ div โดยตรง เพื่อป้องกันการโดนทับด้วย Default Browser CSS */
-  .board-title h2 { margin: 0; font-size: clamp(23px, 2.3vw, 30px); color: #6b21a8; }
-  .board-title div { font-size: clamp(16px, 1.5vw, 19px); font-weight: 600; color: #6b21a8; }
+  .board-title { text-align: center; color: #ea580c; margin-bottom: 18px; }
+  .board-title h2 { margin: 0; font-size: clamp(23px, 2.3vw, 30px); }
+  .board-title div { font-size: clamp(16px, 1.5vw, 19px); font-weight: 600; }
 
   .analysis-box {
     margin: 0 auto 22px;
@@ -3183,7 +3096,6 @@ const styles = `
     gap: 24px;
     padding-top: 28px; /* เว้นระยะด้านบน 28px ป้องกันก้านโน้ต/ไม้จัตวาของคำว่า ก๋อ ชนหรือล้นขอบบน */
     overflow: visible;
-    min-height: min-content; /* บังคับให้รักษาความสูงตามเนื้อหาจริง ไม่หดจนทับกัน */
   }
 
   .tone-row {
@@ -3590,8 +3502,7 @@ const styles = `
     box-shadow: 0 16px 42px rgba(0,0,0,.18);
     display: flex;
     flex-direction: column;
-    overflow-y: auto; /* เปลียนจาก hidden เป็นเลื่อนแนวตั้งได้ */
-    overflow-x: hidden;
+    overflow: hidden;
   }
 
   .display-board .tone-rows {
