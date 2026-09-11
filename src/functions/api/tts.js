@@ -1,120 +1,174 @@
-// functions/api/tts.js
-export async function onRequestGet(context) {
-  const { env, request } = context;
-  const url = new URL(request.url);
-  const word = url.searchParams.get("word");
-  const list = url.searchParams.get("list");
 
-  // 1. เรียกดูรายการคำศัพท์ทั้งหมดสำหรับแผงควบคุม
-  if (list) {
-    const { results } = await env.DB.prepare("SELECT * FROM words ORDER BY id DESC").all();
-    return new Response(JSON.stringify(results), {
-      headers: { "Content-Type": "application/json" }
-    });
-  }
+audioService.js
 
-  // 2. ดึงไฟล์เสียงเฉพาะคำจาก R2
-  if (word) {
-    const filename = `${encodeURIComponent(word)}.mp3`;
-    const object = await env.AUDIO_BUCKET.get(filename);
-    if (!object) {
-      return new Response(JSON.stringify({ error: "Audio not found" }), { status: 404 });
-    }
-    return new Response(object.body, {
-      headers: { "Content-Type": "audio/mpeg", "X-Cache-Status": "HIT-R2" }
-    });
-  }
+100%
+/**
+ * src/utils/audioService.js
+ * 
+ * โมดูลจัดการฐานเสียงและบริการออกเสียงภาษาไทย (Thai Audio Service)
+ * ออกแบบสำหรับใช้งานร่วมกับ Cloudflare Pages และ Azure Speech API
+ * 
+ * คุณสมบัติ:
+ * 1. ฐานเสียงหลัก: Azure Speech ผ่าน Cloudflare Pages Function (/api/tts)
+ * 2. ระบบ In-Memory Audio Caching เพื่อให้การเล่นเสียงซ้ำทำได้ทันทีโดยไม่ต้องโหลดใหม่
+ * 3. ฐานเสียงสำรอง: Browser Web Speech API (คัดกรองเฉพาะเสียงภาษาไทย th-TH / th-*)
+ * 4. จัดการเสียงแบบ Promise-based รอจนกว่าเสียงจะพูดจบจริง รองรับการเล่นแบบวนลำดับอัตโนมัติ
+ * 5. ฟังก์ชัน stopAudio() สำหรับตัดเสียงทันทีเมื่อเปลี่ยนคำหรือกดยกเลิก
+ */
 
-  return new Response(JSON.stringify({ error: "Invalid request" }), { status: 400 });
+const TTS_API_ENDPOINT = "/api/tts";
+const DEFAULT_VOICE = "th-TH-PremwadeeNeural";
+
+// แคชจัดเก็บ Object URL ของไฟล์เสียงเพื่อป้องกันการเรียก Network ซ้ำ
+const audioCache = new Map();
+
+let currentAudio = null;
+let currentUtterance = null;
+
+export function normalizeThaiSpeechText(text = "") {
+  return String(text)
+    .normalize("NFC")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
-export async function onRequestPost(context) {
-  const { request, env } = context;
-  const { word, ipa, tone_rule, overwrite } = await request.json();
+export function stopAudio() {
+  if (currentAudio instanceof HTMLAudioElement) {
+    currentAudio.pause();
+    currentAudio.currentTime = 0;
+    currentAudio = null;
+  }
+  if (typeof window !== "undefined" && "speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+    currentUtterance = null;
+  }
+}
 
-  if (!word) {
-    return new Response(JSON.stringify({ error: "Word is required" }), { status: 400 });
+export function getSpeechFallbackVoice(voices = [], selectedVoiceURI = "") {
+  return (
+    voices.find(
+      (item) =>
+        item.voiceURI === selectedVoiceURI &&
+        item.lang?.toLowerCase().startsWith("th"),
+    ) ||
+    voices.find((item) => item.lang?.toLowerCase().startsWith("th"))
+  );
+}
+
+/**
+ * ออกเสียงคำภาษาไทยผ่านฐานเสียง Cloudflare / Azure พร้อมระบบ Fallback
+ * @param {string} text - คำหรือข้อความที่ต้องการออกเสียง
+ * @param {object} options - { rate: number, voice: string, selectedVoiceURI: string, voices: Array }
+ * @returns {Promise<void>} resolve เมื่อเสียงพูดจบประโยคสมบูรณ์
+ */
+export async function playThaiAudio(text, options = {}) {
+  if (typeof window === "undefined" || !text) return;
+
+  const normalizedText = normalizeThaiSpeechText(text);
+  const speechRate = Number(options.rate) || 0.85;
+  const voice = options.voice || DEFAULT_VOICE;
+
+  // หยุดเสียงเดิมที่กำลังเล่นอยู่ก่อน
+  stopAudio();
+
+  // 1. ตรวจสอบใน Audio Cache (หากเคยเล่นแล้ว ให้เล่นจากแคชทันที)
+  const cacheKey = `${normalizedText}_${speechRate}_${voice}`;
+  if (audioCache.has(cacheKey)) {
+    const cachedUrl = audioCache.get(cacheKey);
+    const audio = new Audio(cachedUrl);
+    currentAudio = audio;
+
+    return new Promise((resolve) => {
+      audio.onended = () => {
+        if (currentAudio === audio) currentAudio = null;
+        resolve();
+      };
+      audio.onerror = () => {
+        if (currentAudio === audio) currentAudio = null;
+        resolve();
+      };
+      audio.play().catch(() => resolve());
+    });
   }
 
-  const filename = `${encodeURIComponent(word)}.mp3`;
+  // 2. เรียกฐานเสียงหลัก: Cloudflare Pages Function (/api/tts -> Azure Neural)
+  try {
+    const response = await fetch(TTS_API_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        text: normalizedText,
+        voice,
+        rate: speechRate,
+      }),
+    });
 
-  // ตรวจสอบใน R2 ก่อน (ถ้าไม่ได้สั่ง overwrite)
-  if (!overwrite) {
-    const cachedAudio = await env.AUDIO_BUCKET.get(filename);
-    if (cachedAudio) {
-      return new Response(cachedAudio.body, {
-        headers: { "Content-Type": "audio/mpeg", "X-Cache-Status": "HIT-R2" }
+    if (response.ok) {
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      audioCache.set(cacheKey, audioUrl);
+
+      const audio = new Audio(audioUrl);
+      currentAudio = audio;
+
+      return new Promise((resolve) => {
+        audio.onended = () => {
+          if (currentAudio === audio) currentAudio = null;
+          resolve();
+        };
+        audio.onerror = () => {
+          if (currentAudio === audio) currentAudio = null;
+          resolve();
+        };
+        audio.play().catch(() => resolve());
       });
     }
+  } catch (err) {
+    console.warn("audioService: Primary TTS endpoint failed, using fallback:", err);
   }
 
-  // Azure Neural TTS Configuration เพื่อคุณภาพเสียงภาษาไทยระดับสูงสุด
-  const azureKey = env.AZURE_SPEECH_KEY;
-  const azureRegion = env.AZURE_SPEECH_REGION;
-  const endpoint = `https://${azureRegion}.tts.speech.microsoft.com/cognitiveservices/v1`;
+  // 3. ฐานเสียงสำรอง: Web Speech API ของเบราว์เซอร์
+  if ("speechSynthesis" in window) {
+    const availableVoices = options.voices || window.speechSynthesis.getVoices();
+    const thaiVoice = getSpeechFallbackVoice(availableVoices, options.selectedVoiceURI);
 
-  const wordContent = ipa ? `<phoneme alphabet="ipa" ph="${ipa}">${word}</phoneme>` : word;
-  const ssml = `
-    <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="th-TH">
-      <voice name="th-TH-PremwadeeNeural">
-        <prosody rate="0%" pitch="0%">
-          ${wordContent}
-        </prosody>
-      </voice>
-    </speak>`;
+    if (!thaiVoice) {
+      console.warn("audioService: ไม่พบเสียงภาษาไทยในระบบ");
+      return;
+    }
 
-  const azureRes = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Ocp-Apim-Subscription-Key": azureKey,
-      "Content-Type": "application/ssml+xml",
-      "X-Microsoft-OutputFormat": "audio-24khz-96kbitrate-mono-mp3"
-    },
-    body: ssml
-  });
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(normalizedText);
+    utterance.lang = "th-TH";
+    utterance.voice = thaiVoice;
+    utterance.rate = speechRate;
+    utterance.pitch = 1;
+    utterance.volume = 1;
 
-  if (!azureRes.ok) {
-    const errorText = await azureRes.text();
-    return new Response(JSON.stringify({ error: "Azure TTS failed", details: errorText }), { status: 502 });
+    currentUtterance = utterance;
+
+    return new Promise((resolve) => {
+      utterance.onend = () => {
+        currentUtterance = null;
+        resolve();
+      };
+      utterance.onerror = () => {
+        currentUtterance = null;
+        resolve();
+      };
+      window.speechSynthesis.speak(utterance);
+    });
   }
-
-  const audioBuffer = await azureRes.arrayBuffer();
-
-  // บันทึกไฟล์เสียงลง Cloudflare R2
-  await env.AUDIO_BUCKET.put(filename, audioBuffer, {
-    httpMetadata: { contentType: "audio/mpeg" }
-  });
-
-  // บันทึกหรืออัปเดตลง D1 Database
-  await env.DB.prepare(`
-    INSERT INTO words (word, tone_rule, ipa, audio_filename) 
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(word) DO UPDATE SET 
-      tone_rule = excluded.tone_rule,
-      ipa = excluded.ipa,
-      audio_filename = excluded.audio_filename
-  `).bind(word, tone_rule || null, ipa || null, filename).run();
-
-  return new Response(audioBuffer, {
-    headers: { "Content-Type": "audio/mpeg", "X-Cache-Status": "MISS-AZURE" }
-  });
 }
 
-export async function onRequestDelete(context) {
-  const { request, env } = context;
-  const { word } = await request.json();
+const audioService = {
+  play: playThaiAudio,
+  stop: stopAudio,
+  normalizeText: normalizeThaiSpeechText,
+  getFallbackVoice: getSpeechFallbackVoice,
+};
 
-  if (!word) {
-    return new Response(JSON.stringify({ error: "Word is required" }), { status: 400 });
-  }
-
-  const filename = `${encodeURIComponent(word)}.mp3`;
-
-  // ลบทั้งใน R2 และ D1
-  await env.AUDIO_BUCKET.delete(filename);
-  await env.DB.prepare("DELETE FROM words WHERE word = ?").bind(word).run();
-
-  return new Response(JSON.stringify({ success: true, message: `Deleted ${word}` }), {
-    headers: { "Content-Type": "application/json" }
-  });
-}
+export default audioService;
+กำลังแสดง audioService.js
