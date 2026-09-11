@@ -20,19 +20,21 @@ function escapeSsml(text) {
 
 /**
  * เรียก Azure Cognitive Services Speech เพื่อสังเคราะห์เสียง
- * @param {object} env - Cloudflare env bindings (ต้องมี AZURE_TTS_KEY, AZURE_TTS_REGION)
+ * @param {object} env - Cloudflare env bindings. รองรับทั้งชื่อเดิม
+ *   AZURE_TTS_KEY/AZURE_TTS_REGION และชื่อที่ตั้งไว้ใน Pages
+ *   AZURE_SPEECH_KEY/AZURE_SPEECH_REGION
  * @param {string} text - คำ/ข้อความภาษาไทยที่จะอ่าน
  * @param {string} [voice] - ชื่อเสียง Azure Neural เช่น th-TH-PremwadeeNeural
  * @param {number} [rate] - อัตราเร็ว 0.5 - 1.4 (1 = ปกติ)
  * @returns {Promise<ArrayBuffer>} ไฟล์เสียง MP3 แบบ binary
  */
 export async function synthesizeAzureTts(env, text, voice, rate) {
-  const azureKey = env.AZURE_TTS_KEY;
-  const azureRegion = env.AZURE_TTS_REGION;
+  const azureKey = env.AZURE_TTS_KEY || env.AZURE_SPEECH_KEY;
+  const azureRegion = env.AZURE_TTS_REGION || env.AZURE_SPEECH_REGION;
 
   if (!azureKey || !azureRegion) {
     throw new Error(
-      "Missing AZURE_TTS_KEY / AZURE_TTS_REGION environment variable binding",
+      "Missing Azure Speech bindings: set AZURE_TTS_KEY/AZURE_TTS_REGION or AZURE_SPEECH_KEY/AZURE_SPEECH_REGION",
     );
   }
   if (!text || !text.trim()) {

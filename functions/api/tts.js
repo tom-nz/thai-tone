@@ -9,12 +9,13 @@ import { synthesizeAzureTts, toAudioFilename } from "../_lib/azureTts.js";
  *  2) ถ้าไม่มี -> เรียก Azure TTS สังเคราะห์ใหม่ -> บันทึกลง R2 + บันทึกคำลง D1 -> ส่งกลับ
  *
  * ต้องผูก binding ต่อไปนี้ใน Cloudflare Pages > Settings > Functions:
- *  - R2 bucket:      AUDIO_BUCKET
+ *  - R2 bucket:      AUDIO_BUCKET (หรือ AUDIO_FILES ตามชื่อ binding ที่ตั้งไว้ใน Pages)
  *  - D1 database:    DB
  *  - Env variables:  AZURE_TTS_KEY, AZURE_TTS_REGION
  */
 export async function onRequestPost(context) {
   const { request, env } = context;
+  const audioBucket = env.AUDIO_BUCKET || env.AUDIO_FILES;
 
   let body;
   try {
@@ -37,11 +38,18 @@ export async function onRequestPost(context) {
     });
   }
 
+  if (!audioBucket) {
+    return new Response(JSON.stringify({ error: "Missing R2 binding: set AUDIO_BUCKET or AUDIO_FILES" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const filename = toAudioFilename(word);
 
   // ชั้นที่ 2: ตรวจสอบใน Cloudflare R2 ก่อนว่ามีไฟล์เสียงนี้อยู่แล้วหรือไม่
   try {
-    const existingAudio = await env.AUDIO_BUCKET.get(filename);
+    const existingAudio = await audioBucket.get(filename);
     if (existingAudio) {
       return new Response(existingAudio.body, {
         headers: {
@@ -69,7 +77,7 @@ export async function onRequestPost(context) {
 
   // บันทึกไฟล์เสียงลง Cloudflare R2 เพื่อให้ครั้งถัดไปเร็วขึ้น (ทุกเครื่อง/ทุกผู้ใช้)
   try {
-    await env.AUDIO_BUCKET.put(filename, audioBuffer, {
+    await audioBucket.put(filename, audioBuffer, {
       httpMetadata: { contentType: "audio/mpeg" },
     });
   } catch (err) {

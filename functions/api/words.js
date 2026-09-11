@@ -10,7 +10,7 @@ import { synthesizeAzureTts, toAudioFilename } from "../_lib/azureTts.js";
  *        formData: word, audio(file)
  * DELETE /api/words?word=...      -> ลบคำ + ไฟล์เสียงออกจาก R2 และ D1 (delete)
  *
- * ต้องผูก binding เดียวกับ functions/api/tts.js: AUDIO_BUCKET (R2), DB (D1),
+ * ต้องผูก binding เดียวกับ functions/api/tts.js: AUDIO_BUCKET หรือ AUDIO_FILES (R2), DB (D1),
  * AZURE_TTS_KEY, AZURE_TTS_REGION (Environment variables)
  */
 
@@ -35,6 +35,7 @@ export async function onRequestGet(context) {
 
 export async function onRequestPost(context) {
   const { request, env } = context;
+  const audioBucket = env.AUDIO_BUCKET || env.AUDIO_FILES;
 
   let body;
   try {
@@ -54,6 +55,13 @@ export async function onRequestPost(context) {
     });
   }
 
+  if (!audioBucket) {
+    return new Response(JSON.stringify({ error: "Missing R2 binding: set AUDIO_BUCKET or AUDIO_FILES" }), {
+      status: 500,
+      headers: jsonHeaders,
+    });
+  }
+
   const filename = toAudioFilename(word);
 
   let audioBuffer;
@@ -67,7 +75,7 @@ export async function onRequestPost(context) {
   }
 
   try {
-    await env.AUDIO_BUCKET.put(filename, audioBuffer, {
+    await audioBucket.put(filename, audioBuffer, {
       httpMetadata: { contentType: "audio/mpeg" },
     });
 
@@ -105,6 +113,7 @@ export async function onRequestPost(context) {
 // แก้ไข: แทนที่ไฟล์เสียงด้วยไฟล์ที่ผู้ใช้อัปโหลดเอง (เช่น กรณี Azure อ่านคำเพี้ยน)
 export async function onRequestPut(context) {
   const { request, env } = context;
+  const audioBucket = env.AUDIO_BUCKET || env.AUDIO_FILES;
 
   let formData;
   try {
@@ -126,11 +135,18 @@ export async function onRequestPut(context) {
     );
   }
 
+  if (!audioBucket) {
+    return new Response(JSON.stringify({ error: "Missing R2 binding: set AUDIO_BUCKET or AUDIO_FILES" }), {
+      status: 500,
+      headers: jsonHeaders,
+    });
+  }
+
   const filename = toAudioFilename(word);
 
   try {
     const audioBuffer = await audioFile.arrayBuffer();
-    await env.AUDIO_BUCKET.put(filename, audioBuffer, {
+    await audioBucket.put(filename, audioBuffer, {
       httpMetadata: { contentType: audioFile.type || "audio/mpeg" },
     });
 
@@ -168,6 +184,7 @@ export async function onRequestPut(context) {
 // ลบ: เอาคำออกจาก D1 และลบไฟล์เสียงออกจาก R2
 export async function onRequestDelete(context) {
   const { request, env } = context;
+  const audioBucket = env.AUDIO_BUCKET || env.AUDIO_FILES;
   const url = new URL(request.url);
   const word = (url.searchParams.get("word") || "").trim();
 
@@ -178,10 +195,17 @@ export async function onRequestDelete(context) {
     );
   }
 
+  if (!audioBucket) {
+    return new Response(JSON.stringify({ error: "Missing R2 binding: set AUDIO_BUCKET or AUDIO_FILES" }), {
+      status: 500,
+      headers: jsonHeaders,
+    });
+  }
+
   const filename = toAudioFilename(word);
 
   try {
-    await env.AUDIO_BUCKET.delete(filename);
+    await audioBucket.delete(filename);
     await env.DB.prepare("DELETE FROM words WHERE word = ?").bind(word).run();
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {
