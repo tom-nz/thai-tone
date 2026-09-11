@@ -147,12 +147,7 @@ const apiKey = "";
 const CHANNEL_NAME = "thai_tone_sync_channel";
 const STORAGE_KEY = "thai_tone_live_sync_data";
 const TTS_API_ENDPOINT = "/api/tts";
-const WORDS_API_ENDPOINT = "/api/words";
 const TTS_VOICE = "th-TH-PremwadeeNeural";
-
-// ชื่อฐานข้อมูล/ตารางสำหรับแคชไฟล์เสียงในเครื่อง (IndexedDB)
-const LOCAL_AUDIO_DB_NAME = "thai_tone_audio_cache";
-const LOCAL_AUDIO_STORE_NAME = "audio_blobs";
 
 // Regex ตรวจสอบคำไทย 1 พยางค์อย่างเคร่งครัด
 const STRICT_THAI_SYLLABLE_PATTERN = /^[เแโใไ]?[ก-ฮ]{1,2}[ิีึืุูั็ํ]?[่้๊๋]?[าำยวอ]?[ก-ฮ]?[ะ์]?$/;
@@ -247,90 +242,6 @@ const toneRows = [
   { id: 2, tone: "เสียงเอก", mark: "◌่", leftPos: "40%" },
   { id: 1, tone: "เสียงสามัญ", mark: "-", leftPos: "28%" },
 ];
-
-/**
- * =============================================================================
- * LOCAL AUDIO CACHE (IndexedDB) — ชั้นที่ 1 ของ Multi-tier Caching
- * =============================================================================
- * ใช้ IndexedDB เก็บไฟล์เสียง (Blob) ที่เคยเล่นแล้วไว้ในเครื่อง PC / มือถือ
- * เพื่อให้เล่นซ้ำได้ทันที (0 ms) โดยไม่ต้องเรียก Cloudflare R2 / Azure TTS ซ้ำ
- * ไม่ใช้ localStorage เพราะมีข้อจำกัดพื้นที่แค่ ~5MB และเก็บ Blob ไม่ได้ดี
- * =============================================================================
- */
-function openAudioCacheDB() {
-  return new Promise((resolve, reject) => {
-    if (typeof indexedDB === "undefined") {
-      reject(new Error("IndexedDB not supported in this environment"));
-      return;
-    }
-    const request = indexedDB.open(LOCAL_AUDIO_DB_NAME, 1);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(LOCAL_AUDIO_STORE_NAME)) {
-        db.createObjectStore(LOCAL_AUDIO_STORE_NAME);
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-async function getLocalAudioBlob(key) {
-  try {
-    const db = await openAudioCacheDB();
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(LOCAL_AUDIO_STORE_NAME, "readonly");
-      const req = tx.objectStore(LOCAL_AUDIO_STORE_NAME).get(key);
-      req.onsuccess = () => resolve(req.result || null);
-      req.onerror = () => reject(req.error);
-    });
-  } catch (err) {
-    console.warn("getLocalAudioBlob error:", err);
-    return null;
-  }
-}
-
-async function setLocalAudioBlob(key, blob) {
-  try {
-    const db = await openAudioCacheDB();
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(LOCAL_AUDIO_STORE_NAME, "readwrite");
-      tx.objectStore(LOCAL_AUDIO_STORE_NAME).put(blob, key);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch (err) {
-    console.warn("setLocalAudioBlob error:", err);
-  }
-}
-
-async function deleteLocalAudioBlob(key) {
-  try {
-    const db = await openAudioCacheDB();
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(LOCAL_AUDIO_STORE_NAME, "readwrite");
-      tx.objectStore(LOCAL_AUDIO_STORE_NAME).delete(key);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch (err) {
-    console.warn("deleteLocalAudioBlob error:", err);
-  }
-}
-
-async function clearAllLocalAudioBlobs() {
-  try {
-    const db = await openAudioCacheDB();
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(LOCAL_AUDIO_STORE_NAME, "readwrite");
-      tx.objectStore(LOCAL_AUDIO_STORE_NAME).clear();
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch (err) {
-    console.warn("clearAllLocalAudioBlobs error:", err);
-  }
-}
 
 // Custom Radio Component
 function ModeRadio({ value, checked, label, onChange }) {
@@ -1817,14 +1728,6 @@ export default function App() {
   const [voices, setVoices] = useState([]);
   const [selectedVoiceURI, setSelectedVoiceURI] = useState("");
 
-  // สถานะสำหรับแผง "คลังเสียง" (เพิ่ม/แก้ไข/ลบคำในฐานข้อมูล Cloudflare D1 + R2)
-  const [soundManagerOpen, setSoundManagerOpen] = useState(false);
-  const [soundWords, setSoundWords] = useState([]);
-  const [soundLoading, setSoundLoading] = useState(false);
-  const [soundError, setSoundError] = useState("");
-  const [soundSearch, setSoundSearch] = useState("");
-  const [newSoundWord, setNewSoundWord] = useState("");
-
   const [customApiKey, setCustomApiKey] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("gemini_api_key") || "";
@@ -1872,12 +1775,28 @@ export default function App() {
     }
 
     const normalizedText = normalizeThaiSpeechText(text);
-    // คีย์ที่ใช้เก็บ/ค้นไฟล์เสียงใน Local Cache (IndexedDB) — อิงตามคำพูดล้วนๆ
-    // ให้สอดคล้องกับชื่อไฟล์ฝั่ง Cloudflare R2 (ดู functions/api/tts.js -> toAudioFilename)
-    const cacheKey = normalizedText;
 
-    const playAudioBlob = async (blob) => {
-      const audioUrl = URL.createObjectURL(blob);
+    // Primary TTS: Azure Speech ผ่าน Cloudflare Pages Function
+    // ใช้ Thai Neural voice + SSML เพื่อไม่ให้เบราว์เซอร์แยกอ่านเป็นชื่ออักษร
+    try {
+      const response = await fetch(TTS_API_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: normalizedText,
+          voice: TTS_VOICE,
+          rate: Number(speechRate),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Azure TTS HTTP ${response.status}`);
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
 
       const previousAudio = speechRef.current;
@@ -1902,42 +1821,6 @@ export default function App() {
         };
         audio.play().catch(() => resolve());
       });
-    };
-
-    // ชั้นที่ 1: Local Cache ในเครื่อง (IndexedDB) — เร็วที่สุด ออฟไลน์ได้
-    try {
-      const localBlob = await getLocalAudioBlob(cacheKey);
-      if (localBlob) {
-        await playAudioBlob(localBlob);
-        return;
-      }
-    } catch (err) {
-      console.warn("Local audio cache read error:", err);
-    }
-
-    // ชั้นที่ 2 & 3: Cloudflare R2 (แคชกลาง) -> Azure TTS (สังเคราะห์ใหม่)
-    // ผ่าน Cloudflare Pages Function เดียวกัน (ดู functions/api/tts.js)
-    try {
-      const response = await fetch(TTS_API_ENDPOINT, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          text: normalizedText,
-          voice: TTS_VOICE,
-          rate: Number(speechRate),
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Azure TTS HTTP ${response.status}`);
-      }
-
-      const audioBlob = await response.blob();
-      // เซฟลง Local Cache ไว้ใช้ครั้งถัดไป (fire-and-forget ไม่บล็อกการเล่นเสียง)
-      setLocalAudioBlob(cacheKey, audioBlob);
-      await playAudioBlob(audioBlob);
       return;
     } catch (err) {
       console.warn(
@@ -2222,111 +2105,6 @@ export default function App() {
     setApiSaveStatus("บันทึก API Key เรียบร้อยแล้ว!");
     window.setTimeout(() => setApiSaveStatus(""), 3000);
   };
-
-  /**
-   * =============================================================================
-   * SOUND LIBRARY MANAGER — เรียก /api/words (Cloudflare Pages Function + D1 + R2)
-   * เพื่อ เรียกดู(browse) / เพิ่ม(add) / แก้ไข(edit) / ลบ(delete) ไฟล์เสียงคำอ่าน
-   * =============================================================================
-   */
-  const fetchSoundWords = useCallback(async () => {
-    setSoundLoading(true);
-    setSoundError("");
-    try {
-      const response = await fetch(WORDS_API_ENDPOINT);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
-      setSoundWords(Array.isArray(data.words) ? data.words : []);
-    } catch (err) {
-      console.warn("fetchSoundWords error:", err);
-      setSoundError(t("โหลดรายการคำไม่สำเร็จ ตรวจสอบการเชื่อมต่อ D1/R2", "Failed to load word list"));
-    } finally {
-      setSoundLoading(false);
-    }
-  }, [t]);
-
-  useEffect(() => {
-    if (soundManagerOpen) fetchSoundWords();
-  }, [soundManagerOpen, fetchSoundWords]);
-
-  const handleAddSoundWord = async () => {
-    const word = newSoundWord.trim();
-    if (!word) return;
-    setSoundLoading(true);
-    setSoundError("");
-    try {
-      const response = await fetch(WORDS_API_ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ word, voice: TTS_VOICE, rate: speechRate }),
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      await deleteLocalAudioBlob(normalizeThaiSpeechText(word));
-      setNewSoundWord("");
-      await fetchSoundWords();
-    } catch (err) {
-      console.warn("handleAddSoundWord error:", err);
-      setSoundError(t("เพิ่มคำไม่สำเร็จ ลองใหม่อีกครั้ง", "Failed to add word"));
-    } finally {
-      setSoundLoading(false);
-    }
-  };
-
-  const handleDeleteSoundWord = async (word) => {
-    setSoundLoading(true);
-    setSoundError("");
-    try {
-      const response = await fetch(
-        `${WORDS_API_ENDPOINT}?word=${encodeURIComponent(word)}`,
-        { method: "DELETE" },
-      );
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      await deleteLocalAudioBlob(normalizeThaiSpeechText(word));
-      await fetchSoundWords();
-    } catch (err) {
-      console.warn("handleDeleteSoundWord error:", err);
-      setSoundError(t("ลบคำไม่สำเร็จ ลองใหม่อีกครั้ง", "Failed to delete word"));
-    } finally {
-      setSoundLoading(false);
-    }
-  };
-
-  const handleReplaceSoundAudio = async (word, file) => {
-    if (!file) return;
-    setSoundLoading(true);
-    setSoundError("");
-    try {
-      const formData = new FormData();
-      formData.append("word", word);
-      formData.append("audio", file);
-      const response = await fetch(WORDS_API_ENDPOINT, {
-        method: "PUT",
-        body: formData,
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      await deleteLocalAudioBlob(normalizeThaiSpeechText(word));
-      await fetchSoundWords();
-    } catch (err) {
-      console.warn("handleReplaceSoundAudio error:", err);
-      setSoundError(t("แทนที่ไฟล์เสียงไม่สำเร็จ", "Failed to replace audio"));
-    } finally {
-      setSoundLoading(false);
-    }
-  };
-
-  const handleClearAllLocalCache = async () => {
-    await clearAllLocalAudioBlobs();
-    setSoundError(t("ล้างแคชเสียงในเครื่องเรียบร้อยแล้ว", "Local audio cache cleared"));
-    window.setTimeout(() => setSoundError(""), 3000);
-  };
-
-  const filteredSoundWords = useMemo(() => {
-    const query = soundSearch.trim().toLowerCase();
-    if (!query) return soundWords;
-    return soundWords.filter((item) =>
-      (item.word || "").toLowerCase().includes(query),
-    );
-  }, [soundWords, soundSearch]);
 
   const toggleFullscreen = useCallback(() => {
     if (typeof document === "undefined") return;
@@ -2994,104 +2772,6 @@ export default function App() {
                     >
                       ▶ {t("ทดลองอ่านคำ", "Test Voice")}
                     </button>
-                  </section>
-
-                  <section className="control-group sound-manager-section">
-                    <button
-                      className="soft-btn"
-                      onClick={() => setSoundManagerOpen((value) => !value)}
-                    >
-                      📚 {soundManagerOpen
-                        ? t("ปิดคลังเสียง", "Close Sound Library")
-                        : t("จัดการคลังเสียง (เรียกดู/เพิ่ม/แก้ไข/ลบ)", "Manage Sound Library (Browse/Add/Edit/Delete)")}
-                    </button>
-
-                    {soundManagerOpen && (
-                      <div className="sound-manager-box">
-                        <div className="input-row">
-                          <input
-                            type="text"
-                            value={newSoundWord}
-                            placeholder={t("พิมพ์คำใหม่ที่จะเพิ่ม...", "Type a new word to add...")}
-                            onChange={(event) => setNewSoundWord(event.target.value)}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") handleAddSoundWord();
-                            }}
-                          />
-                          <button
-                            className="green-btn"
-                            onClick={handleAddSoundWord}
-                            disabled={soundLoading || !newSoundWord.trim()}
-                          >
-                            ➕ {t("เพิ่ม", "Add")}
-                          </button>
-                        </div>
-
-                        <input
-                          type="text"
-                          value={soundSearch}
-                          placeholder={t("🔍 ค้นหาคำในคลังเสียง...", "🔍 Search sound library...")}
-                          onChange={(event) => setSoundSearch(event.target.value)}
-                        />
-
-                        {soundLoading && (
-                          <div className="section-label">{t("กำลังโหลด...", "Loading...")}</div>
-                        )}
-                        {soundError && <div className="error-text">{soundError}</div>}
-
-                        <div className="sound-word-list">
-                          {filteredSoundWords.length === 0 && !soundLoading && (
-                            <div className="section-label">
-                              {t("ยังไม่มีคำในคลังเสียง", "No words in the sound library yet")}
-                            </div>
-                          )}
-                          {filteredSoundWords.map((item) => (
-                            <div key={item.word} className="sound-word-row">
-                              <span className="sound-word-text">{item.word}</span>
-                              <div className="sound-word-actions">
-                                <button
-                                  className="soft-btn"
-                                  title={t("ฟังเสียง", "Play")}
-                                  onClick={() => speak(item.word, true)}
-                                >
-                                  ▶
-                                </button>
-                                <label
-                                  className="soft-btn sound-edit-btn"
-                                  title={t("แทนที่ไฟล์เสียง (อัปโหลดเอง)", "Replace audio (upload your own)")}
-                                >
-                                  ✏️
-                                  <input
-                                    type="file"
-                                    accept="audio/*"
-                                    onChange={(event) => {
-                                      const file = event.target.files?.[0];
-                                      handleReplaceSoundAudio(item.word, file);
-                                      event.target.value = "";
-                                    }}
-                                  />
-                                </label>
-                                <button
-                                  className="danger-btn"
-                                  title={t("ลบคำนี้", "Delete this word")}
-                                  onClick={() => handleDeleteSoundWord(item.word)}
-                                >
-                                  🗑
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-
-                        <button className="soft-btn" onClick={fetchSoundWords} disabled={soundLoading}>
-                          🔄 {t("รีเฟรชรายการ", "Refresh List")}
-                        </button>
-
-                        <button className="danger-btn" onClick={handleClearAllLocalCache}>
-                          🧹 {t("ล้างแคชเสียงในเครื่องทั้งหมด", "Clear all local audio cache")}
-                        </button>
-                      </div>
-                    )}
                   </section>
 
                   <section className="control-group">
@@ -3858,73 +3538,6 @@ const styles = `
   }
 
   .upload-btn input { display: none; }
-
-  .sound-manager-box {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-top: 8px;
-    padding-top: 10px;
-    border-top: 1px dashed #cbd5e1;
-  }
-
-  .sound-manager-box > input[type="text"] {
-    padding: 8px 10px;
-    background: #fff;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    font-size: 13px;
-  }
-
-  .sound-word-list {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    max-height: 220px;
-    overflow-y: auto;
-  }
-
-  .sound-word-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 6px 9px;
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 7px;
-  }
-
-  .sound-word-text {
-    font-weight: 700;
-    font-size: 14px;
-    color: #1e293b;
-    overflow-wrap: anywhere;
-  }
-
-  .sound-word-actions {
-    display: flex;
-    gap: 5px;
-    flex-shrink: 0;
-  }
-
-  .sound-word-actions button,
-  .sound-word-actions .sound-edit-btn {
-    min-width: 30px;
-    padding: 5px 7px;
-    font-size: 13px;
-  }
-
-  .sound-edit-btn {
-    position: relative;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .sound-edit-btn input { display: none; }
-
   .api-section { border-top: 1px solid #e2e8f0; padding-top: 12px; }
   .api-toggle {
     width: 100%;

@@ -1,209 +1,104 @@
-function escapeXmlText(text = "") {
-  return String(text)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
+import { synthesizeAzureTts, toAudioFilename } from "../_lib/azureTts.js";
 
-function json(data, status = 200) {
-  return new Response(
-    JSON.stringify(data),
-    {
-      status,
-      headers: {
-        "Content-Type":
-          "application/json; charset=utf-8",
-      },
-    },
-  );
-}
+/**
+ * POST /api/tts
+ * body: { text: string, voice?: string, rate?: number }
+ *
+ * Workflow (ชั้นที่ 2 & 3 ของ Multi-tier Caching):
+ *  1) ตรวจสอบไฟล์เสียงใน Cloudflare R2 ก่อน -> ถ้ามี ส่งกลับทันที (เร็ว, ไม่เสีย Azure quota)
+ *  2) ถ้าไม่มี -> เรียก Azure TTS สังเคราะห์ใหม่ -> บันทึกลง R2 + บันทึกคำลง D1 -> ส่งกลับ
+ *
+ * ต้องผูก binding ต่อไปนี้ใน Cloudflare Pages > Settings > Functions:
+ *  - R2 bucket:      AUDIO_BUCKET
+ *  - D1 database:    DB
+ *  - Env variables:  AZURE_TTS_KEY, AZURE_TTS_REGION
+ */
+export async function onRequestPost(context) {
+  const { request, env } = context;
 
-export async function onRequestPost({
-  request,
-  env,
-}) {
+  let body;
   try {
-    const body =
-      await request.json();
-
-    const text = String(
-      body?.text || "",
-    )
-      .normalize("NFC")
-      .trim();
-
-    const requestedVoice =
-      String(
-        body?.voice ||
-          "th-TH-PremwadeeNeural",
-      );
-
-    const rate =
-      Number(body?.rate);
-
-    if (!text) {
-      return json(
-        {
-          error:
-            "text is required",
-        },
-        400,
-      );
-    }
-
-    if (text.length > 500) {
-      return json(
-        {
-          error:
-            "text is too long",
-        },
-        400,
-      );
-    }
-
-    const allowedVoices =
-      new Set([
-        "th-TH-PremwadeeNeural",
-        "th-TH-NiwatNeural",
-        "th-TH-AcharaNeural",
-        "th-TH-Krit:MAI-Voice-2",
-        "th-TH-Krit:MAI-Voice-2-Flash",
-        "th-TH-Nattapong:MAI-Voice-2",
-        "th-TH-Nattapong:MAI-Voice-2-Flash",
-      ]);
-
-    const voice =
-      allowedVoices.has(
-        requestedVoice,
-      )
-        ? requestedVoice
-        : "th-TH-PremwadeeNeural";
-
-    const safeRate =
-      Math.max(
-        0.5,
-        Math.min(
-          1.4,
-          Number.isFinite(rate)
-            ? rate
-            : 0.85,
-        ),
-      );
-
-    const ratePercent =
-      Math.round(
-        (safeRate - 1) * 100,
-      );
-
-    const rateValue =
-      `${ratePercent >= 0 ? "+" : ""}${ratePercent}%`;
-
-    const key =
-      env.AZURE_SPEECH_KEY;
-
-    const region =
-      env.AZURE_SPEECH_REGION;
-
-    if (!key || !region) {
-      return json(
-        {
-          error:
-            "Azure Speech secrets are not configured",
-        },
-        503,
-      );
-    }
-
-    const ssml = [
-      '<?xml version="1.0" encoding="UTF-8"?>',
-      '<speak version="1.0"',
-      ' xmlns="http://www.w3.org/2001/10/synthesis"',
-      ' xmlns:mstts="http://www.w3.org/2001/mstts"',
-      ' xml:lang="th-TH">',
-      `<voice name="${voice}">`,
-      `<prosody rate="${rateValue}" pitch="0%">`,
-      escapeXmlText(text),
-      "</prosody>",
-      "</voice>",
-      "</speak>",
-    ].join("");
-
-    const response =
-      await fetch(
-        `https://${region}.tts.speech.microsoft.com/cognitiveservices/v1`,
-        {
-          method: "POST",
-
-          headers: {
-            "Ocp-Apim-Subscription-Key":
-              key,
-
-            "Content-Type":
-              "application/ssml+xml",
-
-            "X-Microsoft-OutputFormat":
-              "audio-16khz-128kbitrate-mono-mp3",
-
-            "User-Agent":
-              "thai-tone-app",
-          },
-
-          body: ssml,
-        },
-      );
-
-    if (!response.ok) {
-      const errorText =
-        await response.text();
-
-      console.error(
-        "Azure Speech error:",
-        response.status,
-        errorText,
-      );
-
-      return json(
-        {
-          error:
-            "Azure Speech synthesis failed",
-          status:
-            response.status,
-        },
-        502,
-      );
-    }
-
-    const audioBuffer =
-      await response.arrayBuffer();
-
-    return new Response(
-      audioBuffer,
-      {
-        status: 200,
-
-        headers: {
-          "Content-Type":
-            "audio/mpeg",
-
-          "Cache-Control":
-            "no-store",
-        },
-      },
-    );
-  } catch (error) {
-    console.error(
-      "TTS proxy error:",
-      error,
-    );
-
-    return json(
-      {
-        error:
-          "Invalid TTS request",
-      },
-      400,
-    );
+    body = await request.json();
+  } catch (err) {
+    return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
   }
+
+  const word = (body.text || body.word || "").trim();
+  const voice = body.voice;
+  const rate = body.rate;
+
+  if (!word) {
+    return new Response(JSON.stringify({ error: "Word is required" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const filename = toAudioFilename(word);
+
+  // ชั้นที่ 2: ตรวจสอบใน Cloudflare R2 ก่อนว่ามีไฟล์เสียงนี้อยู่แล้วหรือไม่
+  try {
+    const existingAudio = await env.AUDIO_BUCKET.get(filename);
+    if (existingAudio) {
+      return new Response(existingAudio.body, {
+        headers: {
+          "Content-Type": "audio/mpeg",
+          "Cache-Control": "public, max-age=31536000, immutable",
+          "X-Cache": "HIT-R2",
+        },
+      });
+    }
+  } catch (err) {
+    console.warn("R2 lookup error:", err);
+    // ไม่ throw ต่อ — ถ้า R2 มีปัญหาชั่วคราว ให้ลองไป Azure ต่อแทนที่จะพังทั้งคำขอ
+  }
+
+  // ชั้นที่ 3: ไม่พบใน R2 -> เรียก Azure TTS สังเคราะห์เสียงใหม่
+  let audioBuffer;
+  try {
+    audioBuffer = await synthesizeAzureTts(env, word, voice, rate);
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // บันทึกไฟล์เสียงลง Cloudflare R2 เพื่อให้ครั้งถัดไปเร็วขึ้น (ทุกเครื่อง/ทุกผู้ใช้)
+  try {
+    await env.AUDIO_BUCKET.put(filename, audioBuffer, {
+      httpMetadata: { contentType: "audio/mpeg" },
+    });
+  } catch (err) {
+    console.warn("R2 put error:", err);
+  }
+
+  // บันทึกคำลง D1 (ถ้ายังไม่มีในฐานข้อมูล) เพื่อให้ปรากฏในหน้า "คลังเสียง"
+  try {
+    const existingWord = await env.DB.prepare(
+      "SELECT id FROM words WHERE word = ?",
+    )
+      .bind(word)
+      .first();
+    if (!existingWord) {
+      await env.DB.prepare(
+        "INSERT INTO words (word, audio_filename) VALUES (?, ?)",
+      )
+        .bind(word, filename)
+        .run();
+    }
+  } catch (err) {
+    console.warn("D1 insert warning:", err);
+  }
+
+  return new Response(audioBuffer, {
+    headers: {
+      "Content-Type": "audio/mpeg",
+      "Cache-Control": "public, max-age=31536000, immutable",
+      "X-Cache": "MISS-AZURE",
+    },
+  });
 }
