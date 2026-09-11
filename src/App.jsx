@@ -1,9 +1,8 @@
 
-thai-tone-app-v8.jsx
+thai-tone-app-v7.jsx
 
 100%
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import audioService, { playThaiAudio, stopAudio, getSpeechFallbackVoice } from "./utils/audioService";
 
 /**
  * =============================================================================
@@ -1778,17 +1777,90 @@ export default function App() {
       return;
     }
 
+    const normalizedText = normalizeThaiSpeechText(text);
+
+    // Primary TTS: Azure Speech ผ่าน Cloudflare Pages Function
+    // ใช้ Thai Neural voice + SSML เพื่อไม่ให้เบราว์เซอร์แยกอ่านเป็นชื่ออักษร
     try {
-      // เรียกใช้ฐานเสียงภาษาไทยผ่าน audioService (รองรับ Azure TTS + Web Speech Fallback + Audio Caching)
-      await playThaiAudio(text, {
-        rate: Number(speechRate),
-        voice: TTS_VOICE,
-        selectedVoiceURI,
-        voices,
+      const response = await fetch(TTS_API_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: normalizedText,
+          voice: TTS_VOICE,
+          rate: Number(speechRate),
+        }),
       });
+
+      if (!response.ok) {
+        throw new Error(`Azure TTS HTTP ${response.status}`);
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+
+      const previousAudio = speechRef.current;
+      if (previousAudio instanceof HTMLAudioElement) {
+        previousAudio.pause();
+        previousAudio.currentTime = 0;
+      }
+
+      speechRef.current = audio;
+
+      await new Promise((resolve) => {
+        audio.onended = () => {
+          URL.revokeObjectURL(audioUrl);
+          if (speechRef.current === audio) {
+            speechRef.current = null;
+          }
+          resolve();
+        };
+        audio.onerror = () => {
+          URL.revokeObjectURL(audioUrl);
+          resolve();
+        };
+        audio.play().catch(() => resolve());
+      });
+      return;
     } catch (err) {
-      console.warn("audioService playback error:", err);
+      console.warn(
+        "Azure Thai TTS unavailable; using browser Thai voice fallback:",
+        err,
+      );
     }
+
+    // Fallback: browser Web Speech API โดยยอมใช้เฉพาะ Thai voice
+    const availableVoices = window.speechSynthesis.getVoices();
+    const thaiVoice = getSpeechFallbackVoice(
+      availableVoices,
+      selectedVoiceURI,
+    );
+
+    if (!thaiVoice) {
+      console.warn(
+        "ไม่พบเสียงภาษาไทย (th-TH/th-*). กรุณาเลือก/ติดตั้ง Thai TTS voice ในระบบ",
+      );
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(normalizedText);
+    utterance.lang = "th-TH";
+    utterance.voice = thaiVoice;
+    utterance.rate = Number(speechRate);
+    utterance.pitch = 1;
+    utterance.volume = 1;
+
+    await new Promise((resolve) => {
+      utterance.onend = () => resolve();
+      utterance.onerror = () => resolve();
+      speechRef.current = utterance;
+      window.speechSynthesis.speak(utterance);
+    });
   };
 
   const handlePlayAllTones = async () => {
@@ -1800,7 +1872,13 @@ export default function App() {
 
     if (isPlayingAll) {
       isCancelingAutoPlayRef.current = true;
-      stopAudio();
+      if (speechRef.current instanceof HTMLAudioElement) {
+        speechRef.current.pause();
+        speechRef.current.currentTime = 0;
+      }
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
       setActiveRowId(null);
       setIsPlayingAll(false);
       return;
