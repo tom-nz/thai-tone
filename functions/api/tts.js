@@ -1,4 +1,4 @@
-import { synthesizeAzureTts, toAudioFilename } from "../_lib/azureTts.js";
+import { synthesizeAzureTts, THAI_TTS_VOICE, toAudioFilename } from "../_lib/azureTts.js";
 
 /**
  * POST /api/tts
@@ -28,7 +28,6 @@ export async function onRequestPost(context) {
   }
 
   const word = (body.text || body.word || "").trim();
-  const voice = body.voice;
   const rate = body.rate;
 
   if (!word) {
@@ -56,6 +55,8 @@ export async function onRequestPost(context) {
           "Content-Type": "audio/mpeg",
           "Cache-Control": "public, max-age=31536000, immutable",
           "X-Cache": "HIT-R2",
+          "X-TTS-Provider": "azure",
+          "X-TTS-Voice": THAI_TTS_VOICE,
         },
       });
     }
@@ -67,7 +68,7 @@ export async function onRequestPost(context) {
   // ชั้นที่ 3: ไม่พบใน R2 -> เรียก Azure TTS สังเคราะห์เสียงใหม่
   let audioBuffer;
   try {
-    audioBuffer = await synthesizeAzureTts(env, word, voice, rate);
+    audioBuffer = await synthesizeAzureTts(env, word, rate);
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
@@ -91,7 +92,13 @@ export async function onRequestPost(context) {
     )
       .bind(word)
       .first();
-    if (!existingWord) {
+    if (existingWord) {
+      await env.DB.prepare(
+        "UPDATE words SET audio_filename = ? WHERE word = ?",
+      )
+        .bind(filename, word)
+        .run();
+    } else {
       await env.DB.prepare(
         "INSERT INTO words (word, audio_filename) VALUES (?, ?)",
       )
@@ -107,6 +114,8 @@ export async function onRequestPost(context) {
       "Content-Type": "audio/mpeg",
       "Cache-Control": "public, max-age=31536000, immutable",
       "X-Cache": "MISS-AZURE",
+      "X-TTS-Provider": "azure",
+      "X-TTS-Voice": THAI_TTS_VOICE,
     },
   });
 }

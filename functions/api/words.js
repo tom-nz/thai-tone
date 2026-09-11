@@ -66,7 +66,7 @@ export async function onRequestPost(context) {
 
   let audioBuffer;
   try {
-    audioBuffer = await synthesizeAzureTts(env, word, body.voice, body.rate);
+    audioBuffer = await synthesizeAzureTts(env, word, body.rate);
   } catch (err) {
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
