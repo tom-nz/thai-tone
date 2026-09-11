@@ -1,7 +1,3 @@
-
-thai-tone-app-v7.jsx
-
-100%
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 
 /**
@@ -1608,7 +1604,8 @@ function Board({
         })}
       </div>
 
-      {linesData.some((item) => item.show && (item.word || (item.isMulti && item.multi.length > 0))) && (
+      {/* เพิ่มการเช็ค inputText ว่าง เพื่อซ่อนปุ่ม */}
+      {inputText.trim() !== "" && linesData.some((item) => item.show && (item.word || (item.isMulti && item.multi.length > 0))) && (
         <div className="board-footer-actions">
           <button
             type="button"
@@ -2053,8 +2050,14 @@ export default function App() {
   const handleModeChange = (newMode) => {
     setMode(newMode);
     if (newMode === "pair") {
-      const { initial } = parseThaiWord(inputText);
-      const pairWord = `${initial || "ก"}อ`;
+      // หากมีคำอยู่แล้ว ให้ดึงพยัญชนะตัวแรกมาประสมสระออ หากไม่มีให้เริ่มที่ "ขอ"
+      let pairWord = "ขอ";
+      if (inputText.trim() !== "") {
+        const match = inputText.match(/([ก-ฮ])/);
+        if (match) {
+          pairWord = `${match[1]}อ`;
+        }
+      }
       setInputText(pairWord);
       validateInput(pairWord);
     }
@@ -2074,6 +2077,7 @@ export default function App() {
   };
 
   const handleQuickVowelClick = (vowel) => {
+    if (mode === "pair") return; // ป้องกันไม่ให้กดเปลี่ยนสระในโหมดจับคู่
     const { initial } = parseThaiWord(inputText);
     const newWord = `${vowel.front}${initial || "ก"}${vowel.rear}`;
     setInputText(newWord);
@@ -2517,7 +2521,7 @@ export default function App() {
                       <ModeRadio value="full5" checked={mode === "full5"} label={t("แสดงชุดผัน 5 เสียงเมื่อมีกฎเทียบ (อักษรคู่ / ห นำ)", "Show 5 tones with paired / leading rules")} onChange={handleModeChange} />
                       <ModeRadio value="highOnly" checked={mode === "highOnly"} label={t("เฉพาะเสียงสูง (เอก, โท, จัตวา)", "High tone set only (Low, Falling, Rising)")} onChange={handleModeChange} />
                       <ModeRadio value="lowOnly" checked={mode === "lowOnly"} label={t("เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)", "Low tone set only (Mid, Falling, High)")} onChange={handleModeChange} />
-                      <ModeRadio value="pair" checked={mode === "pair"} label={t("จับคู่อักษรสูงและอักษรต่ำ", "Pair High & Low Class Consonants")} onChange={handleModeChange} />
+                      <ModeRadio value="pair" checked={mode === "pair"} label={t("จับคู่อักษร(เสียง)สูงและอักษร(เสียง)ต่ำ เพื่อระบุกลุ่มอักษร", "Pair High & Low Class Consonants")} onChange={handleModeChange} />
                     </div>
 
                     <div className="input-row">
@@ -2526,8 +2530,10 @@ export default function App() {
                         placeholder={t("พิมพ์ 1 คำ เช่น กอ, เมา, กวาง", "Type 1 word, e.g. กอ, เมา, กวาง")}
                         onChange={(event) => {
                           let val = event.target.value;
-                          if (mode === "pair" && val.length === 1 && /[ก-ฮ]/.test(val)) {
-                            val = `${val}อ`;
+                          if (mode === "pair") {
+                            // บังคับให้เป็นพยัญชนะไทย 1 ตัวตามด้วยสระออ หากลบข้อความหมดให้กลับไปเริ่มที่ "ขอ"
+                            const match = val.match(/([ก-ฮ])/);
+                            val = match ? `${match[1]}อ` : "ขอ";
                           }
                           setInputText(val);
                           validateInput(val);
@@ -3060,7 +3066,8 @@ const styles = `
   .main-grid > section {
     min-width: 0;
     min-height: 0;
-    overflow: hidden;
+    overflow-y: auto; /* เปลียนจาก hidden เป็นเลื่อนแนวตั้งได้ */
+    overflow-x: hidden;
   }
 
   .board-panel { padding: 30px 22px; min-width: 0; }
@@ -3112,7 +3119,7 @@ const styles = `
     70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
     100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
   }
-  .board-title { text-align: center; color: #ea580c; margin-bottom: 18px; }
+  .board-title { text-align: center; color: #6b21a8; margin-bottom: 18px; } /* เปลี่ยนเป็นสีม่วงแก่ */
   .board-title h2 { margin: 0; font-size: clamp(23px, 2.3vw, 30px); }
   .board-title div { font-size: clamp(16px, 1.5vw, 19px); font-weight: 600; }
 
@@ -3174,6 +3181,7 @@ const styles = `
     gap: 24px;
     padding-top: 28px; /* เว้นระยะด้านบน 28px ป้องกันก้านโน้ต/ไม้จัตวาของคำว่า ก๋อ ชนหรือล้นขอบบน */
     overflow: visible;
+    min-height: min-content; /* บังคับให้รักษาความสูงตามเนื้อหาจริง ไม่หดจนทับกัน */
   }
 
   .tone-row {
@@ -3580,7 +3588,8 @@ const styles = `
     box-shadow: 0 16px 42px rgba(0,0,0,.18);
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-y: auto; /* เปลียนจาก hidden เป็นเลื่อนแนวตั้งได้ */
+    overflow-x: hidden;
   }
 
   .display-board .tone-rows {
