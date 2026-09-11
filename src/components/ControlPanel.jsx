@@ -1,167 +1,258 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { playThaiAudio, clearLocalAudioCache } from '../utils/audioService';
 
-function ControlPanel({
-  inputText,
-  setInputText,
-  mode,
-  setMode,
-  loading,
-  inputError,
-  handleAnalyze,
-  handleQuickSelect,
-  analysisInfo,
-  quickConsonants,
-  longVowels,
-  shortVowels,
-  thaiClusters
-}) {
+export default function ControlPanel(props) {
+  // คง props และ logic เดิมไว้ครบถ้วน
+  const {
+    currentConsonant,
+    currentVowel,
+    currentTone,
+    onPlay,
+    onReset,
+    ...restProps
+  } = props;
+
+  const [activeSubTab, setActiveSubTab] = useState('controls'); // 'controls' | 'audioDb'
+  const [audioRecords, setAudioRecords] = useState([]);
+  const [loadingAudio, setLoadingAudio] = useState(false);
+  const [searchFilter, setSearchFilter] = useState('');
+  const [newWord, setNewWord] = useState('');
+  const [newIpa, setNewIpa] = useState('');
+
+  useEffect(() => {
+    if (activeSubTab === 'audioDb') {
+      fetchAudioList();
+    }
+  }, [activeSubTab]);
+
+  const fetchAudioList = async () => {
+    setLoadingAudio(true);
+    try {
+      const res = await fetch('/api/tts?list=true');
+      if (res.ok) {
+        const data = await res.json();
+        setAudioRecords(data);
+      }
+    } catch (e) {
+      console.error('Error fetching words list:', e);
+    } finally {
+      setLoadingAudio(false);
+    }
+  };
+
+  const handleCreateOrUpdate = async (word, ipa, overwrite = false) => {
+    if (!word) return;
+    setLoadingAudio(true);
+    try {
+      await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ word, ipa, overwrite }),
+      });
+      await clearLocalAudioCache(word);
+      setNewWord('');
+      setNewIpa('');
+      await fetchAudioList();
+    } catch (e) {
+      alert('เกิดข้อผิดพลาดในการบันทึกคำศัพท์');
+    } finally {
+      setLoadingAudio(false);
+    }
+  };
+
+  const handleDelete = async (word) => {
+    if (!window.confirm(`คุณต้องการลบไฟล์เสียงของคำว่า "${word}" ใช่หรือไม่?`)) return;
+    setLoadingAudio(true);
+    try {
+      await fetch('/api/tts', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ word }),
+      });
+      await clearLocalAudioCache(word);
+      await fetchAudioList();
+    } catch (e) {
+      alert('เกิดข้อผิดพลาดในการลบ');
+    } finally {
+      setLoadingAudio(false);
+    }
+  };
+
+  const filteredRecords = audioRecords.filter(item => 
+    item.word?.includes(searchFilter)
+  );
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {/* ส่วนป้อนคำและปุ่มคำเป็น/คำตาย */}
-      <div style={{ backgroundColor: '#fff', padding: '16px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-        <h3 style={{ margin: '0 0 12px 0', fontSize: '1rem', color: '#334155' }}>ป้อนคำและรูปแบบคำ</h3>
-        
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+    <div className="control-panel-wrapper" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* แท็บสลับหน้าควบคุมเดิม และระบบจัดการฐานข้อมูลเสียง */}
+      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
+        <button
+          onClick={() => setActiveSubTab('controls')}
+          style={{
+            padding: '6px 14px',
+            borderRadius: '6px',
+            border: 'none',
+            cursor: 'pointer',
+            backgroundColor: activeSubTab === 'controls' ? '#3b82f6' : '#f1f5f9',
+            color: activeSubTab === 'controls' ? '#fff' : '#475569',
+            fontWeight: 'bold'
+          }}
+        >
+          🎛️ แผงควบคุมหลัก
+        </button>
+        <button
+          onClick={() => setActiveSubTab('audioDb')}
+          style={{
+            padding: '6px 14px',
+            borderRadius: '6px',
+            border: 'none',
+            cursor: 'pointer',
+            backgroundColor: activeSubTab === 'audioDb' ? '#3b82f6' : '#f1f5f9',
+            color: activeSubTab === 'audioDb' ? '#fff' : '#475569',
+            fontWeight: 'bold'
+          }}
+        >
+          🗄️ จัดการฐานข้อมูลเสียง (Cloudflare R2/D1)
+        </button>
+      </div>
+
+      {activeSubTab === 'controls' ? (
+        <div className="default-controls" style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* UI เดิมสำหรับการกดเล่นและรีเซ็ต */}
+          <button
+            onClick={() => onPlay ? onPlay() : playThaiAudio(currentConsonant + currentVowel)}
+            style={{
+              padding: '10px 20px',
+              backgroundColor: '#10b981',
+              color: '#ffffff',
+              borderRadius: '8px',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '16px',
+              fontWeight: 'bold'
+            }}
+          >
+            🔊 ฟังเสียงผันคำ
+          </button>
+          {onReset && (
+            <button
+              onClick={onReset}
+              style={{
+                padding: '10px 16px',
+                backgroundColor: '#ef4444',
+                color: '#ffffff',
+                borderRadius: '8px',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              🔄 รีเซ็ต
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="audio-db-panel" style={{ backgroundColor: '#ffffff', padding: '16px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+          <h4 style={{ margin: '0 0 12px 0', color: '#1e293b' }}>จัดการคลังเสียงและฐานข้อมูลคำศัพท์</h4>
+          
+          {/* ฟอร์มเพิ่มคำศัพท์ใหม่ / เจนเสียงล่วงหน้า */}
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              placeholder="คำศัพท์ (เช่น กา, ป่า, ม้า)"
+              value={newWord}
+              onChange={(e) => setNewWord(e.target.value)}
+              style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+            />
+            <input
+              type="text"
+              placeholder="สัทอักษร IPA (ถ้ามี)"
+              value={newIpa}
+              onChange={(e) => setNewIpa(e.target.value)}
+              style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #cbd5e1' }}
+            />
+            <button
+              onClick={() => handleCreateOrUpdate(newWord, newIpa, true)}
+              disabled={loadingAudio || !newWord}
+              style={{
+                padding: '6px 14px',
+                backgroundColor: '#3b82f6',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              + สังเคราะห์และบันทึก
+            </button>
+          </div>
+
+          {/* ค้นหาและรายชื่อคำศัพท์ */}
           <input
             type="text"
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
-            placeholder="พิมพ์คำ เช่น กอ, ขา, คา..."
-            style={{
-              flex: 1, padding: '8px 12px', fontSize: '1rem',
-              borderRadius: '6px', border: '1px solid #cbd5e1'
-            }}
+            placeholder="🔍 ค้นหาคำในฐานข้อมูล..."
+            value={searchFilter}
+            onChange={(e) => setSearchFilter(e.target.value)}
+            style={{ width: '100%', padding: '6px 10px', borderRadius: '4px', border: '1px solid #cbd5e1', marginBottom: '12px' }}
           />
-          <button
-            onClick={handleAnalyze}
-            disabled={loading}
-            style={{
-              padding: '8px 16px', backgroundColor: '#2563eb', color: '#fff',
-              border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 600
-            }}
-          >
-            {loading ? 'กำลังวิเคราะห์...' : 'วิเคราะห์'}
-          </button>
-        </div>
 
-        {inputError && (
-          <div style={{ color: '#ef4444', fontSize: '0.85rem', marginBottom: '8px' }}>
-            {inputError}
-          </div>
-        )}
-
-        {/* ตัวเลือกคำเป็น / คำตาย */}
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button
-            onClick={() => setMode('live')}
-            style={{
-              flex: 1, padding: '8px', border: '1px solid #2563eb', borderRadius: '6px',
-              backgroundColor: mode === 'live' ? '#2563eb' : '#fff',
-              color: mode === 'live' ? '#fff' : '#2563eb',
-              cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem'
-            }}
-          >
-            คำเป็น
-          </button>
-          <button
-            onClick={() => setMode('dead')}
-            style={{
-              flex: 1, padding: '8px', border: '1px solid #dc2626', borderRadius: '6px',
-              backgroundColor: mode === 'dead' ? '#dc2626' : '#fff',
-              color: mode === 'dead' ? '#fff' : '#dc2626',
-              cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem'
-            }}
-          >
-            คำตาย
-          </button>
-        </div>
-      </div>
-
-      {/* เลือกพยัญชนะด่วน */}
-      <div style={{ backgroundColor: '#fff', padding: '16px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-        <h3 style={{ margin: '0 0 8px 0', fontSize: '0.95rem', color: '#334155' }}>พยัญชนะ (ก-ฮ)</h3>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', maxHeight: '120px', overflowY: 'auto' }}>
-          {quickConsonants.map(c => (
-            <button
-              key={c}
-              onClick={() => handleQuickSelect(c)}
-              style={{
-                width: '32px', height: '32px', border: '1px solid #e2e8f0', borderRadius: '4px',
-                backgroundColor: '#f8fafc', cursor: 'pointer', fontSize: '0.85rem'
-              }}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* เลือกคำควบกล้ำ / อักษรนำ */}
-      <div style={{ backgroundColor: '#fff', padding: '16px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-        <h3 style={{ margin: '0 0 8px 0', fontSize: '0.95rem', color: '#334155' }}>คำควบกล้ำ / อักษรนำ</h3>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', maxHeight: '90px', overflowY: 'auto' }}>
-          {thaiClusters.map(cl => (
-            <button
-              key={cl}
-              onClick={() => handleQuickSelect(cl)}
-              style={{
-                padding: '4px 8px', border: '1px solid #e2e8f0', borderRadius: '4px',
-                backgroundColor: '#f8fafc', cursor: 'pointer', fontSize: '0.8rem'
-              }}
-            >
-              {cl}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* เลือกสระด่วน (ยาว / สั้น) */}
-      <div style={{ backgroundColor: '#fff', padding: '16px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-        <h3 style={{ margin: '0 0 8px 0', fontSize: '0.95rem', color: '#334155' }}>สระเสียงยาว</h3>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '12px' }}>
-          {longVowels.map(v => (
-            <button
-              key={v.label}
-              onClick={() => handleQuickSelect(v.label)}
-              style={{
-                padding: '4px 8px', border: '1px solid #bbf7d0', borderRadius: '4px',
-                backgroundColor: '#f0fdf4', cursor: 'pointer', fontSize: '0.8rem', color: '#166534'
-              }}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
-
-        <h3 style={{ margin: '0 0 8px 0', fontSize: '0.95rem', color: '#334155' }}>สระเสียงสั้น</h3>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-          {shortVowels.map(v => (
-            <button
-              key={v.label}
-              onClick={() => handleQuickSelect(v.label)}
-              style={{
-                padding: '4px 8px', border: '1px solid #fecdd3', borderRadius: '4px',
-                backgroundColor: '#fff1f2', cursor: 'pointer', fontSize: '0.8rem', color: '#9f1239'
-              }}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* แสดงการวิเคราะห์หลักภาษา */}
-      {analysisInfo && analysisInfo.type && (
-        <div style={{ backgroundColor: '#eff6ff', padding: '16px', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
-          <h4 style={{ margin: '0 0 6px 0', color: '#1e40af', fontSize: '0.95rem' }}>ผลการวิเคราะห์หลักภาษา</h4>
-          <p style={{ margin: '0 0 4px 0', fontSize: '0.85rem', fontWeight: 600, color: '#1e3a8a' }}>{analysisInfo.type}</p>
-          <p style={{ margin: '0 0 4px 0', fontSize: '0.8rem', color: '#3b82f6' }}>{analysisInfo.vowelLen}</p>
-          <p style={{ margin: 0, fontSize: '0.8rem', color: '#475569' }}>{analysisInfo.desc}</p>
+          {loadingAudio ? (
+            <div style={{ color: '#64748b', textAlign: 'center', padding: '12px' }}>กำลังประมวลผลข้อมูล...</div>
+          ) : (
+            <div style={{ maxHeight: '250px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
+                <thead>
+                  <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                    <th style={{ padding: '8px' }}>คำ</th>
+                    <th style={{ padding: '8px' }}>IPA</th>
+                    <th style={{ padding: '8px' }}>ไฟล์</th>
+                    <th style={{ padding: '8px', textAlign: 'center' }}>การจัดการ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRecords.length === 0 ? (
+                    <tr>
+                      <td colSpan="4" style={{ textAlign: 'center', padding: '12px', color: '#94a3b8' }}>
+                        ไม่พบข้อมูลคำศัพท์ใน D1/R2
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredRecords.map((row) => (
+                      <tr key={row.id || row.word} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '8px', fontWeight: 'bold' }}>{row.word}</td>
+                        <td style={{ padding: '8px', color: '#64748b' }}>{row.ipa || '-'}</td>
+                        <td style={{ padding: '8px', color: '#64748b' }}>{row.audio_filename}</td>
+                        <td style={{ padding: '8px', textAlign: 'center' }}>
+                          <button
+                            onClick={() => playThaiAudio(row.word)}
+                            title="ฟังเสียง"
+                            style={{ marginRight: '6px', cursor: 'pointer', border: 'none', background: 'none' }}
+                          >
+                            🔊
+                          </button>
+                          <button
+                            onClick={() => handleCreateOrUpdate(row.word, row.ipa, true)}
+                            title="แปลงเสียงใหม่จาก Azure ทับไฟล์เดิม"
+                            style={{ marginRight: '6px', cursor: 'pointer', border: 'none', background: 'none' }}
+                          >
+                            🔄
+                          </button>
+                          <button
+                            onClick={() => handleDelete(row.word)}
+                            title="ลบคำศัพท์และไฟล์เสียง"
+                            style={{ cursor: 'pointer', border: 'none', background: 'none', color: '#ef4444' }}
+                          >
+                            🗑️
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
-
-export default ControlPanel;
