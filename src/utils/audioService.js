@@ -1,7 +1,4 @@
 
-audioService.js
-
-100%
 /**
  * src/utils/audioService.js
  * 
@@ -163,12 +160,29 @@ export async function playThaiAudio(text, options = {}) {
   }
 }
 
+export function isPlaying() {
+  return Boolean(currentAudio || currentUtterance);
+}
+
+export async function clearLocalAudioCache(word) {
+  if (word) {
+    for (const key of audioCache.keys()) {
+      if (key.startsWith(word)) {
+        audioCache.delete(key);
+      }
+    }
+  } else {
+    audioCache.clear();
+  }
+}
+
 const audioService = {
   play: playThaiAudio,
   stop: stopAudio,
+  isPlaying,
   normalizeText: normalizeThaiSpeechText,
   getFallbackVoice: getSpeechFallbackVoice,
+  clearLocalAudioCache,
 };
 
 export default audioService;
-กำลังแสดง audioService.js

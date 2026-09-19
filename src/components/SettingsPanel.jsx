@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { playThaiAudio, clearLocalAudioCache } from '../utils/audioService';
 
 export default function SettingsPanel(props) {
@@ -12,7 +12,6 @@ export default function SettingsPanel(props) {
     onRateChange,
     onTestVoice,
     onBgColorChange,
-    ...restProps
   } = props;
 
   const [activePanelTab, setActivePanelTab] = useState('settings'); // 'settings' | 'audioDb'
@@ -22,13 +21,7 @@ export default function SettingsPanel(props) {
   const [newWord, setNewWord] = useState('');
   const [newIpa, setNewIpa] = useState('');
 
-  useEffect(() => {
-    if (activePanelTab === 'audioDb') {
-      fetchAudioList();
-    }
-  }, [activePanelTab]);
-
-  const fetchAudioList = async () => {
+  const fetchAudioList = useCallback(async () => {
     setLoadingAudio(true);
     try {
       const res = await fetch('/api/tts?list=true');
@@ -41,7 +34,13 @@ export default function SettingsPanel(props) {
     } finally {
       setLoadingAudio(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (activePanelTab === 'audioDb') {
+      fetchAudioList();
+    }
+  }, [activePanelTab, fetchAudioList]);
 
   const handleCreateOrUpdate = async (word, ipa, overwrite = false) => {
     if (!word) return;
@@ -56,7 +55,8 @@ export default function SettingsPanel(props) {
       setNewWord('');
       setNewIpa('');
       await fetchAudioList();
-    } catch (e) {
+    } catch (err) {
+      console.error(err);
       alert('เกิดข้อผิดพลาดในการบันทึกคำ');
     } finally {
       setLoadingAudio(false);
@@ -74,7 +74,8 @@ export default function SettingsPanel(props) {
       });
       await clearLocalAudioCache(word);
       await fetchAudioList();
-    } catch (e) {
+    } catch (err) {
+      console.error(err);
       alert('เกิดข้อผิดพลาดในการลบ');
     } finally {
       setLoadingAudio(false);

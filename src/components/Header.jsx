@@ -1,5 +1,3 @@
-import React from 'react';
-
 function Header({ viewLayout, setViewLayout, setShowApiInput, apiKey, openDisplayWindow }) {
   return (
     <header className="app-header" style={{

@@ -155,7 +155,7 @@ const LOCAL_AUDIO_DB_NAME = "thai_tone_audio_cache";
 const LOCAL_AUDIO_STORE_NAME = "audio_blobs";
 
 // Regex ตรวจสอบคำไทย 1 พยางค์อย่างเคร่งครัด
-const STRICT_THAI_SYLLABLE_PATTERN = /^[เแโใไ]?[ก-ฮ]{1,2}[ิีึืุูั็ํ]?[่้๊๋]?[าำยวอ]?[ก-ฮ]?[ะ์]?$/;
+const STRICT_THAI_SYLLABLE_PATTERN = /^[เแโใไ]?[ก-ฮ]{1,2}[ิีึืุูั็ํ]?[่้๊๋]?(?:[ายวอ]|ำ)?[ก-ฮ]?(?:ะ|์)?$/;
 
 const midConsonants = ["ก", "จ", "ด", "ต", "บ", "ป", "อ", "ฎ", "ฏ"];
 const highConsonants = ["ข", "ฃ", "ฉ", "ฐ", "ถ", "ผ", "ฝ", "ศ", "ษ", "ส", "ห"];
@@ -661,7 +661,7 @@ function analyzeSyllable(word, currentMode) {
           ? ` (กลุ่มอักษรควบไม่แท้ "${initial}")`
           : "";
 
-  let desc = "";
+  let desc;
 
   if (consonantClass === "middle") {
     desc = isDead
@@ -1419,11 +1419,15 @@ function Board({
   return (
     <div
       className={`tone-board ${isDisplay ? "display-board" : ""}`}
-      style={isDisplay ? { backgroundColor: staffBgColor } : {}}
+      style={{
+        ...(isDisplay ? { backgroundColor: staffBgColor } : {}),
+        scrollbarWidth: "none",
+        msOverflowStyle: "none",
+      }}
     >
-      <div className="board-title">
-        <h2>{t("ไตรยางศ์ หรือ อักษร 3 หมู่", "Three Consonant Classes (Triyang)")}</h2>
-        <div>{t("และการผันวรรณยุกต์", "Tone Rules & Musical Staves")}</div>
+      <div className="board-title" style={{ color: "#4A148C" }}>
+        <h2 style={{ color: "#4A148C" }}>{t("ไตรยางศ์ หรือ อักษร 3 หมู่", "Three Consonant Classes (Triyang)")}</h2>
+        <div style={{ color: "#4A148C" }}>{t("และการผันวรรณยุกต์", "Tone Rules & Musical Staves")}</div>
       </div>
 
       {(() => {
@@ -1441,8 +1445,8 @@ function Board({
           const pConsonant = analysisInfo?.primaryConsonant || "";
           const isSingle = lowSingleConsonants.includes(pConsonant);
 
-          let pairTitle = "";
-          let pairDesc = "";
+          let pairTitle;
+          let pairDesc;
 
           if (isMid) {
             pairTitle = t("อักษรกลาง (Soloist / ศิลปินเดี่ยว)", "Mid Class (Soloist)");
@@ -2679,13 +2683,15 @@ export default function App() {
 
           <div className={`main-grid ${viewLayout === "split" ? "split-layout" : ""}`}>
             <section
-              className="panel"
+              className="panel staff-board-section"
               style={{
                 backgroundColor: staffBgColor,
                 borderRadius: "16px",
                 padding: viewLayout === "present" ? "40px 50px" : "35px 25px",
                 boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
                 backdropFilter: "blur(6px)",
+                scrollbarWidth: "none",
+                msOverflowStyle: "none",
               }}
             >
               <Board
@@ -3390,6 +3396,24 @@ const styles = `
     overflow-x: hidden;
   }
 
+  /* กล่องบรรทัด 5 เส้น: ซ่อนแถบเลื่อนขึ้น-ลง แต่ยังคงเลื่อนดูเนื้อหาด้วยเมาส์ได้ตามปกติ */
+  .staff-board-section,
+  .main-grid > section:first-of-type,
+  .display-board,
+  .tone-board {
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE / Edge */
+  }
+
+  .staff-board-section::-webkit-scrollbar,
+  .main-grid > section:first-of-type::-webkit-scrollbar,
+  .display-board::-webkit-scrollbar,
+  .tone-board::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+
   .board-panel { padding: 30px 22px; min-width: 0; }
   .presentation-panel { padding: 45px 50px; }
 
@@ -3439,9 +3463,9 @@ const styles = `
     70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
     100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
   }
-  .board-title { text-align: center; color: #6b21a8; margin-bottom: 18px; } /* เปลี่ยนเป็นสีม่วงแก่ */
-  .board-title h2 { margin: 0; font-size: clamp(23px, 2.3vw, 30px); }
-  .board-title div { font-size: clamp(16px, 1.5vw, 19px); font-weight: 600; }
+  .board-title { text-align: center; color: #4A148C !important; margin-bottom: 18px; } /* สีม่วงเข้มสำหรับทุกอุปกรณ์ */
+  .board-title h2 { margin: 0; font-size: clamp(23px, 2.3vw, 30px); color: #4A148C !important; }
+  .board-title div { font-size: clamp(16px, 1.5vw, 19px); font-weight: 600; color: #4A148C !important; }
 
   .analysis-box {
     margin: 0 auto 22px;
@@ -3977,6 +4001,8 @@ const styles = `
     flex-direction: column;
     overflow-y: auto; /* เปลียนจาก hidden เป็นเลื่อนแนวตั้งได้ */
     overflow-x: hidden;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
 
   .display-board .tone-rows {

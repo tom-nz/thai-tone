@@ -1,5 +1,5 @@
 // ใน toneBoardPatch.js
-const PATCH_CSS = `
+export const PATCH_CSS = `
   /* เพิ่มส่วนนี้เพื่อแก้ Clipping */
   .main-grid.split-layout {
     grid-template-columns: minmax(0, 1.2fr) minmax(320px, 400px); /* ให้กระดานกว้างขึ้น */

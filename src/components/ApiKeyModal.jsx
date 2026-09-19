@@ -1,5 +1,3 @@
-import React from 'react';
-
 function ApiKeyModal({ showApiInput, setShowApiInput, tempApiKey, setTempApiKey, onSaveKey, onClearKey, apiKey }) {
   if (!showApiInput) return null;
 

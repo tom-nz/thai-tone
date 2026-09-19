@@ -1,0 +1,6 @@
+{
+  "name": "Thai Tone App",
+  "description": "Thai tone practice and pronunciation tool with Triyang (3 tone classes) rule engine and audio playback",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
