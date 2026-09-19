@@ -1,110 +1,108 @@
-import React from 'react';
+import React, { useState } from 'react';
 
-function ToneBoard({
-  linesData,
-  hoveredRowId,
-  setHoveredRowId,
-  labelFontSize,
-  circleTextColor,
-  bgType,
-  bgColor,
-  bgImage,
-  viewLayout
+export default function ToneBoard({
+  analysisData,
+  pitchData = [],
+  initialExpanded = true
 }) {
-  const isPresentMode = viewLayout === 'present';
+  const [isExpanded, setIsExpanded] = useState(initialExpanded);
 
-  const boardStyle = {
-    backgroundColor: bgType === 'color' ? bgColor : 'transparent',
-    backgroundImage: bgType === 'image' && bgImage ? `url(${bgImage})` : 'none',
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    borderRadius: '12px',
-    padding: isPresentMode ? '32px' : '24px',
-    boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'space-around',
-    minHeight: isPresentMode ? 'calc(100vh - 120px)' : '500px',
-    position: 'relative'
+  const handleToggleExpand = () => {
+    setIsExpanded((prev) => !prev);
   };
 
   return (
-    <div style={boardStyle}>
-      {linesData.map((item, idx) => {
-        const isHovered = hoveredRowId === item.id;
-        const currentFontSize = isHovered ? labelFontSize * 1.4 : labelFontSize;
+    <div 
+      onClick={handleToggleExpand}
+      className="w-full max-w-4xl mx-auto my-4 p-4 bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-gray-200 dark:border-zinc-800 cursor-pointer select-none transition-all duration-200 hover:shadow-md"
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleToggleExpand();
+        }
+      }}
+      aria-expanded={isExpanded}
+      title="คลิกบริเวณใดก็ได้เพื่อย่อ-ขยาย"
+    >
+      {/* 1. ส่วนหัวข้อ: กำหนดสีม่วงเข้มแน่นอน (#4A148C) ทุกอุปกรณ์ */}
+      <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-zinc-800">
+        <h3 
+          style={{ color: '#4A148C', fontWeight: 800 }} 
+          className="text-base sm:text-lg tracking-tight"
+        >
+          ไตรยางศ์ หรืออักษร 3 หมู่ และการผันวรรณยุกต์
+        </h3>
+        <span 
+          style={{ color: '#4A148C' }} 
+          className="text-xs font-semibold px-2.5 py-1 bg-purple-50 rounded-full"
+        >
+          {isExpanded ? 'ย่อ ▲' : 'ขยาย ▼'}
+        </span>
+      </div>
 
-        return (
-          <div
-            key={idx}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: isPresentMode
-                ? 'clamp(150px, 20vw, 250px) 1fr clamp(80px, 10vw, 140px)'
-                : '220px 1fr 110px',
-              alignItems: 'center',
-              cursor: 'pointer',
-              padding: '8px 0',
-              transition: 'all 0.2s ease'
-            }}
-            onClick={() => setHoveredRowId(prev => prev === item.id ? null : item.id)}
-          >
-            {/* ชื่อเสียงและรูปวรรณยุกต์หน้าเส้น */}
-            <div style={{
-              fontSize: `${currentFontSize}px`,
-              fontWeight: isHovered ? 'bold' : 'normal',
-              color: isHovered ? '#1e293b' : '#334155',
-              transition: 'font-size 0.2s ease, color 0.2s ease'
-            }}>
-              {item.tone} <span style={{ fontSize: '0.85em', color: '#64748b' }}>({item.mark})</span>
-            </div>
-
-            {/* เส้นบรรทัดและวงกลม */}
-            <div style={{ position: 'relative', width: '100%', height: '30px', display: 'flex', alignItems: 'center' }}>
-              {/* เส้นบรรทัด */}
-              <div style={{
-                position: 'absolute', top: '50%', left: 0, right: 0,
-                height: isHovered ? '4px' : '2px',
-                backgroundColor: isHovered ? '#3b82f6' : '#94a3b8',
-                transform: 'translateY(-50%)',
-                transition: 'all 0.2s ease'
-              }} />
-
-              {/* วงกลมพร้อมคำ */}
-              {item.show && (
-                <div style={{
-                  position: 'absolute',
-                  left: item.leftPos,
-                  top: '50%',
-                  transform: `translate(-50%, -50%) scale(${isHovered ? 1.3 : 1})`,
-                  width: isPresentMode ? '54px' : '44px',
-                  height: isPresentMode ? '54px' : '44px',
-                  borderRadius: '50%',
-                  backgroundColor: item.color,
-                  color: circleTextColor,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: 'bold',
-                  fontSize: isPresentMode ? '1.4rem' : '1.1rem',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                  zIndex: 10
-                }}>
-                  {item.word}
-                </div>
-              )}
-            </div>
-
-            {/* ตำแหน่งเปอร์เซ็นต์ / ข้อมูลทางขวา */}
-            <div style={{ textAlign: 'right', fontSize: '0.85rem', color: '#64748b' }}>
-              {item.show ? item.leftPos : '-'}
-            </div>
+      {/* 2. กล่องวิเคราะห์ภาษา */}
+      <div className="mt-3 p-3 bg-purple-50/40 dark:bg-zinc-800/50 rounded-xl border border-purple-100 dark:border-zinc-700/60 text-sm text-gray-700 dark:text-gray-300">
+        {analysisData ? (
+          <div className="flex flex-wrap gap-x-4 gap-y-1">
+            <span><strong>พยัญชนะต้น:</strong> {analysisData.initial || '-'}</span>
+            <span><strong>หมู่สัทอักษร:</strong> {analysisData.class || '-'}</span>
+            <span><strong>รูป/เสียงวรรณยุกต์:</strong> {analysisData.tone || '-'}</span>
           </div>
-        );
-      })}
+        ) : (
+          <p className="text-gray-500 text-xs italic">แสดงผลการวิเคราะห์โครงสร้างพยางค์และวรรณยุกต์</p>
+        )}
+      </div>
+
+      {/* 3. บรรทัด 5 เส้น (ตัดวงกลมหุ้มคำออก เหลือเฉพาะข้อความและเส้นบรรทัด) */}
+      <div 
+        className={`mt-4 overflow-hidden transition-all duration-300 ease-in-out ${
+          isExpanded ? 'max-h-[500px] opacity-100' : 'max-h-24 opacity-80'
+        }`}
+      >
+        <svg 
+          viewBox="0 0 800 200" 
+          className="w-full h-auto drop-shadow-sm"
+        >
+          {/* เส้นบรรทัด 5 เส้น */}
+          {[40, 70, 100, 130, 160].map((yVal, idx) => (
+            <line 
+              key={`staff-line-${idx}`} 
+              x1="30" 
+              y1={yVal} 
+              x2="770" 
+              y2={yVal} 
+              stroke="#D1D5DB" 
+              strokeWidth="1.5" 
+              strokeLinecap="round"
+            />
+          ))}
+
+          {/* เรนเดอร์ตัวอักษรบนระดับเสียงโดยไม่มีวงกลมรอบคำ */}
+          {pitchData.map((node, i) => {
+            const posX = node.x ?? 70 + i * 90;
+            const posY = node.y ?? 100;
+            return (
+              <g key={`pitch-node-${i}`} transform={`translate(${posX}, ${posY})`}>
+                {/* เอา <circle> ออกเรียบร้อยแล้ว */}
+                <text
+                  textAnchor="middle"
+                  dy="0.35em"
+                  fill="#1E293B"
+                  style={{
+                    fontSize: '15px',
+                    fontWeight: 600,
+                    fontFamily: 'system-ui, sans-serif'
+                  }}
+                >
+                  {node.text || node.word || ''}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
     </div>
   );
 }
-
-export default ToneBoard;
