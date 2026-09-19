@@ -730,13 +730,6 @@ function calculateTones(word, mode, colorMid, colorHigh, colorLow) {
       }));
     }
 
-    if (mode === "pair") {
-      return fullRows.map((row) => ({
-        ...row,
-        show: [5, 1].includes(row.id),
-      }));
-    }
-
     return fullRows;
   }
 
@@ -787,6 +780,8 @@ function calculateTones(word, mode, colorMid, colorHigh, colorLow) {
 
     const entries = [];
 
+    // เมื่อมีทั้งอักษรต่ำและอักษรสูงในบรรทัดเดียวกัน
+    // ให้แสดงวงกลมอักษรต่ำก่อนอักษรสูง
     if (lowMark !== undefined) {
       entries.push({
         consonant: pairedLow,
@@ -832,13 +827,6 @@ function calculateTones(word, mode, colorMid, colorHigh, colorLow) {
 
     return multiToneRow(toneRow.id, uniqueEntries);
   });
-
-  if (mode === "pair") {
-    return combined.map((row) => ({
-      ...row,
-      show: [5, 1].includes(row.id),
-    }));
-  }
 
   return combined;
 }
@@ -1260,9 +1248,13 @@ function getSpeechFallbackVoice(voices = [], selectedVoiceURI = "") {
 function getSpeechText(item) {
   if (!item?.show) return "";
 
+  // กรณีมี 2 วงกลม (อักษรสูง/ต่ำที่ให้เสียงเดียวกัน)
+  // ให้ใช้เพียงวงกลมแรกเป็นคำสำหรับ TTS เพื่อไม่ให้ออกเสียงซ้ำ/อ่านสองคำ
   if (item.isMulti) {
-    // บรรทัดที่ 3 ที่มีอักษรต่ำ-สูงคู่เสียงเดียวกัน ให้ออกเสียงคำในวงกลมเพียงคำเดียว (คำแรก)
-    return item.multi[0]?.ttsText || item.multi[0]?.text || "";
+    const firstCircle = item.multi?.find(
+      (circle) => circle.ttsText || circle.text,
+    );
+    return firstCircle?.ttsText || firstCircle?.text || "";
   }
 
   return item.ttsText || item.word || "";
@@ -1286,24 +1278,11 @@ function Board({
   isDisplay = false,
   fontSize = 20,
   staffBgColor = "#ffffff",
-  lang = "th",
-  onPlayAllTones,
-  isPlayingAll = false,
 }) {
-  const t = (th, en) => (lang === "en" ? en : th);
-
   const fixedRightLabels = {
-    5: { text: t("เสียงสูง", "High Pitch"), color: "#ef4444" },
-    3: { text: t("เสียงกลาง", "Mid Pitch"), color: "#22c55e" },
-    1: { text: t("เสียงต่ำ", "Low Pitch"), color: "#007bff" },
-  };
-
-  const toneNames = {
-    5: { th: "เสียงจัตวา", en: "Rising (Chattawa)" },
-    4: { th: "เสียงตรี", en: "High (Tri)" },
-    3: { th: "เสียงโท", en: "Falling (Tho)" },
-    2: { th: "เสียงเอก", en: "Low (Ek)" },
-    1: { th: "เสียงสามัญ", en: "Mid (Saman)" },
+    5: { text: "เสียงสูง", color: "#ef4444" },
+    3: { text: "เสียงกลาง", color: "#22c55e" },
+    1: { text: "เสียงต่ำ", color: "#007bff" },
   };
 
   const ratio = Math.max(0.8, fontSize / 20);
@@ -1333,8 +1312,8 @@ function Board({
       style={isDisplay ? { backgroundColor: staffBgColor } : {}}
     >
       <div className="board-title">
-        <h2>{t("ไตรยางศ์ หรือ อักษร 3 หมู่", "Three Consonant Classes (Triyang)")}</h2>
-        <div>{t("และการผันวรรณยุกต์", "Tone Rules & Musical Staves")}</div>
+        <h2>ไตรยางศ์ หรือ อักษร 3 หมู่</h2>
+        <div>และการผันวรรณยุกต์</div>
       </div>
 
       {(() => {
@@ -1345,46 +1324,6 @@ function Board({
 
         const getTargetWord = (item) => getSpeechText(item);
         const analyses = [];
-
-        if (mode === "pair") {
-          const topWord = getTargetWord(topItem);
-          const bottomWord = getTargetWord(bottomItem);
-          const pConsonant = analysisInfo?.primaryConsonant || "";
-          const isSingle = lowSingleConsonants.includes(pConsonant);
-
-          let pairTitle = "";
-          let pairDesc = "";
-
-          if (isMid) {
-            pairTitle = t("อักษรกลาง (Soloist / ศิลปินเดี่ยว)", "Mid Class (Soloist)");
-            pairDesc = t(
-              `มีเอกลักษณ์เฉพาะตัว สามารถผันได้ครบทั้ง 5 เสียงด้วยตัวเองโดยไม่ต้องจับคู่กับพยัญชนะอื่น (พื้นเสียงสามัญ "${bottomWord}" ➔ เสียงจัตวา "${topWord}")`,
-              `Self-sufficient — inflects all 5 tones on its own without needing a partner (Base mid tone "${bottomWord}" ➔ Rising tone "${topWord}")`
-            );
-          } else if (isSingle) {
-            pairTitle = t("อักษรต่ำเดี่ยว (Solo with Leading ห- / ยืม ห-นำ)", "Single Low Class (With Leading ห-)");
-            pairDesc = t(
-              `"${bottomWord}" (อักษรต่ำเดี่ยว) ไม่มีคู่เสียงสูงในตัวเอง จึงผันเสียงจัตวาโดย "ยืม ห-นำ" มาเป็น "${topWord}" เพื่อให้ผันครบ 5 เสียง (เสียงจัตวา "${topWord}" ➔ เสียงสามัญ "${bottomWord}")`,
-              `"${bottomWord}" has no natural high partner, so it borrows "Leading ห-" ("${topWord}") to produce the rising tone and achieve all 5 tones (Rising "${topWord}" ➔ Mid "${bottomWord}")`
-            );
-          } else {
-            pairTitle = t("คู่เสียงสูง-ต่ำคู่ (Duo / คู่หู)", "High & Paired Low Duo");
-            pairDesc = t(
-              `"${topWord}" (อักษรสูง) จับคู่กับ "${bottomWord}" (อักษรต่ำคู่) ช่วยกันผันให้ครบ 5 เสียง โดยทั้งคู่มีเสียงโทตรงกัน (เสียงจัตวา "${topWord}" ➔ เสียงสามัญ "${bottomWord}")`,
-              `"${topWord}" (High Class) pairs with "${bottomWord}" (Paired Low Class) to complement all 5 tones together, sharing the falling tone (Rising "${topWord}" ➔ Mid "${bottomWord}")`
-            );
-          }
-
-          if (!topWord && !bottomWord) return null;
-
-          return (
-            <div className="analysis-box">
-              <div className="analysis-item">
-                📌 <strong>{pairTitle}</strong>: {pairDesc}
-              </div>
-            </div>
-          );
-        }
 
         if (isMid) {
           const word = inputText.trim();
@@ -1436,82 +1375,15 @@ function Board({
 
         if (!analyses.length) return null;
 
-        const getLabelText = (lbl) => {
-          if (lbl === "อักษรกลาง") return t("อักษรกลาง", "Mid Class");
-          if (lbl === "เสียงสูง") return t("เสียงสูง", "High Tone");
-          if (lbl === "เสียงต่ำ") return t("เสียงต่ำ", "Low Tone");
-          return lbl;
-        };
-
-        const translateType = (type) => {
-          if (type === "คำเป็น") return t("คำเป็น", "Live Syllable");
-          if (type === "คำตาย") return t("คำตาย", "Dead Syllable");
-          return type;
-        };
-
-        const translateVowel = (v) => {
-          if (v === "สระเสียงยาว") return t("สระเสียงยาว", "Long Vowel");
-          if (v === "สระเสียงสั้น") return t("สระเสียงสั้น", "Short Vowel");
-          return v;
-        };
-
-        const getAnalysisDesc = (inf) => {
-          if (lang !== "en") return inf.desc;
-
-          const cClass = inf.consonantClass;
-          const pConsonant = inf.primaryConsonant || "";
-          const init = inf.initial || "";
-          const initKind = inf.initialKind || "single";
-          const dead = inf.isDead;
-          const short = inf.isShort;
-
-          let cLabel = "";
-          if (initKind === "trueCluster") {
-            cLabel = ` (True Cluster "${init}")`;
-          } else if (initKind === "leadingHo") {
-            cLabel = ` (Leading ห- "${init}")`;
-          } else if (initKind === "leadingO") {
-            cLabel = ` (Leading อ- "${init}")`;
-          } else if (initKind === "falseCluster") {
-            cLabel = ` (False Cluster "${init}")`;
-          }
-
-          if (cClass === "middle") {
-            return dead
-              ? `Mid Class${cLabel} Dead Syllable (Inflects 4 tones: Low, Falling, High, Rising; Natural pitch: Low)`
-              : `Mid Class${cLabel} Live Syllable (Inflects all 5 tones; Natural pitch: Mid)`;
-          }
-
-          if (cClass === "high") {
-            return dead
-              ? `High Class${cLabel} Dead Syllable (Inflects 2 tones: Low, Falling; Natural pitch: Low)`
-              : `High Class${cLabel} Live Syllable (Inflects 3 tones: Low, Falling, Rising; Natural pitch: Rising)`;
-          }
-
-          if (cClass === "low") {
-            const subtype = lowSingleConsonants.includes(pConsonant)
-              ? "Single Low Class"
-              : "Paired Low Class";
-
-            return dead
-              ? short
-                ? `${subtype}${cLabel} Dead Syllable (Short Vowel) (Inflects 2 tones: Falling, High; Natural pitch: High)`
-                : `${subtype}${cLabel} Dead Syllable (Long Vowel) (Inflects 2 tones: Falling, High; Natural pitch: Falling)`
-              : `${subtype}${cLabel} Live Syllable (Inflects 3 tones: Mid, Falling, High; Natural pitch: Mid)`;
-          }
-
-          return inf.desc;
-        };
-
         return (
           <div className="analysis-box">
             {analyses.map(({ label, word, info }, index) => (
               <div className="analysis-item" key={`${label}-${word}-${index}`}>
-                📌 {t("ผลวิเคราะห์หลักภาษา", "Linguistic Analysis")} ({getLabelText(label)}): <strong>"{word}"</strong> {t("เป็น", "is")}{" "}
+                📌 ผลวิเคราะห์หลักภาษา ({label}): <strong>"{word}"</strong> เป็น{" "}
                 <span className="analysis-tag">
-                  {translateType(info.type)} ({translateVowel(info.vowelLen)})
+                  {info.type} ({info.vowelLen})
                 </span>{" "}
-                — {getAnalysisDesc(info)}
+                — {info.desc}
               </div>
             ))}
           </div>
@@ -1519,7 +1391,7 @@ function Board({
       })()}
 
       <div className="tone-header">
-        <span>{t("รูปวรรณยุกต์", "Tone Mark")}</span>
+        <span>รูปวรรณยุกต์</span>
       </div>
 
       <div className="tone-rows">
@@ -1538,7 +1410,7 @@ function Board({
               className={`tone-row ${isActive ? "active" : ""} ${!item.show ? "disabled-tone-row" : ""}`}
               key={item.id}
               onClick={() => onRowClick(item)}
-              title={item.show ? `${t("คลิกเพื่อขยายและอ่านคำ", "Click to zoom and speak")} ${getSpeechText(item)}` : ""}
+              title={item.show ? `คลิกเพื่อขยายและอ่านคำ ${getSpeechText(item)}` : ""}
             >
               <div
                 className="tone-name"
@@ -1547,7 +1419,7 @@ function Board({
                   fontSize: textSize,
                 }}
               >
-                {t(item.tone, toneNames[item.id]?.en || item.tone)} <span>[ {item.mark} ]</span>
+                {item.tone} <span>[ {item.mark} ]</span>
               </div>
 
               <div className="tone-line-wrap">
@@ -1587,13 +1459,6 @@ function Board({
               </div>
 
               <div
-                className="tone-line-number"
-                style={{ color: item.show ? (item.isMulti ? item.multi[0]?.color : item.color) : "#94a3b8" }}
-              >
-                {item.id}
-              </div>
-
-              <div
                 className="fixed-tone-label"
                 style={{ color: fixedRight?.color || "#94a3b8" }}
               >
@@ -1603,107 +1468,14 @@ function Board({
           );
         })}
       </div>
-
-      {/* เพิ่มการเช็ค inputText ว่าง เพื่อซ่อนปุ่ม */}
-      {inputText.trim() !== "" && linesData.some((item) => item.show && (item.word || (item.isMulti && item.multi.length > 0))) && (
-        <div className="board-footer-actions">
-          <button
-            type="button"
-            className={`auto-play-tones-btn ${isPlayingAll ? "playing" : ""}`}
-            onClick={onPlayAllTones}
-            title={
-              mode === "pair"
-                ? t(
-                    isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์คู่เสียงสูง-ต่ำ (5 ➔ 1)",
-                    isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play paired tones (5 ➔ 1)"
-                  )
-                : mode === "highOnly"
-                  ? t(
-                      isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์เฉพาะเสียงสูง (5 ➔ 2 ➔ 3)",
-                      isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play high tones (5 ➔ 2 ➔ 3)"
-                    )
-                  : mode === "lowOnly"
-                    ? t(
-                        isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์เฉพาะเสียงต่ำ (1 ➔ 3 ➔ 4)",
-                        isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play low tones (1 ➔ 3 ➔ 4)"
-                      )
-                    : t(
-                        isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์อัตโนมัติ 5 เสียง (1 ➔ 5)",
-                        isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play 5 tones ascending (1 ➔ 5)"
-                      )
-            }
-            aria-label="Auto play tones"
-          >
-            {mode === "pair" || mode === "highOnly" ? (
-              /* ลำโพงพร้อมลูกศรลง สำหรับเสียงสูง 5-2-3 หรือคู่เสียงสูง-ต่ำ 5+1 */
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polygon points="10 5 5 9 2 9 2 15 5 15 10 19 10 5" fill="currentColor" stroke="none" />
-                <path d="M15 9l6 6" stroke="currentColor" strokeWidth="2.2" />
-                <path d="M16 15h5v-5" stroke="currentColor" strokeWidth="2.2" />
-              </svg>
-            ) : (
-              /* ลำโพงพร้อมลูกศรขึ้น สำหรับเสียงต่ำ 1-3-4 หรือผัน 5 เสียง 1-5 */
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polygon points="10 5 5 9 2 9 2 15 5 15 10 19 10 5" fill="currentColor" stroke="none" />
-                <path d="M15 15l6-6" stroke="currentColor" strokeWidth="2.2" />
-                <path d="M16 9h5v5" stroke="currentColor" strokeWidth="2.2" />
-              </svg>
-            )}
-            <span className="auto-play-label">
-              {isPlayingAll
-                ? t("กำลังออกเสียง...", "Playing...")
-                : mode === "pair"
-                  ? t("ผันเสียง 5+1", "Play 5+1")
-                  : mode === "highOnly"
-                    ? t("ผันเสียง 5-2-3", "Play 5-2-3")
-                    : mode === "lowOnly"
-                      ? t("ผันเสียง 1-3-4", "Play 1-3-4")
-                      : t("ผันเสียง 1-5", "Play 1-5")}
-            </span>
-          </button>
-        </div>
-      )}
     </div>
   );
 }
 
 export default function App() {
   const [isDisplayWindow, setIsDisplayWindow] = useState(false);
-  const [lang, setLang] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("thai_tone_lang") || "th";
-    }
-    return "th";
-  });
-
-  const t = (th, en) => (lang === "en" ? en : th);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      localStorage.setItem("thai_tone_lang", lang);
-    }
-  }, [lang]);
   const [mode, setMode] = useState("full5");
   const [viewLayout, setViewLayout] = useState("split");
-  const [previousLayout, setPreviousLayout] = useState("split");
   const [inputText, setInputText] = useState("");
   const [lastValidInput, setLastValidInput] = useState("");
   const [inputError, setInputError] = useState("");
@@ -1721,8 +1493,6 @@ export default function App() {
   const [staffBgColor, setStaffBgColor] = useState("#ffffff");
 
   const [activeRowId, setActiveRowId] = useState(null);
-  const [isPlayingAll, setIsPlayingAll] = useState(false);
-  const isCancelingAutoPlayRef = useRef(false);
   const [speechEnabled, setSpeechEnabled] = useState(false);
   const [speechRate, setSpeechRate] = useState(0.85);
   const [voices, setVoices] = useState([]);
@@ -1765,11 +1535,12 @@ export default function App() {
     return { backgroundColor: bgColor };
   }, [bgType, bgColor, bgImage]);
 
-  const speak = async (text, force = false) => {
+  const speak = async (text) => {
     if (
       typeof window === "undefined" ||
-      (!speechEnabled && !force) ||
-      !text
+      !speechEnabled ||
+      !text ||
+      !("speechSynthesis" in window)
     ) {
       return;
     }
@@ -1807,20 +1578,14 @@ export default function App() {
 
       speechRef.current = audio;
 
-      await new Promise((resolve) => {
-        audio.onended = () => {
-          URL.revokeObjectURL(audioUrl);
-          if (speechRef.current === audio) {
-            speechRef.current = null;
-          }
-          resolve();
-        };
-        audio.onerror = () => {
-          URL.revokeObjectURL(audioUrl);
-          resolve();
-        };
-        audio.play().catch(() => resolve());
-      });
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+        if (speechRef.current === audio) {
+          speechRef.current = null;
+        }
+      };
+
+      await audio.play();
       return;
     } catch (err) {
       console.warn(
@@ -1852,78 +1617,14 @@ export default function App() {
     utterance.pitch = 1;
     utterance.volume = 1;
 
-    await new Promise((resolve) => {
-      utterance.onend = () => resolve();
-      utterance.onerror = () => resolve();
-      speechRef.current = utterance;
-      window.speechSynthesis.speak(utterance);
-    });
-  };
-
-  const handlePlayAllTones = async () => {
-    if (isDisplayWindow && typeof window !== "undefined" && "BroadcastChannel" in window) {
-      const ch = new BroadcastChannel(CHANNEL_NAME);
-      ch.postMessage({ type: "TRIGGER_PLAY_ALL" });
-      ch.close();
-    }
-
-    if (isPlayingAll) {
-      isCancelingAutoPlayRef.current = true;
-      if (speechRef.current instanceof HTMLAudioElement) {
-        speechRef.current.pause();
-        speechRef.current.currentTime = 0;
-      }
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-      }
-      setActiveRowId(null);
-      setIsPlayingAll(false);
-      return;
-    }
-
-    // กำหนดลำดับการออกเสียงตามโหมดที่เลือก
-    let targetSequence = [1, 2, 3, 4, 5];
-    if (mode === "pair") {
-      targetSequence = [5, 1]; // จับคู่อักษรสูง-ต่ำ: เส้น 5 -> เส้น 1
-    } else if (mode === "highOnly") {
-      targetSequence = [5, 2, 3]; // เฉพาะเสียงสูง: 5 -> 2 -> 3
-    } else if (mode === "lowOnly") {
-      targetSequence = [1, 3, 4]; // เฉพาะเสียงต่ำ: 1 -> 3 -> 4
-    }
-
-    const playableItems = targetSequence
-      .map((id) => linesData.find((item) => item.id === id))
-      .filter((item) => item && item.show && (item.word || (item.isMulti && item.multi.length > 0)));
-
-    if (!playableItems.length) return;
-
-    setIsPlayingAll(true);
-    isCancelingAutoPlayRef.current = false;
-
-    for (const item of playableItems) {
-      if (isCancelingAutoPlayRef.current) break;
-      setActiveRowId(item.id);
-      const textToSpeak = getSpeechText(item);
-      if (textToSpeak) {
-        await speak(textToSpeak, true);
-      }
-      if (isCancelingAutoPlayRef.current) break;
-      // เว้นช่วงสั้นๆ ระหว่างแต่ละเสียงเพื่อให้ฟังชัดเจนและออกเสียงตามได้ทัน
-      await new Promise((resolve) => setTimeout(resolve, 320));
-    }
-
-    setActiveRowId(null);
-    setIsPlayingAll(false);
-    isCancelingAutoPlayRef.current = false;
+    speechRef.current = utterance;
+    window.speechSynthesis.speak(utterance);
   };
 
   const handleRowClick = (item) => {
     if (!item.show) return;
-    const isExpanding = activeRowId !== item.id;
-    setActiveRowId(isExpanding ? item.id : null);
-    if (isExpanding) {
-      speak(getSpeechText(item));
-    }
+    setActiveRowId((previous) => (previous === item.id ? null : item.id));
+    speak(getSpeechText(item));
   };
 
   const validateInput = (word) => {
@@ -2047,29 +1748,7 @@ export default function App() {
     }
   };
 
-  const handleModeChange = (newMode) => {
-    setMode(newMode);
-    if (newMode === "pair") {
-      // หากมีคำอยู่แล้ว ให้ดึงพยัญชนะตัวแรกมาประสมสระออ หากไม่มีให้เริ่มที่ "ขอ"
-      let pairWord = "ขอ";
-      if (inputText.trim() !== "") {
-        const match = inputText.match(/([ก-ฮ])/);
-        if (match) {
-          pairWord = `${match[1]}อ`;
-        }
-      }
-      setInputText(pairWord);
-      validateInput(pairWord);
-    }
-  };
-
   const handleQuickConsonantClick = (consonant) => {
-    if (mode === "pair") {
-      const newWord = `${consonant}อ`;
-      setInputText(newWord);
-      validateInput(newWord);
-      return;
-    }
     const { frontVowel, aboveBelowVowel, rest } = parseThaiWord(inputText);
     const newWord = buildWord(frontVowel || "", consonant, aboveBelowVowel || "", "", rest || "อ");
     setInputText(newWord);
@@ -2077,7 +1756,6 @@ export default function App() {
   };
 
   const handleQuickVowelClick = (vowel) => {
-    if (mode === "pair") return; // ป้องกันไม่ให้กดเปลี่ยนสระในโหมดจับคู่
     const { initial } = parseThaiWord(inputText);
     const newWord = `${vowel.front}${initial || "ก"}${vowel.rear}`;
     setInputText(newWord);
@@ -2139,7 +1817,7 @@ export default function App() {
     const popupTop = Math.max(0, Math.floor((screenHeight - popupHeight) / 2));
 
     window.open(
-      `${currentUrl}?view=display&lang=${lang}`,
+      `${currentUrl}?view=display`,
       "ThaiToneDisplayWindow",
       [
         `width=${popupWidth}`,
@@ -2192,7 +1870,6 @@ export default function App() {
       speechEnabled,
       speechRate,
       selectedVoiceURI,
-      lang,
     ],
   );
 
@@ -2201,11 +1878,6 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const displayMode = params.get("view") === "display";
     setIsDisplayWindow(displayMode);
-
-    const initialLang = params.get("lang");
-    if (initialLang === "en" || initialLang === "th") {
-      setLang(initialLang);
-    }
 
     if (displayMode) {
       document.body.style.margin = "0";
@@ -2261,7 +1933,6 @@ export default function App() {
 
     const listener = (event) => {
       if (event.data?.type === "REQUEST_SYNC") channel.postMessage(syncData);
-      if (event.data?.type === "TRIGGER_PLAY_ALL") handlePlayAllTones();
     };
 
     channel.addEventListener("message", listener);
@@ -2293,7 +1964,6 @@ export default function App() {
       if (data.speechEnabled !== undefined) setSpeechEnabled(data.speechEnabled);
       if (data.speechRate) setSpeechRate(data.speechRate);
       if (data.selectedVoiceURI !== undefined) setSelectedVoiceURI(data.selectedVoiceURI);
-      if (data.lang) setLang(data.lang);
     };
 
     try {
@@ -2330,21 +2000,16 @@ export default function App() {
   const renderTopBar = (extraStyle = {}) => (
     <section className="top-bar panel" style={extraStyle}>
       <div className="view-buttons">
-        <strong>{t("🖥️ มุมมอง:", "🖥️ View:")}</strong>
+        <strong>🖥️ มุมมอง:</strong>
         {[
-          ["standard", t("1 คอลัมน์", "1 Column")],
-          ["split", t("2 คอลัมน์", "2 Columns")],
-          ["present", t("พรีวิว", "Preview")],
+          ["standard", "ชิดเดียว"],
+          ["split", "แบ่ง 2 จอ"],
+          ["present", "โหมดพรีวิว"],
         ].map(([value, label]) => (
           <button
             key={value}
             className={viewLayout === value ? "selected-btn" : "soft-btn"}
-            onClick={() => {
-              if (value === "present") {
-                setPreviousLayout(viewLayout !== "present" ? viewLayout : "split");
-              }
-              setViewLayout(value);
-            }}
+            onClick={() => setViewLayout(value)}
           >
             {label}
           </button>
@@ -2353,39 +2018,10 @@ export default function App() {
 
       <div className="monitor-buttons">
         <button className="blue-btn" onClick={sendFullscreenToDisplay}>
-          {t("⛶ สลับเต็มจอ 2", "⛶ Fullscreen 2")}
+          ⛶ สลับเต็มจอ จอที่ 2
         </button>
         <button className="green-btn" onClick={handleOpenDualMonitor}>
-          {t("🚀 เปิดจอ 2", "🚀 Open Screen 2")}
-        </button>
-        <button
-          type="button"
-          onClick={() => setLang((l) => (l === "th" ? "en" : "th"))}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "6px",
-            padding: "8px 14px",
-            borderRadius: "8px",
-            border: "1.5px solid #0284c7",
-            background: lang === "th" ? "#f0f9ff" : "#f0fdf4",
-            color: "#0369a1",
-            fontWeight: "700",
-            fontSize: "13px",
-            cursor: "pointer",
-            transition: "all .18s ease",
-            boxShadow: "0 2px 6px rgba(2,132,199,.15)",
-          }}
-          title={lang === "th" ? "Switch interface to English" : "เปลี่ยนอินเทอร์เฟซเป็นภาษาไทย"}
-        >
-          <span>🌐</span>
-          <span style={{ color: lang === "th" ? "#0284c7" : "#94a3b8", fontWeight: lang === "th" ? "800" : "500" }}>
-            ไทย
-          </span>
-          <span style={{ color: "#94a3b8" }}>/</span>
-          <span style={{ color: lang === "en" ? "#16a34a" : "#94a3b8", fontWeight: lang === "en" ? "800" : "500" }}>
-            English
-          </span>
+          🚀 เปิดกระดานแยกขึ้นมอนิเตอร์ที่ 2
         </button>
       </div>
     </section>
@@ -2411,11 +2047,8 @@ export default function App() {
             isDisplay
             fontSize={labelFontSize}
             staffBgColor={staffBgColor}
-            lang={lang}
-            onPlayAllTones={handlePlayAllTones}
-            isPlayingAll={isPlayingAll}
           />
-          
+          <div className="display-tip">ดับเบิลคลิกพื้นที่ว่างเพื่อสลับเต็มจอ • คลิกบรรทัดเพื่อขยายและอ่านออกเสียง</div>
         </main>
       </>
     );
@@ -2428,32 +2061,8 @@ export default function App() {
       <main className="app-page" style={containerBackground}>
         <div className="app-shell">
           
-          {/* ในโหมด present แสดงไอคอนสลับมุมมองที่มุมบนขวา เพื่อให้กระดานขยายเต็มพื้นที่จอ */}
-          {viewLayout === "present" && (
-            <button
-              type="button"
-              className="preview-switch-btn"
-              onClick={() => setViewLayout(previousLayout || "split")}
-              title={t(
-                `สลับกลับไปมุมมองก่อนหน้า (${previousLayout === "standard" ? "1 คอลัมน์" : "2 คอลัมน์"})`,
-                `Switch back to previous view (${previousLayout === "standard" ? "1 Column" : "2 Columns"})`
-              )}
-              aria-label="Switch back view"
-            >
-              <svg
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M16 3l4 4-4 4M20 7H4M8 21l-4-4 4-4M4 17h16" />
-              </svg>
-            </button>
-          )}
+          {/* กรณีโหมด present ให้ Top bar ยังคงลอยอยู่บนสุด */}
+          {viewLayout === "present" && renderTopBar({ marginBottom: "20px" })}
 
           <div className={`main-grid ${viewLayout === "split" ? "split-layout" : ""}`}>
             <section
@@ -2476,9 +2085,6 @@ export default function App() {
                 mode={mode}
                 fontSize={labelFontSize}
                 staffBgColor={staffBgColor}
-                lang={lang}
-                onPlayAllTones={handlePlayAllTones}
-                isPlayingAll={isPlayingAll}
               />
             </section>
 
@@ -2503,41 +2109,37 @@ export default function App() {
                   className="control-panel panel" 
                   style={{ flex: 1, overflowY: "auto", position: "static", maxHeight: "none", margin: 0 }}
                 >
-                  <h3>{t("⚙️ แผงควบคุม", "⚙️ Control Panel")}</h3>
+                  <h3>⚙️ แผงควบคุม</h3>
 
                   <section className="control-group">
-                    <strong>{t("✨ ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ", "✨ AI Tone Inflection Assistant")}</strong>
+                    <strong>✨ ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ</strong>
 
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "6px",
-                        marginBottom: "12px",
-                        fontSize: "13px",
-                        color: "#334155",
-                      }}
-                    >
-                      <ModeRadio value="full5" checked={mode === "full5"} label={t("แสดงชุดผัน 5 เสียงเมื่อมีกฎเทียบ (อักษรคู่ / ห นำ)", "Show 5 tones with paired / leading rules")} onChange={handleModeChange} />
-                      <ModeRadio value="highOnly" checked={mode === "highOnly"} label={t("เฉพาะเสียงสูง (เอก, โท, จัตวา)", "High tone set only (Low, Falling, Rising)")} onChange={handleModeChange} />
-                      <ModeRadio value="lowOnly" checked={mode === "lowOnly"} label={t("เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)", "Low tone set only (Mid, Falling, High)")} onChange={handleModeChange} />
-                      <ModeRadio value="pair" checked={mode === "pair"} label={t("จับคู่อักษร(เสียง)สูงและอักษร(เสียง)ต่ำ เพื่อระบุกลุ่มอักษร", "Pair High & Low Class Consonants")} onChange={handleModeChange} />
-                    </div>
+                    {inputText.trim() !== "" && (
+                      <div
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "6px",
+                          marginBottom: "12px",
+                          fontSize: "13px",
+                          color: "#334155",
+                        }}
+                      >
+                        <ModeRadio value="full5" checked={mode === "full5"} label="แสดงชุดผัน 5 เสียงเมื่อมีกฎเทียบ (อักษรคู่ / ห นำ)" onChange={setMode} />
+                        <ModeRadio value="highOnly" checked={mode === "highOnly"} label="เฉพาะเสียงสูง (เอก, โท, จัตวา)" onChange={setMode} />
+                        <ModeRadio value="lowOnly" checked={mode === "lowOnly"} label="เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)" onChange={setMode} />
+                      </div>
+                    )}
 
                     <div className="input-row">
                       <input
                         value={inputText}
-                        placeholder={t("พิมพ์ 1 คำ เช่น กอ, เมา, กวาง", "Type 1 word, e.g. กอ, เมา, กวาง")}
+                        placeholder="พิมพ์ 1 คำ เช่น กอ, เมา, กวาง"
                         onChange={(event) => {
-                          let val = event.target.value;
-                          if (mode === "pair") {
-                            // บังคับให้เป็นพยัญชนะไทย 1 ตัวตามด้วยสระออ หากลบข้อความหมดให้กลับไปเริ่มที่ "ขอ"
-                            const match = val.match(/([ก-ฮ])/);
-                            val = match ? `${match[1]}อ` : "ขอ";
-                          }
+                          const val = event.target.value;
                           setInputText(val);
                           validateInput(val);
-                          if (!val.trim() && mode !== "pair") {
+                          if (!val.trim()) {
                             setMode("full5");
                           }
                         }}
@@ -2547,17 +2149,26 @@ export default function App() {
                         className={inputError ? "input-error" : ""}
                       />
                       <button className="blue-btn" disabled={loading} onClick={handleGenerate}>
-                        {loading ? "..." : t("ผันคำ", "Analyze")}
+                        {loading ? "..." : "ผันคำ"}
                       </button>
                     </div>
 
                     {inputError && <div className="error-text">{inputError}</div>}
 
-
+                    {toneValidation.status !== "idle" && (
+                      <div
+                        className={`tone-validation tone-validation-${toneValidation.status}`}
+                      >
+                        <strong>{toneValidation.message}</strong>
+                        {toneValidation.detail && (
+                          <span>{toneValidation.detail}</span>
+                        )}
+                      </div>
+                    )}
                   </section>
 
                   <section>
-                    <div className="section-label">{t("⌨️ เลือกพยัญชนะด่วน (๔๔ ตัว):", "⌨️ Quick Consonants (44 Letters):")}</div>
+                    <div className="section-label">⌨️ เลือกพยัญชนะด่วน (๔๔ ตัว):</div>
                     <div className="consonant-grid">
                       {quickConsonants.map((consonant) => (
                         <button
@@ -2581,7 +2192,7 @@ export default function App() {
                     <div className="low-class-groups">
                       <div className="low-class-group">
                         <div className="section-label low-pair-label">
-                          {t("🟣 อักษรต่ำคู่ (๑๔ ตัว)", "🟣 Paired Low Consonants (14 Letters)")}
+                          🟣 อักษรต่ำคู่ (๑๔ ตัว)
                         </div>
                         <div className="low-consonant-grid">
                           {lowPairConsonants.map((consonant) => (
@@ -2601,7 +2212,7 @@ export default function App() {
 
                       <div className="low-class-group">
                         <div className="section-label low-single-label">
-                          {t("🔵 อักษรต่ำเดี่ยว (๑๐ ตัว)", "🔵 Single Low Consonants (10 Letters)")}
+                          🔵 อักษรต่ำเดี่ยว (๑๐ ตัว)
                         </div>
                         <div className="low-consonant-grid">
                           {lowSingleConsonants.map((consonant) => (
@@ -2623,7 +2234,7 @@ export default function App() {
                     <div className="cluster-groups">
                       <div>
                         <div className="section-label cluster-label">
-                          {t("🔗 ควบกล้ำแท้", "🔗 True Clusters")}
+                          🔗 ควบกล้ำแท้
                         </div>
                         <div className="cluster-grid">
                           {trueClusters.map((cluster) => (
@@ -2643,7 +2254,7 @@ export default function App() {
 
                       <div>
                         <div className="section-label cluster-label">
-                          {t("🟣 อักษรนำ ห-นำ", "🟣 Leading ห- Clusters")}
+                          🟣 อักษรนำ ห-นำ
                         </div>
                         <div className="cluster-grid">
                           {leadingHoClusters.map((cluster) => (
@@ -2663,7 +2274,7 @@ export default function App() {
 
                       <div>
                         <div className="section-label cluster-label">
-                          {t("🟠 ควบกล้ำไม่แท้", "🟠 False Clusters")}
+                          🟠 ควบกล้ำไม่แท้
                         </div>
                         <div className="cluster-grid">
                           {falseClusters.map((cluster) => (
@@ -2684,7 +2295,7 @@ export default function App() {
                   </section>
 
                   <section>
-                    <div className="section-label green-label">{t("🟢 สระเสียงยาว (คำเป็น):", "🟢 Long Vowels (Live Syllables):")}</div>
+                    <div className="section-label green-label">🟢 สระเสียงยาว (คำเป็น):</div>
                     <div className="vowel-list">
                       {longVowels.map((vowel) => (
                         <button
@@ -2697,7 +2308,7 @@ export default function App() {
                       ))}
                     </div>
 
-                    <div className="section-label red-label">{t("🔴 สระเสียงสั้น (คำตาย):", "🔴 Short Vowels (Dead Syllables):")}</div>
+                    <div className="section-label red-label">🔴 สระเสียงสั้น (คำตาย):</div>
                     <div className="vowel-list">
                       {shortVowels.map((vowel) => (
                         <button
@@ -2712,7 +2323,7 @@ export default function App() {
                   </section>
 
                   <section className="control-group">
-                    <strong>{t("🔊 การอ่านออกเสียง", "🔊 Speech & Voice")}</strong>
+                    <strong>🔊 การอ่านออกเสียง</strong>
 
                     <label className="toggle-label">
                       <input
@@ -2720,16 +2331,16 @@ export default function App() {
                         checked={speechEnabled}
                         onChange={(event) => setSpeechEnabled(event.target.checked)}
                       />
-                      {t("เปิดเสียงเมื่อคลิกบรรทัด", "Enable voice on row click")}
+                      เปิดเสียงเมื่อคลิกบรรทัด
                     </label>
 
                     <label className="select-label">
-                      {t("เสียงอ่าน", "Voice")}
+                      เสียงอ่าน
                       <select
                         value={selectedVoiceURI}
                         onChange={(event) => setSelectedVoiceURI(event.target.value)}
                       >
-                        <option value="">{t("เลือกอัตโนมัติ", "Auto Select")}</option>
+                        <option value="">เลือกอัตโนมัติ</option>
                         {voices
                           .filter((voice) =>
                             voice.lang?.toLowerCase().startsWith("th"),
@@ -2752,7 +2363,7 @@ export default function App() {
                     )}
 
                     <label className="select-label">
-                      {t("ความเร็วอ่าน:", "Speech Rate:")} {speechRate}x
+                      ความเร็วอ่าน: {speechRate}x
                       <input
                         type="range"
                         min="0.5"
@@ -2770,7 +2381,7 @@ export default function App() {
                         speak(item ? getSpeechText(item) : inputText);
                       }}
                     >
-                      ▶ {t("ทดลองอ่านคำ", "Test Voice")}
+                      ▶ ทดลองอ่านคำ
                     </button>
                   </section>
 
@@ -2783,16 +2394,16 @@ export default function App() {
                         marginBottom: "8px",
                       }}
                     >
-                      {t("🎼 สีพื้นหลังกระดานบรรทัด 5 เส้น", "🎼 5-Line Staff Background")}
+                      🎼 สีพื้นหลังกระดานบรรทัด 5 เส้น
                     </div>
 
                     <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                       {[
-                        { label: t("ขาว", "White"), value: "#ffffff" },
-                        { label: t("ครีม", "Cream"), value: "#fffbeb" },
-                        { label: t("ฟ้าอ่อน", "Soft Blue"), value: "#f0f9ff" },
-                        { label: t("เขียวอ่อน", "Soft Green"), value: "#f0fdf4" },
-                        { label: t("เทาอ่อน", "Soft Gray"), value: "#f8fafc" },
+                        { label: "ขาว", value: "#ffffff" },
+                        { label: "ครีม", value: "#fffbeb" },
+                        { label: "ฟ้าอ่อน", value: "#f0f9ff" },
+                        { label: "เขียวอ่อน", value: "#f0fdf4" },
+                        { label: "เทาอ่อน", value: "#f8fafc" },
                       ].map((item) => (
                         <button
                           key={item.value}
@@ -2833,13 +2444,13 @@ export default function App() {
                   </section>
 
                   <section>
-                    <div className="section-label">{t("🎨 ตั้งค่าสีประจำหมู่ และสีตัวอักษร", "🎨 Consonant Class & Text Colors")}</div>
+                    <div className="section-label">🎨 ตั้งค่าสีประจำหมู่ และสีตัวอักษร</div>
                     <div className="color-grid">
                       {[
-                        [t("อักษรกลาง", "Mid Class"), colorMid, setColorMid],
-                        [t("อักษรสูง", "High Class"), colorHigh, setColorHigh],
-                        [t("อักษรต่ำ", "Low Class"), colorLow, setColorLow],
-                        [t("สีตัวอักษร", "Text Color"), circleTextColor, setCircleTextColor],
+                        ["อักษรกลาง", colorMid, setColorMid],
+                        ["อักษรสูง", colorHigh, setColorHigh],
+                        ["อักษรต่ำ", colorLow, setColorLow],
+                        ["สีตัวอักษร", circleTextColor, setCircleTextColor],
                       ].map(([label, value, setter]) => (
                         <label
                           key={label}
@@ -2861,15 +2472,15 @@ export default function App() {
                   </section>
 
                   <section className="control-group">
-                    <strong>{t("🖼️ เลือกสีหรือรูปภาพพื้นหลังจอภาพรวม", "🖼️ Overall Screen Background")}</strong>
+                    <strong>🖼️ เลือกสีหรือรูปภาพพื้นหลังจอภาพรวม</strong>
                     <div className="background-colors">
                       {[
-                        [t("เทา", "Gray"), "#e2e8f0"],
-                        [t("สว่าง", "Light"), "#f1f5f9"],
-                        [t("ฟ้าอ่อน", "Soft Blue"), "#e0f2fe"],
-                        [t("มินต์", "Mint"), "#dcfce7"],
-                        [t("ส้มอ่อน", "Soft Orange"), "#fef3c7"],
-                        [t("เข้ม", "Dark"), "#334155"],
+                        ["เทา", "#e2e8f0"],
+                        ["สว่าง", "#f1f5f9"],
+                        ["ฟ้าอ่อน", "#e0f2fe"],
+                        ["มินต์", "#dcfce7"],
+                        ["ส้มอ่อน", "#fef3c7"],
+                        ["เข้ม", "#334155"],
                       ].map(([label, color]) => (
                         <button
                           key={color}
@@ -2889,7 +2500,7 @@ export default function App() {
                     </div>
 
                     <label className="upload-btn">
-                      {t("📁 อัปโหลดรูปภาพพื้นหลัง", "📁 Upload Background Image")}
+                      📁 อัปโหลดรูปภาพพื้นหลัง
                       <input type="file" accept="image/*" onChange={handleImageUpload} />
                     </label>
 
@@ -2901,14 +2512,14 @@ export default function App() {
                           setBgImage("");
                         }}
                       >
-                        {t("ยกเลิกรูปภาพ", "Remove Image")}
+                        ยกเลิกรูปภาพ
                       </button>
                     )}
                   </section>
 
                   <section className="control-group">
                     <label className="select-label">
-                      {t("📐 ขนาดตัวหนังสือและวงกลม (จอที่ 2):", "📐 Font & Circle Size (Screen 2):")} {labelFontSize}px
+                      📐 ขนาดตัวหนังสือและวงกลม (จอที่ 2): {labelFontSize}px
                       <input
                         type="range"
                         min="16"
@@ -2924,24 +2535,24 @@ export default function App() {
                       className="api-toggle"
                       onClick={() => setShowApiInput((value) => !value)}
                     >
-                      🔑 {customApiKey ? t("เปลี่ยน Gemini API Key", "Change Gemini API Key") : t("เชื่อมต่อ AI (API Key)", "Connect AI (API Key)")}
+                      🔑 {customApiKey ? "เปลี่ยน Gemini API Key" : "เชื่อมต่อ AI (API Key)"}
                     </button>
 
                     {showApiInput && (
                       <div className="api-input-box">
-                        <strong>{t("🔑 เชื่อมต่อ Gemini API Key ส่วนตัว:", "🔑 Connect Personal Gemini API Key:")}</strong>
+                        <strong>🔑 เชื่อมต่อ Gemini API Key ส่วนตัว:</strong>
                         <div className="input-row">
                           <input
                             type="password"
                             value={tempApiKey}
-                            placeholder={t("วาง Gemini API Key...", "Paste Gemini API Key...")}
+                            placeholder="วาง Gemini API Key..."
                             onChange={(event) => setTempApiKey(event.target.value)}
                             onKeyDown={(event) => {
                               if (event.key === "Enter") handleSaveApiKey();
                             }}
                           />
                           <button className="green-btn" onClick={handleSaveApiKey}>
-                            {t("บันทึก", "Save")}
+                            บันทึก
                           </button>
                         </div>
                         {apiSaveStatus && <div className="success-text">✓ {apiSaveStatus}</div>}
@@ -2993,32 +2604,6 @@ const styles = `
     border-radius: 16px;
   }
 
-  .preview-switch-btn {
-    position: fixed;
-    top: 18px;
-    right: 22px;
-    z-index: 1000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.95);
-    border: 1.5px solid #0284c7;
-    color: #0284c7;
-    box-shadow: 0 4px 14px rgba(2, 132, 199, 0.25);
-    cursor: pointer;
-    transition: transform .18s ease, background .18s ease, color .18s ease, box-shadow .18s ease;
-  }
-
-  .preview-switch-btn:hover {
-    background: #0284c7;
-    color: #ffffff;
-    transform: scale(1.08);
-    box-shadow: 0 6px 18px rgba(2, 132, 199, 0.35);
-  }
-
   .top-bar {
     display: flex;
     align-items: center;
@@ -3066,62 +2651,16 @@ const styles = `
   .main-grid > section {
     min-width: 0;
     min-height: 0;
-    overflow-y: auto; /* เปลียนจาก hidden เป็นเลื่อนแนวตั้งได้ */
-    overflow-x: hidden;
+    overflow: hidden;
   }
 
   .board-panel { padding: 30px 22px; min-width: 0; }
   .presentation-panel { padding: 45px 50px; }
 
   .tone-board { width: 100%; }
-
-  .board-footer-actions {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    margin-top: 14px;
-    padding-right: 6px;
-  }
-
-  .auto-play-tones-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    padding: 7px 15px;
-    border-radius: 999px;
-    background: #f0fdf4;
-    border: 1.5px solid #22c55e;
-    color: #15803d;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(34, 197, 94, 0.18);
-    transition: all .18s ease;
-  }
-
-  .auto-play-tones-btn:hover {
-    background: #16a34a;
-    color: #ffffff;
-    border-color: #16a34a;
-    transform: scale(1.04);
-    box-shadow: 0 4px 12px rgba(22, 163, 74, 0.28);
-  }
-
-  .auto-play-tones-btn.playing {
-    background: #15803d;
-    color: #ffffff;
-    border-color: #15803d;
-    animation: tonePulse 1.4s infinite;
-  }
-
-  @keyframes tonePulse {
-    0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }
-    70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
-  }
-  .board-title { text-align: center; color: #6b21a8; margin-bottom: 18px; } /* เปลี่ยนเป็นสีม่วงแก่ */
-  .board-title h2 { margin: 0; font-size: clamp(23px, 2.3vw, 30px); }
-  .board-title div { font-size: clamp(16px, 1.5vw, 19px); font-weight: 600; }
+  .board-title { text-align: center; color: #d000ff; margin-bottom: 18px; }
+  .board-title h2 { margin: 0; font-size: clamp(23px, 2.3vw, 30px); color: #d000ff; }
+  .board-title div { font-size: clamp(16px, 1.5vw, 19px); font-weight: 600; color: #d000ff; }
 
   .analysis-box {
     margin: 0 auto 22px;
@@ -3149,28 +2688,15 @@ const styles = `
 
   .tone-header, .tone-row {
     display: grid;
-    grid-template-columns: 215px minmax(180px, 1fr) 32px 100px;
+    grid-template-columns: 215px minmax(190px, 1fr) 100px;
     align-items: center;
-  }
-
-  .tone-line-number {
-    text-align: center;
-    font-size: 16px;
-    font-weight: 800;
-    line-height: 1;
-    user-select: none;
-    transition: transform .18s ease, color .18s ease;
-  }
-
-  .tone-row.active .tone-line-number {
-    transform: scale(1.18);
   }
 
   .tone-header {
     color: #0284c7;
     font-size: 14px;
     font-weight: 700;
-    margin-bottom: 8px;
+    margin-bottom: 3px;
   }
 
   .tone-header span { text-align: right; padding-right: 20px; }
@@ -3179,9 +2705,6 @@ const styles = `
     display: flex;
     flex-direction: column;
     gap: 24px;
-    padding-top: 28px; /* เว้นระยะด้านบน 28px ป้องกันก้านโน้ต/ไม้จัตวาของคำว่า ก๋อ ชนหรือล้นขอบบน */
-    overflow: visible;
-    min-height: min-content; /* บังคับให้รักษาความสูงตามเนื้อหาจริง ไม่หดจนทับกัน */
   }
 
   .tone-row {
@@ -3190,7 +2713,6 @@ const styles = `
     background: transparent;
     text-align: inherit;
     border-radius: 12px;
-    overflow: visible; /* ป้องกัน browser ตัดส่วนที่ยื่นออกนอก button */
     transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
   }
 
@@ -3219,7 +2741,6 @@ const styles = `
     display: flex;
     align-items: center;
     position: relative;
-    overflow: visible;
     transition: none;
     transform: none;
   }
@@ -3247,7 +2768,6 @@ const styles = `
     white-space: nowrap;
     font-weight: 700;
     overflow: visible;
-    isolation: isolate; /* จัด Stacking Context ภายใน ไม่ให้ก้านโน้ตมุดหายใต้แถวหรือการ์ด */
     box-sizing: border-box;
     box-shadow: 0 4px 11px rgba(0,0,0,.24);
     transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
@@ -3588,8 +3108,7 @@ const styles = `
     box-shadow: 0 16px 42px rgba(0,0,0,.18);
     display: flex;
     flex-direction: column;
-    overflow-y: auto; /* เปลียนจาก hidden เป็นเลื่อนแนวตั้งได้ */
-    overflow-x: hidden;
+    overflow: hidden;
   }
 
   .display-board .tone-rows {
@@ -3600,8 +3119,7 @@ const styles = `
     justify-content: space-evenly;
     gap: 0;
     margin-top: 2vh;
-    padding-top: 24px;
-    overflow: visible;
+    overflow: hidden;
   }
 
   .display-tip {
@@ -3640,8 +3158,7 @@ const styles = `
     .app-page { padding: 10px; }
     .top-bar { padding: 12px; }
     .board-panel, .presentation-panel { padding: 22px 10px; }
-    .tone-header, .tone-row { grid-template-columns: 112px minmax(115px, 1fr) 22px 52px; }
-    .tone-line-number { font-size: 13px; }
+    .tone-header, .tone-row { grid-template-columns: 112px minmax(125px, 1fr) 52px; }
     .tone-header span, .tone-name { padding-right: 8px; }
     .tone-name { font-size: 13px !important; white-space: normal; }
     .fixed-tone-label { font-size: 12px; }
@@ -3678,7 +3195,7 @@ const styles = `
       padding: 14px 8px;
     }
     .display-board .analysis-box { font-size: 11px; margin-bottom: 12px; }
-    .display-board .tone-header, .display-board .tone-row { grid-template-columns: 104px minmax(100px, 1fr) 22px 48px; }
+    .display-board .tone-header, .display-board .tone-row { grid-template-columns: 104px minmax(100px, 1fr) 48px; }
     .display-tip { font-size: 10px; max-width: 92vw; white-space: normal; text-align: center; }
   }
 
