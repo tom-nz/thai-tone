@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { autoCorrelate, TONE_TARGET_FREQS } from './utils/pitchDetector';
+import { autoCorrelate, classifyToneContour, TONE_TARGET_FREQS } from './utils/pitchDetector';
 
 /**
  * =============================================================================
@@ -151,11 +151,9 @@ const TTS_API_ENDPOINT = "/api/tts";
 const WORDS_API_ENDPOINT = "/api/words";
 const TTS_VOICE = "th-TH-PremwadeeNeural";
 
-// ชื่อฐานข้อมูล/ตารางสำหรับแคชไฟล์เสียงในเครื่อง (IndexedDB)
 const LOCAL_AUDIO_DB_NAME = "thai_tone_audio_cache";
 const LOCAL_AUDIO_STORE_NAME = "audio_blobs";
 
-// Regex ตรวจสอบคำไทย 1 พยางค์อย่างเคร่งครัด
 const STRICT_THAI_SYLLABLE_PATTERN = /^[เแโใไ]?[ก-ฮ]{1,2}[ิีึืุูั็ํ]?[่้๊๋]?(?:[ายวอ]|ำ)?[ก-ฮ]?(?:ะ|์)?$/;
 
 const midConsonants = ["ก", "จ", "ด", "ต", "บ", "ป", "อ", "ฎ", "ฏ"];
@@ -185,7 +183,6 @@ const quickConsonants = [
   "ย", "ร", "ล", "ว", "ศ", "ษ", "ส", "ห", "ฬ", "อ", "ฮ",
 ];
 
-// กลุ่มคำควบ/อักษรนำสำหรับปุ่มเลือกด่วน
 const trueClusters = [
   "กร", "กล", "กว", "ขร", "ขล", "ขว", "คร", "คล", "คว",
   "ตร", "ปร", "ปล", "พร", "พล", "ฟร", "ฟล",
@@ -196,8 +193,6 @@ const leadingHoClusters = [
 ];
 
 const leadingOClusters = ["อย"];
-
-// ควบกล้ำไม่แท้: แยกไว้เพื่อไม่ให้ถูกสรุปเป็นควบแท้
 const falseClusters = ["ทร", "ศร", "สร", "จร", "ซร"];
 
 const thaiClusters = [
@@ -249,11 +244,6 @@ const toneRows = [
   { id: 1, tone: "เสียงสามัญ", mark: "-", leftPos: "28%" },
 ];
 
-/**
- * =============================================================================
- * LOCAL AUDIO CACHE (IndexedDB) — ชั้นที่ 1 ของ Multi-tier Caching
- * =============================================================================
- */
 function openAudioCacheDB() {
   return new Promise((resolve, reject) => {
     if (typeof indexedDB === "undefined") {
@@ -329,17 +319,9 @@ async function clearAllLocalAudioBlobs() {
   }
 }
 
-// Custom Radio Component
 function ModeRadio({ value, checked, label, onChange }) {
   return (
-    <label
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: "9px",
-        cursor: "pointer",
-      }}
-    >
+    <label style={{ display: "flex", alignItems: "center", gap: "9px", cursor: "pointer" }}>
       <input
         type="radio"
         name="mode"
@@ -982,6 +964,7 @@ function Board({
   practiceTargetWord = null,
   mismatchWord = null,
   onTogglePractice,
+  onSkip,
   practiceTimer = 10,
   practiceScore = 0,
   practiceMsg = "",
@@ -1297,84 +1280,82 @@ function Board({
         })}
       </div>
 
-      {/* แถบปุ่มด้านล่างกระดาน */}
-      {inputText.trim() !== "" && linesData.some((item) => item.show && (item.word || (item.isMulti && item.multi.length > 0))) && (
-        <div className="board-footer-actions">
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <button
-              type="button"
-              className={`auto-play-tones-btn ${isPlayingAll ? "playing" : ""}`}
-              onClick={onPlayAllTones}
-              disabled={isPracticing}
-              title={
-                mode === "pair"
-                  ? t(
-                      isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์คู่เสียงสูง-ต่ำ (5 ➔ 1)",
-                      isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play paired tones (5 ➔ 1)"
-                    )
+      {/* แถบปุ่มด้านล่างกระดาน: แสดงผลเสมอ ไม่ซ่อน */}
+      <div className="board-footer-actions">
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button
+            type="button"
+            className={`auto-play-tones-btn ${isPlayingAll ? "playing" : ""}`}
+            onClick={onPlayAllTones}
+            disabled={isPracticing || !linesData.some((item) => item.show && (item.word || (item.isMulti && item.multi.length > 0)))}
+            title={
+              mode === "pair"
+                ? t("ออกเสียงผันวรรณยุกต์คู่เสียงสูง-ต่ำ (5 ➔ 1)", "Auto-play paired tones (5 ➔ 1)")
+                : mode === "highOnly"
+                  ? t("ออกเสียงผันวรรณยุกต์เฉพาะเสียงสูง (5 ➔ 2 ➔ 3)", "Auto-play high tones (5 ➔ 2 ➔ 3)")
+                  : mode === "lowOnly"
+                    ? t("ออกเสียงผันวรรณยุกต์เฉพาะเสียงต่ำ (1 ➔ 3 ➔ 4)", "Auto-play low tones (1 ➔ 3 ➔ 4)")
+                    : t("ออกเสียงผันวรรณยุกต์อัตโนมัติ 5 เสียง (1 ➔ 5)", "Auto-play 5 tones ascending (1 ➔ 5)")
+            }
+            aria-label="Auto play tones"
+          >
+            {mode === "pair" || mode === "highOnly" ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="10 5 5 9 2 9 2 15 5 15 10 19 10 5" fill="currentColor" stroke="none" />
+                <path d="M15 9l6 6" stroke="currentColor" strokeWidth="2.2" />
+                <path d="M16 15h5v-5" stroke="currentColor" strokeWidth="2.2" />
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="10 5 5 9 2 9 2 15 5 15 10 19 10 5" fill="currentColor" stroke="none" />
+                <path d="M15 15l6-6" stroke="currentColor" strokeWidth="2.2" />
+                <path d="M16 9h5v5" stroke="currentColor" strokeWidth="2.2" />
+              </svg>
+            )}
+            <span className="auto-play-label">
+              {isPlayingAll
+                ? t("กำลังออกเสียง...", "Playing...")
+                : mode === "pair"
+                  ? t("ผันเสียง 5+1", "Play 5+1")
                   : mode === "highOnly"
-                    ? t(
-                        isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์เฉพาะเสียงสูง (5 ➔ 2 ➔ 3)",
-                        isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play high tones (5 ➔ 2 ➔ 3)"
-                      )
+                    ? t("ผันเสียง 5-2-3", "Play 5-2-3")
                     : mode === "lowOnly"
-                      ? t(
-                          isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์เฉพาะเสียงต่ำ (1 ➔ 3 ➔ 4)",
-                          isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play low tones (1 ➔ 3 ➔ 4)"
-                        )
-                      : t(
-                          isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์อัตโนมัติ 5 เสียง (1 ➔ 5)",
-                          isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play 5 tones ascending (1 ➔ 5)"
-                        )
-              }
-              aria-label="Auto play tones"
-            >
-              {mode === "pair" || mode === "highOnly" ? (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="10 5 5 9 2 9 2 15 5 15 10 19 10 5" fill="currentColor" stroke="none" />
-                  <path d="M15 9l6 6" stroke="currentColor" strokeWidth="2.2" />
-                  <path d="M16 15h5v-5" stroke="currentColor" strokeWidth="2.2" />
-                </svg>
-              ) : (
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="10 5 5 9 2 9 2 15 5 15 10 19 10 5" fill="currentColor" stroke="none" />
-                  <path d="M15 15l6-6" stroke="currentColor" strokeWidth="2.2" />
-                  <path d="M16 9h5v5" stroke="currentColor" strokeWidth="2.2" />
-                </svg>
-              )}
-              <span className="auto-play-label">
-                {isPlayingAll
-                  ? t("กำลังออกเสียง...", "Playing...")
-                  : mode === "pair"
-                    ? t("ผันเสียง 5+1", "Play 5+1")
-                    : mode === "highOnly"
-                      ? t("ผันเสียง 5-2-3", "Play 5-2-3")
-                      : mode === "lowOnly"
-                        ? t("ผันเสียง 1-3-4", "Play 1-3-4")
-                        : t("ผันเสียง 1-5", "Play 1-5")}
-              </span>
-            </button>
+                      ? t("ผันเสียง 1-3-4", "Play 1-3-4")
+                      : t("ผันเสียง 1-5", "Play 1-5")}
+            </span>
+          </button>
 
-            {/* ปุ่ม Toggle ฝึกออกเสียง / ยกเลิก */}
+          {/* ปุ่ม Toggle ฝึกออกเสียง / ยกเลิก */}
+          <button
+            type="button"
+            className={`practice-toggle-btn ${isPracticing ? "cancel" : ""}`}
+            onClick={onTogglePractice}
+          >
+            {isPracticing ? t("❌ ยกเลิก", "❌ Cancel") : t("🎙️ ฝึกออกเสียง", "🎙️ Practice")}
+          </button>
+
+          {/* ปุ่มข้ามคำ (จะแสดงเฉพาะในโหมดฝึก) */}
+          {isPracticing && (
             <button
               type="button"
-              className={`practice-toggle-btn ${isPracticing ? "cancel" : ""}`}
-              onClick={onTogglePractice}
+              className="practice-skip-btn"
+              onClick={onSkip}
+              title={t("ข้ามคำนี้ไปคำถัดไป", "Skip to next word")}
             >
-              {isPracticing ? t("❌ ยกเลิก", "❌ Cancel") : t("🎙️ ฝึกออกเสียง", "🎙️ Practice")}
+              ⏭️ {t("ข้าม", "Skip")}
             </button>
-          </div>
-
-          {/* แถบแสดงสถานะโหมดฝึก */}
-          {isPracticing && (
-            <div className="practice-status-banner">
-              <span className="practice-msg-text">{practiceMsg}</span>
-              <span className="practice-timer-text">⏱️ {practiceTimer}s</span>
-              <span className="practice-score-text">🏆 {t("คะแนน", "Score")}: {practiceScore}</span>
-            </div>
           )}
         </div>
-      )}
+
+        {/* แถบแสดงสถานะโหมดฝึก */}
+        {isPracticing && (
+          <div className="practice-status-banner">
+            <span className="practice-msg-text">{practiceMsg}</span>
+            <span className="practice-timer-text">⏱️ {practiceTimer}s</span>
+            <span className="practice-score-text">🏆 {t("คะแนน", "Score")}: {practiceScore}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1399,8 +1380,10 @@ export default function App() {
   const [mode, setMode] = useState("full5");
   const [viewLayout, setViewLayout] = useState("split");
   const [previousLayout, setPreviousLayout] = useState("split");
-  const [inputText, setInputText] = useState("");
-  const [lastValidInput, setLastValidInput] = useState("");
+
+  // เริ่มต้นด้วยคำว่า "กอ" เพื่อให้กระดานมีคำและปุ่มพร้อมใช้งานทันที
+  const [inputText, setInputText] = useState("กอ");
+  const [lastValidInput, setLastValidInput] = useState("กอ");
   const [inputError, setInputError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -1440,6 +1423,7 @@ export default function App() {
   const isWaitingCorrectionRef = useRef(false);
   const matchCountRef = useRef(0);
   const animFrameRef = useRef(null);
+  const pitchBufferRef = useRef([]); // เก็บค่าวัด Pitch ตลอดพยางค์สำหรับคำนวณ Slope
 
   const [soundManagerOpen, setSoundManagerOpen] = useState(false);
   const [soundWords, setSoundWords] = useState([]);
@@ -1465,13 +1449,13 @@ export default function App() {
   const speechRef = useRef(null);
 
   const [analysisInfo, setAnalysisInfo] = useState(() =>
-    analyzeSyllable("", "full5"),
+    analyzeSyllable("กอ", "full5"),
   );
   const [linesData, setLinesData] = useState(() =>
-    calculateTones("", "full5", "#22c55e", "#ef4444", "#007bff"),
+    calculateTones("กอ", "full5", "#22c55e", "#ef4444", "#007bff"),
   );
   const [toneValidation, setToneValidation] = useState(() =>
-    validateEnteredToneMark(""),
+    validateEnteredToneMark("กอ"),
   );
 
   const containerBackground = useMemo(() => {
@@ -1592,6 +1576,23 @@ export default function App() {
     }
   };
 
+  // ปุ่มกดข้ามคำ (Skip)
+  const handleSkipWord = () => {
+    if (!isPracticing) return;
+    clearInterval(timerRef.current);
+    pitchBufferRef.current = [];
+    setPracticeTargetWord(null);
+    currentIdxRef.current += 1;
+
+    if (currentIdxRef.current < practiceQueueRef.current.length) {
+      loadNextPracticeWord();
+    } else {
+      alert(t(`🎉 ผ่านครบทุกคำแล้ว!\nคะแนนรวม: ${practiceScore} คะแนน`,
+              `🎉 Practice completed!\nTotal score: ${practiceScore}`));
+      cancelPractice();
+    }
+  };
+
   const startPractice = async () => {
     if (isPlayingAll) {
       isCancelingAutoPlayRef.current = true;
@@ -1619,6 +1620,7 @@ export default function App() {
     practiceQueueRef.current = wordsOnScreen;
     currentIdxRef.current = 0;
     setPracticeScore(0);
+    pitchBufferRef.current = [];
     setIsPracticing(true);
 
     try {
@@ -1644,6 +1646,7 @@ export default function App() {
     setPracticeTimer(10);
     isWaitingCorrectionRef.current = false;
     matchCountRef.current = 0;
+    pitchBufferRef.current = [];
     setPracticeMsg(t(`กรุณาออกเสียง: "${current.word}"`, `Please say: "${current.word}"`));
 
     clearInterval(timerRef.current);
@@ -1677,48 +1680,55 @@ export default function App() {
       const freq = autoCorrelate(buffer, audioCtxRef.current.sampleRate);
 
       if (freq !== -1) {
-        const current = practiceQueueRef.current[currentIdxRef.current];
-        if (current) {
-          const targetFreq = TONE_TARGET_FREQS[current.toneId] || 140;
-          const tolerance = 28;
+        pitchBufferRef.current.push(freq);
+        if (pitchBufferRef.current.length > 25) pitchBufferRef.current.shift();
 
-          // เสียงตรงกับคำเป้าหมาย
-          if (Math.abs(freq - targetFreq) <= tolerance) {
-            matchCountRef.current += 1;
-            if (matchCountRef.current >= 6) {
-              clearInterval(timerRef.current);
+        // ใช้อัลกอริทึม Contour & Slope วิเคราะห์รูปทรงเส้นเสียงวรรณยุกต์
+        const detectedToneId = classifyToneContour(pitchBufferRef.current);
 
-              if (!isWaitingCorrectionRef.current) {
-                setPracticeScore((prev) => prev + 10);
+        if (detectedToneId) {
+          const current = practiceQueueRef.current[currentIdxRef.current];
+          if (current) {
+            // ออกเสียงตรงกับเป้าหมาย
+            if (detectedToneId === current.toneId) {
+              matchCountRef.current += 1;
+              if (matchCountRef.current >= 4) {
+                clearInterval(timerRef.current);
+                pitchBufferRef.current = [];
+
+                if (!isWaitingCorrectionRef.current) {
+                  setPracticeScore((prev) => prev + 10);
+                }
+
+                setPracticeTargetWord(null);
+                currentIdxRef.current += 1;
+
+                if (currentIdxRef.current < practiceQueueRef.current.length) {
+                  setTimeout(loadNextPracticeWord, 500);
+                } else {
+                  setTimeout(() => {
+                    alert(t(`🎉 ผ่านการทดสอบครบทุกคำแล้ว!\nคะแนนรวม: ${practiceScore + (isWaitingCorrectionRef.current ? 0 : 10)} คะแนน`,
+                            `🎉 Practice completed!\nTotal score: ${practiceScore + (isWaitingCorrectionRef.current ? 0 : 10)}`));
+                    cancelPractice();
+                  }, 400);
+                  return;
+                }
               }
-
-              // ย่อกลับขนาดและคืนสีเดิมทันที
-              setPracticeTargetWord(null);
-              currentIdxRef.current += 1;
-
-              if (currentIdxRef.current < practiceQueueRef.current.length) {
-                setTimeout(loadNextPracticeWord, 500);
-              } else {
-                setTimeout(() => {
-                  alert(t(`🎉 ผ่านการทดสอบครบทุกคำแล้ว!\nคะแนนรวม: ${practiceScore + (isWaitingCorrectionRef.current ? 0 : 10)} คะแนน`,
-                          `🎉 Practice completed!\nTotal score: ${practiceScore + (isWaitingCorrectionRef.current ? 0 : 10)}`));
-                  cancelPractice();
-                }, 400);
-                return;
-              }
-            }
-          } else {
-            // เช็คว่าตรงกับคำอื่นบนหน้าจอหรือไม่ (เด้งเตือนชั่วคราวแต่ไม่ได้คะแนน)
-            practiceQueueRef.current.forEach((item, idx) => {
-              if (idx !== currentIdxRef.current) {
-                const otherFreq = TONE_TARGET_FREQS[item.toneId] || 140;
-                if (Math.abs(freq - otherFreq) <= tolerance) {
+            } else {
+              // เด้งเตือนเมื่อไปตรงกับวรรณยุกต์อื่นในหน้าจอ
+              practiceQueueRef.current.forEach((item, idx) => {
+                if (idx !== currentIdxRef.current && item.toneId === detectedToneId) {
                   setMismatchWord(item.word);
                   setTimeout(() => setMismatchWord(null), 400);
                 }
-              }
-            });
+              });
+            }
           }
+        }
+      } else {
+        if (pitchBufferRef.current.length > 0) {
+          pitchBufferRef.current = [];
+          matchCountRef.current = 0;
         }
       }
 
@@ -1741,6 +1751,7 @@ export default function App() {
     setMismatchWord(null);
     setPracticeScore(0);
     setPracticeMsg("");
+    pitchBufferRef.current = [];
   };
 
   useEffect(() => {
@@ -2376,6 +2387,7 @@ export default function App() {
             practiceTargetWord={practiceTargetWord}
             mismatchWord={mismatchWord}
             onTogglePractice={handleTogglePractice}
+            onSkip={handleSkipWord}
             practiceTimer={practiceTimer}
             practiceScore={practiceScore}
             practiceMsg={practiceMsg}
@@ -2438,6 +2450,7 @@ export default function App() {
                 practiceTargetWord={practiceTargetWord}
                 mismatchWord={mismatchWord}
                 onTogglePractice={handleTogglePractice}
+                onSkip={handleSkipWord}
                 practiceTimer={practiceTimer}
                 practiceScore={practiceScore}
                 practiceMsg={practiceMsg}
@@ -3157,7 +3170,12 @@ const styles = `
     transition: all .18s ease;
   }
 
-  .auto-play-tones-btn:hover {
+  .auto-play-tones-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .auto-play-tones-btn:hover:not(:disabled) {
     background: #16a34a;
     color: #ffffff;
     border-color: #16a34a;
@@ -3754,9 +3772,6 @@ const styles = `
     .display-tip { font-size: 10px; max-width: 92vw; white-space: normal; text-align: center; }
   }
 
-  /* ========================================= */
-  /* วาดก้านและธงเขบ็ตชั้นเดียว (Eighth Note)  */
-  /* ========================================= */
   .tone-circle::before {
     content: "";
     position: absolute;
@@ -3783,7 +3798,7 @@ const styles = `
   }
 
   /* ========================================= */
-  /* สไตล์เสริมโหมดฝึกออกเสียง (Practice Mode)    */
+  /* สไตล์โหมดฝึกออกเสียง (Practice Mode)        */
   /* ========================================= */
   .tone-circle.target-test-active {
     transform: translate3d(-50%, -50%, 0) scale(1.48) !important;
@@ -3850,6 +3865,28 @@ const styles = `
   .practice-toggle-btn.cancel:hover {
     background: #dc2626 !important;
     border-color: #dc2626 !important;
+  }
+
+  .practice-skip-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 7px 14px;
+    border-radius: 999px;
+    background: #f1f5f9;
+    border: 1.5px solid #cbd5e1;
+    color: #475569;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    transition: all .18s ease;
+  }
+
+  .practice-skip-btn:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+    transform: scale(1.04);
   }
 
   .practice-status-banner {
