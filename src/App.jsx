@@ -3,7 +3,7 @@ import { autoCorrelate, classifyToneContour, TONE_TARGET_FREQS } from './utils/p
 
 /**
  * =============================================================================
- * THAI LANGUAGE / TRIYANG (อักษร 3 หมู่) RULEBOOK FOR THIS APPLICATION
+ * 1. THAI LANGUAGE / TRIYANG (อักษร 3 หมู่) RULEBOOK FOR THIS APPLICATION
  * =============================================================================
  *
  * จุดประสงค์:
@@ -19,230 +19,155 @@ import { autoCorrelate, classifyToneContour, TONE_TARGET_FREQS } from './utils/p
  *      ข ฃ ฉ ฐ ถ ผ ฝ ศ ษ ส ห
  *
  *    อักษรต่ำ 24 ตัว แบ่งเป็น:
- *
  *      อักษรต่ำคู่ 14 ตัว:
  *        ค ฅ ฆ ช ฌ ซ ฑ ฒ ท ธ พ ภ ฟ ฮ
- *
  *      อักษรต่ำเดี่ยว 10 ตัว:
  *        ง ญ ณ น ม ย ร ล ว ฬ
  *
  *    รวมทั้งหมด 44 ตัวพอดี (9 + 11 + 14 + 10 = 44)
  *
  * 2) "พื้นเสียง" คือเสียงของพยางค์เมื่อไม่มีรูปวรรณยุกต์กำกับ
- *
  *    อักษรสูง:
  *      - คำเป็น  -> จัตวา
  *      - คำตาย  -> เอก
- *
  *    อักษรกลาง:
  *      - คำเป็น  -> สามัญ
  *      - คำตาย  -> เอก
- *
  *    อักษรต่ำ:
  *      - คำเป็น          -> สามัญ
  *      - คำตายสระสั้น    -> ตรี
  *      - คำตายสระยาว     -> โท
  *
  * 3) จำนวน "เสียง" ที่ผันได้ไม่เท่ากับจำนวนรูปวรรณยุกต์
- *
  *    มีรูปวรรณยุกต์ 4 รูป: ่ ้ ๊ ๋
  *    แต่การผันจริงขึ้นกับ:
- *      - หมู่อักษร
+ *      - หมู่อักษร (กลาง, สูง, ต่ำคู่, ต่ำเดี่ยว)
  *      - คำเป็น / คำตาย
  *      - สระสั้น / สระยาว (โดยเฉพาะคำตายอักษรต่ำ)
- *      - การมีตัวสะกด
+ *      - การมีตัวสะกด (มาตราตัวสะกด กบด = คำตาย, นมยวง = คำเป็น)
  *      - อักษรคู่ / อักษรเดี่ยว
  *
  * 4) ตารางแกนหลักที่ใช้ใน Rule Engine
- *
  *    อักษรกลาง:
- *      - คำเป็น:  5 เสียง
- *          สามัญ = ไม่มีรูป, เอก = ่, โท = ้, ตรี = ๊, จัตวา = ๋
- *      - คำตาย:  4 เสียง
- *          เอก = ไม่มีรูป, โท = ้, ตรี = ๊, จัตวา = ๋
- *
+ *      - คำเป็น:  5 เสียง (สามัญ = ไม่มีรูป, เอก = ่, โท = ้, ตรี = ๊, จัตวา = ๋)
+ *      - คำตาย:  4 เสียง (เอก = ไม่มีรูป, โท = ้, ตรี = ๊, จัตวา = ๋)
  *    อักษรสูง:
- *      - คำเป็น:  3 เสียง
- *          เอก = ่, โท = ้, จัตวา = ไม่มีรูป
- *      - คำตาย:  2 เสียง
- *          เอก = ไม่มีรูป, โท = ้
- *
+ *      - คำเป็น:  3 เสียง (เอก = ่, โท = ้, จัตวา = ไม่มีรูป)
+ *      - คำตาย:  2 เสียง (เอก = ไม่มีรูป, โท = ้)
  *    อักษรต่ำ:
- *      - คำเป็น:  3 เสียง
- *          สามัญ = ไม่มีรูป, โท = ่, ตรี = ้
- *      - คำตายสระสั้น:
- *          โท = ่, ตรี = ไม่มีรูป
- *          (รูป/เสียงจัตวาในตำราบางชุดเป็นรูปประกอบ/ทางเลือก
- *            ไม่ควรนับเป็นรูปผันหลักโดยอัตโนมัติ)
- *      - คำตายสระยาว:
- *          โท = ไม่มีรูป, ตรี = ้
+ *      - คำเป็น:  3 เสียง (สามัญ = ไม่มีรูป, โท = ่, ตรี = ้)
+ *      - คำตายสระสั้น: 2 เสียง (โท = ่, ตรี = ไม่มีรูป)
+ *      - คำตายสระยาว:  2 เสียง (โท = ไม่มีรูป, ตรี = ้)
  *
  * 5) คำเป็น / คำตาย
- *
- *    คำตายหลักที่ใช้ในการศึกษา:
+ *    คำตายหลัก:
  *      - สระเสียงสั้น ไม่มีตัวสะกด
- *      - มีตัวสะกดในแม่กก แม่กด แม่กบ
- *
+ *      - มีตัวสะกดในแม่กก แม่กด แม่กบ (มาตรา กบด)
  *    คำเป็นหลัก:
  *      - สระเสียงยาว ไม่มีตัวสะกด
- *      - มีตัวสะกดในแม่กง แม่กน แม่กม แม่เกย แม่เกอว
- *
+ *      - มีตัวสะกดในแม่กง แม่กน แม่กม แม่เกย แม่เกอว (มาตรา นมยวง)
  *    ข้อควรระวัง:
  *      การตรวจจาก "อักขระตัวสุดท้าย" อย่างเดียวไม่เพียงพอ เพราะ ย/ว
  *      อาจเป็นส่วนของรูปสระ เช่น เ◌ีย / ◌ียะ / ◌ัว / ◌ัวะ
  *
  * 6) อักษรต่ำคู่ / ต่ำเดี่ยว
- *
- *    ต่ำคู่:
- *      มีอักษรสูงเป็นคู่เสียง และสามารถใช้คู่เสียงสูงร่วมเพื่อเทียบ
- *      การผันให้ครบ 5 เสียงในบริบทการเรียนการสอน
- *
- *    ต่ำเดี่ยว:
- *      ไม่มีคู่เสียงสูงโดยตรง การผันครบ 5 เสียงต้องใช้ "ห นำ"
- *
- *      ตัวอย่าง:
- *        นา -> หนา (รูปเทียบของเสียงจัตวา)
- *        งาน -> หงา/หง่า/หง้า ... ตามชุดเสียงที่ใช้เทียบ
+ *    ต่ำคู่: มีอักษรสูงเป็นคู่เสียง ช่วยเทียบผันให้ครบ 5 เสียง
+ *    ต่ำเดี่ยว: ไม่มีคู่เสียงสูงโดยตรง การผันครบ 5 เสียงต้องใช้ "ห นำ"
  *
  * 7) ห นำ / อ นำ / ควบกล้ำ
- *
  *    - ห นำ: ห ทำหน้าที่นำระดับเสียงให้พยัญชนะต่ำเดี่ยว เช่น หง หน หม หร
- *    - อ นำ: ใช้เฉพาะกรณีภาษาไทยที่เป็นข้อยกเว้นทางคำ/การออกเสียง เช่น อย่า
+ *    - อ นำ: ใช้เฉพาะกรณีคำยกเว้น เช่น อย่า อยู่ อย่าง อยาก
  *    - ควบกล้ำแท้: ตัวพยัญชนะต้น 2 ตัวออกเสียงควบกันจริง เช่น กร กล กว
- *    - ควบกล้ำไม่แท้: ต้องถือเป็นข้อมูลเชิงคำ/การออกเสียง ไม่ควรอนุมาน
- *      ทุกคำด้วยกฎ "เปลี่ยนตัวแรกเป็นคู่สูง" แบบกลไกตายตัว
+ *    - ควบกล้ำไม่แท้: ถือเป็นข้อมูลเฉพาะคำ เช่น ทร ออกเสียง ซ
  *
  * 8) Rule Engine ต้องเป็นแหล่งความจริงหลัก
- *
  *    calculateTones() / analyzeSyllable() เป็นแหล่งตัดสินผลการผัน
- *    AI ใช้ได้เฉพาะ:
- *      - ช่วยอธิบายหลักภาษา
- *      - ช่วยตรวจคำศัพท์
- *      - เสนอคำตัวอย่าง
- *
  *    AI ห้าม overwrite ผลการผันที่ Rule Engine คำนวณแล้ว
  *
  * 9) รูป "เทียบการผัน" ไม่เท่ากับ "คำศัพท์ไทยที่ยืนยันความหมาย"
+ * 10) ตัวตรวจรูปวรรณยุกต์ validateEnteredToneMark() ต้องเรียก Rule Engine ชุดเดียวกัน
+ * 11) TONE_RULE_SELF_TESTS เป็น regression tests เพื่อป้องกันการแก้กฎเดิมเสีย
  *
- *    เช่น การสร้างคู่เสียงเพื่อการสอนอาจได้รูปที่ไม่ใช่คำศัพท์จริง
- *    UI ต้องติดป้าย "รูปเทียบการผัน" ตามความเหมาะสม
- *
- * 10) ตัวตรวจรูปวรรณยุกต์
- *
- *    validateEnteredToneMark() ต้องเรียก Rule Engine ชุดเดียวกับ
- *    ตารางแสดงผล ห้ามสร้างตารางกฎแยกอีกชุด
- *
- * 11) การทดสอบ
- *
- *    TONE_RULE_SELF_TESTS ด้านล่างเป็น regression tests สำหรับตัวอย่าง
- *    คำจริงระดับพื้นฐาน เพื่อป้องกันการแก้กฎในอนาคตแล้วทำให้กฎเดิมเสีย
- *
- * แหล่งอ้างอิงที่ใช้เป็นฐานการเรียนการสอน:
+ * แหล่งอ้างอิง:
  *    - DLTV: ไตรยางศ์ / อักษรสูง กลาง ต่ำ / อักษรต่ำคู่ / ต่ำเดี่ยว
- *    - DLTV: ใบความรู้การผันวรรณยุกต์
- *    - บทเรียนไตรยางศ์ที่ให้ตารางคำเป็น/คำตายและพื้นเสียง
+ *    - DLTV: ใบความรู้การผันวรรณยุกต์ และตารางคำเป็น/คำตาย
+ *
+ * =============================================================================
+ * 2. SYSTEM ARCHITECTURE & RELATED FILES MAPPING
+ * =============================================================================
+ *
+ *  - src/App.jsx:
+ *      หัวใจหลักของแอปพลิเคชัน รวบรวม Rule Engine, State Management,
+ *      คอมโพเนนต์ ToneBoard, ControlPanel, ระบบ Multi-tier Caching (IndexedDB),
+ *      ระบบ BroadcastChannel ซิงค์จอที่ 2 และ Logic โหมดฝึกออกเสียง
+ *
+ *  - src/utils/pitchDetector.js:
+ *      โมดูลวิเคราะห์สัญญาณเสียงไมโครโฟน ประกอบด้วย:
+ *        1) autoCorrelate(buf, sampleRate): คำนวณ Fundamental Frequency (F0 in Hz)
+ *        2) classifyToneContour(pitchPoints): วิเคราะห์ความชันเส้นเสียง (Contour Slope)
+ *           เพื่อจำแนกวรรณยุกต์ (สามัญ, เอก, โท=ตกวูบ, ตรี=สูง, จัตวา=ช้อนขึ้น)
+ *        3) TONE_TARGET_FREQS: ตัวแปรค่าความถี่อ้างอิงของแต่ละระดับเสียง
+ *
+ *  - src/utils/audioService.js:
+ *      เซอร์วิสจัดการไฟล์เสียงและการเชื่อมต่อ API ฝั่ง Cloudflare / Azure
+ *
+ *  - functions/api/tts.js & functions/api/words.js:
+ *      Cloudflare Pages Functions (Serverless Backend) เชื่อมต่อกับ:
+ *        - Cloudflare D1 (ฐานข้อมูล SQL สำหรับจัดเก็บดัชนีคำศัพท์)
+ *        - Cloudflare R2 (Object Storage สำหรับแคชไฟล์เสียง mp3/wav)
+ *        - Azure Cognitive Services Speech API (สังเคราะห์เสียงภาษาไทย th-TH)
+ *
+ * =============================================================================
+ * 3. PROGRAM FLOWCHART & PRACTICE MODE STATE MACHINE
+ * =============================================================================
+ *
+ *  [ โหมดการเรียนปกติ (Normal Mode) ]
+ *          │
+ *          ├──► พิมพ์คำศัพท์ / กดปุ่มพยัญชนะ-สระด่วน ──► Rule Engine วิเคราะห์และเรนเดอร์บน 5 เส้น
+ *          ├──► คลิกที่แถวคำ ──► ขยายขนาด + เล่นเสียงอ่านคำนั้น (IndexedDB -> R2 -> Azure)
+ *          ├──► คลิกปุ่ม "ผันเสียง 1-5" ──► เล่นเสียงไล่ระดับอัตโนมัติ (1 -> 5 หรือตามโหมด)
+ *          │
+ *          ▼ ผู้ใช้คลิกปุ่ม "🎙️ ฝึกออกเสียง"
+ *  ┌────────────────────────────────────────────────────────────────────────┐
+ *  │ [ เริ่มต้นโหมดฝึกออกเสียง (Practice Mode) ]                             │
+ *  │ 1. ดึงคำศัพท์ที่กำลังแสดงอยู่บนหน้าจอปัจจุบันเข้าคิว (Queue)             │
+ *  │ 2. ล็อกปุ่มคลิกคำอื่นบนกระดาน (practice-locked) ป้องกันการขยายทับซ้อน      │
+ *  │ 3. รีเซ็ตคะแนน Score = 0, ซ่อนปุ่มผันเสียง, เปิดไมโครโฟน Web Audio     │
+ *  └───────────────────────────────────┬────────────────────────────────────┘
+ *                                      │
+ *                                      ▼ ◄──────────────────────────────────┐
+ *  ┌──────────────────────────────────────────────────────────────────┐     │
+ *  │ [ คำเป้าหมายปัจจุบัน (Target Word) ]                              │     │
+ *  │ - ขยายใหญ่ 1.48x + เปลี่ยนเป็นสีส้มสด (#ff6b35) ทั้งลูกกลมและก้านโน้ต│     │
+ *  │ - เริ่มนับถอยหลัง Timer 10 วินาที                                │     │
+ *  │ - เริ่มต้นลูปตรวจจับเสียงไมค์ (Contour Slope Analysis)           │     │
+ *  └───────────────────────────────────┬──────────────────────────────┘     │
+ *                                      │                                    │
+ *           ┌──────────────────────────┼──────────────────────────┐         │
+ *           ▼                          ▼                          ▼         │
+ *   [ ผู้เรียนเปล่งเสียงตรง ]      [ เสียงไปโดนคำอื่น ]       [ หมดเวลา 10 วินาที ]│
+ *   - ต้องตรงต่อเนื่อง ~120ms    - กรอง Debounce 5 เฟรม    - เล่นเสียงเฉลยต้นแบบ   │
+ *   - ได้คะแนน (+10 แต้ม)       - เด้งเตือนชั่วขณะ           - ขึ้นข้อความให้พูดตาม   │
+ *   - หดกลับขนาด & สีเดิม        - ไม่คิดคะแนน             - รอจนกว่าจะออกเสียงถูก  │
+ *   - เข้าสู่ Cooldown 800ms      - เวลาเดินต่อปกติ                                │
+ *           │                                                     │         │
+ *           └──────────────────────────┬──────────────────────────┘         │
+ *                                      │                                    │
+ *                         [ ตรวจสอบว่ายังมีคำถัดไป? ]                         │
+ *                         ├── [ มีคำถัดไป ] ────────────────────────────────┘
+ *                         │
+ *                         ▼ [ ครบทุกคำ หรือกดปุ่ม ⏭️ ข้าม จนจบ ]
+ *  ┌────────────────────────────────────────────────────────────────────────┐
+ *  │ [ จบการทดสอบ (Finish Practice) ]                                       │
+ *  │ - ปิดไมโครโฟน คืนขนาดและสีวงกลมทุกตัวกลับสู่สภาวะปกติ                    │
+ *  │ - แสดงแบนเนอร์สรุปคะแนนรวมบนหน้าจอ (บรรทัดถัดจากปุ่มทดสอบ) ไม่ใช้ Alert   │
+ *  │ - ปลดล็อกปุ่มคลิกคำบนกระดานกลับสู่สภาวะปกติ                              │
+ *  └───────────────────────────────────┬────────────────────────────────────┘
+ *                                      │
+ *                                      ▼ เมื่อคลิก "❌ ยกเลิก" หรือปิดสรุปคะแนน
+ *                         [ รีเซ็ตกลับสู่หน้าจอการเรียนปกติ ]
  * =============================================================================
  */
-
-const apiKey = "";
-const CHANNEL_NAME = "thai_tone_sync_channel";
-const STORAGE_KEY = "thai_tone_live_sync_data";
-const TTS_API_ENDPOINT = "/api/tts";
-const WORDS_API_ENDPOINT = "/api/words";
-const TTS_VOICE = "th-TH-PremwadeeNeural";
-
-const LOCAL_AUDIO_DB_NAME = "thai_tone_audio_cache";
-const LOCAL_AUDIO_STORE_NAME = "audio_blobs";
-
-const STRICT_THAI_SYLLABLE_PATTERN = /^[เแโใไ]?[ก-ฮ]{1,2}[ิีึืุูั็ํ]?[่้๊๋]?(?:[ายวอ]|ำ)?[ก-ฮ]?(?:ะ|์)?$/;
-
-const midConsonants = ["ก", "จ", "ด", "ต", "บ", "ป", "อ", "ฎ", "ฏ"];
-const highConsonants = ["ข", "ฃ", "ฉ", "ฐ", "ถ", "ผ", "ฝ", "ศ", "ษ", "ส", "ห"];
-const lowSingleConsonants = ["ง", "ญ", "ณ", "น", "ม", "ย", "ร", "ล", "ฬ", "ว"];
-
-const lowPairConsonants = [
-  "ค", "ฅ", "ฆ", "ช", "ฌ", "ซ", "ฑ", "ฒ",
-  "ท", "ธ", "พ", "ภ", "ฟ", "ฮ",
-];
-
-const lowConsonants = [
-  ...lowPairConsonants,
-  ...lowSingleConsonants,
-];
-
-const allThaiConsonants = [
-  ...midConsonants,
-  ...highConsonants,
-  ...lowConsonants,
-];
-
-const quickConsonants = [
-  "ก", "ข", "ฃ", "ค", "ฅ", "ฆ", "ง", "จ", "ฉ", "ช", "ซ",
-  "ฌ", "ญ", "ฎ", "ฏ", "ฐ", "ฑ", "ฒ", "ณ", "ด", "ต", "ถ",
-  "ท", "ธ", "น", "บ", "ป", "ผ", "ฝ", "พ", "ฟ", "ภ", "ม",
-  "ย", "ร", "ล", "ว", "ศ", "ษ", "ส", "ห", "ฬ", "อ", "ฮ",
-];
-
-const trueClusters = [
-  "กร", "กล", "กว", "ขร", "ขล", "ขว", "คร", "คล", "คว",
-  "ตร", "ปร", "ปล", "พร", "พล", "ฟร", "ฟล",
-];
-
-const leadingHoClusters = [
-  "หง", "หญ", "หน", "หม", "หย", "หร", "หล", "หว",
-];
-
-const leadingOClusters = ["อย"];
-const falseClusters = ["ทร", "ศร", "สร", "จร", "ซร"];
-
-const thaiClusters = [
-  ...trueClusters,
-  ...leadingHoClusters,
-  ...leadingOClusters,
-  ...falseClusters,
-];
-
-const longVowels = [
-  { label: "◌า", front: "", rear: "า" },
-  { label: "◌ี", front: "", rear: "ี" },
-  { label: "◌ือ", front: "", rear: "ือ" },
-  { label: "◌ู", front: "", rear: "ู" },
-  { label: "เ◌", front: "เ", rear: "" },
-  { label: "แ◌", front: "แ", rear: "" },
-  { label: "โ◌", front: "โ", rear: "" },
-  { label: "◌อ", front: "", rear: "อ" },
-  { label: "เ◌อ", front: "เ", rear: "อ" },
-  { label: "เ◌ีย", front: "เ", rear: "ีย" },
-  { label: "เ◌ือ", front: "เ", rear: "ือ" },
-  { label: "◌ัว", front: "", rear: "ัว" },
-  { label: "◌ำ", front: "", rear: "ำ" },
-  { label: "ใ◌", front: "ใ", rear: "" },
-  { label: "ไ◌", front: "ไ", rear: "" },
-  { label: "เ◌า", front: "เ", rear: "า" },
-];
-
-const shortVowels = [
-  { label: "◌ะ", front: "", rear: "ะ" },
-  { label: "◌ิ", front: "", rear: "ิ" },
-  { label: "◌ึ", front: "", rear: "ึ" },
-  { label: "◌ุ", front: "", rear: "ุ" },
-  { label: "เ◌ะ", front: "เ", rear: "ะ" },
-  { label: "แ◌ะ", front: "แ", rear: "ะ" },
-  { label: "โ◌ะ", front: "โ", rear: "ะ" },
-  { label: "เ◌าะ", front: "เ", rear: "าะ" },
-  { label: "เ◌อะ", front: "เ", rear: "อะ" },
-  { label: "เ◌ียะ", front: "เ", rear: "ียะ" },
-  { label: "เ◌ือะ", front: "เ", rear: "ือะ" },
-  { label: "◌ัวะ", front: "", rear: "ัวะ" },
-];
-
-const toneRows = [
-  { id: 5, tone: "เสียงจัตวา", mark: "◌๋", leftPos: "80%" },
-  { id: 4, tone: "เสียงตรี", mark: "◌๊", leftPos: "65%" },
-  { id: 3, tone: "เสียงโท", mark: "◌้", leftPos: "52%" },
-  { id: 2, tone: "เสียงเอก", mark: "◌่", leftPos: "40%" },
-  { id: 1, tone: "เสียงสามัญ", mark: "-", leftPos: "28%" },
-];
 
 function openAudioCacheDB() {
   return new Promise((resolve, reject) => {
@@ -968,6 +893,8 @@ function Board({
   practiceTimer = 10,
   practiceScore = 0,
   practiceMsg = "",
+  practiceCompleted = false,
+  totalPossibleScore = 0,
 }) {
   const t = (th, en) => (lang === "en" ? en : th);
 
@@ -1200,7 +1127,8 @@ function Board({
 
       <div className="tone-rows">
         {linesData.map((item) => {
-          const isActive = activeRowId === item.id;
+          // ยกเลิกสถานะย่อ-ขยายแถว (Active/Click) ขณะทดสอบออกเสียง เพื่อป้องกันการรบกวน
+          const isActive = !isPracticing && activeRowId === item.id;
           const fixedRight = fixedRightLabels[item.id];
           const rowColor = item.show
             ? item.isMulti
@@ -1211,10 +1139,13 @@ function Board({
           return (
             <button
               type="button"
-              className={`tone-row ${isActive ? "active" : ""} ${!item.show ? "disabled-tone-row" : ""}`}
+              className={`tone-row ${isActive ? "active" : ""} ${!item.show ? "disabled-tone-row" : ""} ${isPracticing ? "practice-locked" : ""}`}
               key={item.id}
-              onClick={() => onRowClick(item)}
-              title={item.show ? `${t("คลิกเพื่อขยายและอ่านคำ", "Click to zoom and speak")} ${getSpeechText(item)}` : ""}
+              onClick={() => {
+                if (!isPracticing) onRowClick(item);
+              }}
+              style={isPracticing ? { cursor: 'default' } : {}}
+              title={item.show && !isPracticing ? `${t("คลิกเพื่อขยายและอ่านคำ", "Click to zoom and speak")} ${getSpeechText(item)}` : ""}
             >
               <div
                 className="tone-name"
@@ -1282,7 +1213,7 @@ function Board({
 
       {/* แถบปุ่มด้านล่างกระดาน: แสดงผลเสมอ ไม่ซ่อน */}
       <div className="board-footer-actions">
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
           <button
             type="button"
             className={`auto-play-tones-btn ${isPlayingAll ? "playing" : ""}`}
@@ -1325,7 +1256,7 @@ function Board({
             </span>
           </button>
 
-          {/* ปุ่ม Toggle ฝึกออกเสียง / ยกเลิก */}
+          {/* ปุ่มสลับโหมดฝึกออกเสียง / ยกเลิก */}
           <button
             type="button"
             className={`practice-toggle-btn ${isPracticing ? "cancel" : ""}`}
@@ -1334,25 +1265,44 @@ function Board({
             {isPracticing ? t("❌ ยกเลิก", "❌ Cancel") : t("🎙️ ฝึกออกเสียง", "🎙️ Practice")}
           </button>
 
-          {/* ปุ่มข้ามคำ (จะแสดงเฉพาะในโหมดฝึก) */}
-          {isPracticing && (
+          {/* ปุ่มข้ามคำ (จะแสดงเฉพาะในโหมดฝึก และไม่คิดคะแนน) */}
+          {isPracticing && !practiceCompleted && (
             <button
               type="button"
               className="practice-skip-btn"
               onClick={onSkip}
-              title={t("ข้ามคำนี้ไปคำถัดไป", "Skip to next word")}
+              title={t("ข้ามคำนี้ (ไม่ได้คะแนน)", "Skip this word (no score)")}
             >
               ⏭️ {t("ข้าม", "Skip")}
             </button>
           )}
         </div>
 
-        {/* แถบแสดงสถานะโหมดฝึก */}
-        {isPracticing && (
+        {/* แถบแสดงสถานะขณะกำลังทดสอบ */}
+        {isPracticing && !practiceCompleted && (
           <div className="practice-status-banner">
             <span className="practice-msg-text">{practiceMsg}</span>
             <span className="practice-timer-text">⏱️ {practiceTimer}s</span>
             <span className="practice-score-text">🏆 {t("คะแนน", "Score")}: {practiceScore}</span>
+          </div>
+        )}
+
+        {/* แถบสรุปคะแนนเมื่อจบการทดสอบ (แสดงผลบนหน้าจอแทน alert) */}
+        {practiceCompleted && (
+          <div className="practice-summary-banner">
+            <span style={{ fontSize: "16px" }}>🎉</span>
+            <span>
+              {t(`การทดสอบเสร็จสมบูรณ์! คะแนนรวมของคุณ: ${practiceScore} / ${totalPossibleScore} คะแนน`,
+                 `Practice completed! Total score: ${practiceScore} / ${totalPossibleScore}`)}
+            </span>
+            <button
+              type="button"
+              onClick={onTogglePractice}
+              className="practice-summary-close-btn"
+              title={t("ปิดสรุปคะแนน", "Close summary")}
+            >
+              ✕
+            </button>
           </div>
         )}
       </div>
@@ -1381,7 +1331,6 @@ export default function App() {
   const [viewLayout, setViewLayout] = useState("split");
   const [previousLayout, setPreviousLayout] = useState("split");
 
-  // เริ่มต้นด้วยคำว่า "กอ" เพื่อให้กระดานมีคำและปุ่มพร้อมใช้งานทันที
   const [inputText, setInputText] = useState("กอ");
   const [lastValidInput, setLastValidInput] = useState("กอ");
   const [inputError, setInputError] = useState("");
@@ -1409,6 +1358,8 @@ export default function App() {
   // สถานะสำหรับโหมดฝึกออกเสียง
   const [isPracticing, setIsPracticing] = useState(false);
   const [practiceScore, setPracticeScore] = useState(0);
+  const [totalPossibleScore, setTotalPossibleScore] = useState(0);
+  const [practiceCompleted, setPracticeCompleted] = useState(false);
   const [practiceTimer, setPracticeTimer] = useState(10);
   const [practiceMsg, setPracticeMsg] = useState("");
   const [practiceTargetWord, setPracticeTargetWord] = useState(null);
@@ -1423,7 +1374,10 @@ export default function App() {
   const isWaitingCorrectionRef = useRef(false);
   const matchCountRef = useRef(0);
   const animFrameRef = useRef(null);
-  const pitchBufferRef = useRef([]); // เก็บค่าวัด Pitch ตลอดพยางค์สำหรับคำนวณ Slope
+  const pitchBufferRef = useRef([]);
+  const isTransitioningRef = useRef(false);
+  const mismatchDebounceRef = useRef(0);
+  const lastMismatchToneRef = useRef(null);
 
   const [soundManagerOpen, setSoundManagerOpen] = useState(false);
   const [soundWords, setSoundWords] = useState([]);
@@ -1576,20 +1530,23 @@ export default function App() {
     }
   };
 
-  // ปุ่มกดข้ามคำ (Skip)
   const handleSkipWord = () => {
-    if (!isPracticing) return;
+    if (!isPracticing || isTransitioningRef.current) return;
     clearInterval(timerRef.current);
-    pitchBufferRef.current = [];
+    isTransitioningRef.current = true;
     setPracticeTargetWord(null);
+    pitchBufferRef.current = [];
+    matchCountRef.current = 0;
+    mismatchDebounceRef.current = 0;
     currentIdxRef.current += 1;
 
     if (currentIdxRef.current < practiceQueueRef.current.length) {
-      loadNextPracticeWord();
+      setPracticeMsg(t("กำลังเปลี่ยนคำ...", "Changing word..."));
+      setTimeout(() => {
+        loadNextPracticeWord();
+      }, 700);
     } else {
-      alert(t(`🎉 ผ่านครบทุกคำแล้ว!\nคะแนนรวม: ${practiceScore} คะแนน`,
-              `🎉 Practice completed!\nTotal score: ${practiceScore}`));
-      cancelPractice();
+      finishPractice();
     }
   };
 
@@ -1598,6 +1555,7 @@ export default function App() {
       isCancelingAutoPlayRef.current = true;
       setIsPlayingAll(false);
     }
+    setActiveRowId(null);
 
     const wordsOnScreen = [];
     const sortedRows = [...linesData].filter((l) => l.show).sort((a, b) => a.id - b.id);
@@ -1620,7 +1578,10 @@ export default function App() {
     practiceQueueRef.current = wordsOnScreen;
     currentIdxRef.current = 0;
     setPracticeScore(0);
+    setTotalPossibleScore(wordsOnScreen.length * 10);
+    setPracticeCompleted(false);
     pitchBufferRef.current = [];
+    isTransitioningRef.current = false;
     setIsPracticing(true);
 
     try {
@@ -1646,7 +1607,9 @@ export default function App() {
     setPracticeTimer(10);
     isWaitingCorrectionRef.current = false;
     matchCountRef.current = 0;
+    mismatchDebounceRef.current = 0;
     pitchBufferRef.current = [];
+    isTransitioningRef.current = false;
     setPracticeMsg(t(`กรุณาออกเสียง: "${current.word}"`, `Please say: "${current.word}"`));
 
     clearInterval(timerRef.current);
@@ -1670,11 +1633,30 @@ export default function App() {
     speak(current.word, true);
   };
 
+  const finishPractice = () => {
+    clearInterval(timerRef.current);
+    if (micStreamRef.current) micStreamRef.current.getTracks().forEach((track) => track.stop());
+    if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
+      audioCtxRef.current.close();
+    }
+    setPracticeTargetWord(null);
+    setMismatchWord(null);
+    setPracticeMsg("");
+    pitchBufferRef.current = [];
+    isTransitioningRef.current = false;
+    setPracticeCompleted(true);
+  };
+
   const runAudioDetectionLoop = () => {
     const buffer = new Float32Array(analyserRef.current.fftSize);
 
     const detect = () => {
       if (!audioCtxRef.current || audioCtxRef.current.state === "closed") return;
+
+      if (isTransitioningRef.current) {
+        animFrameRef.current = requestAnimationFrame(detect);
+        return;
+      }
 
       analyserRef.current.getFloatTimeDomainData(buffer);
       const freq = autoCorrelate(buffer, audioCtxRef.current.sampleRate);
@@ -1683,45 +1665,50 @@ export default function App() {
         pitchBufferRef.current.push(freq);
         if (pitchBufferRef.current.length > 25) pitchBufferRef.current.shift();
 
-        // ใช้อัลกอริทึม Contour & Slope วิเคราะห์รูปทรงเส้นเสียงวรรณยุกต์
         const detectedToneId = classifyToneContour(pitchBufferRef.current);
 
         if (detectedToneId) {
           const current = practiceQueueRef.current[currentIdxRef.current];
           if (current) {
-            // ออกเสียงตรงกับเป้าหมาย
             if (detectedToneId === current.toneId) {
               matchCountRef.current += 1;
-              if (matchCountRef.current >= 4) {
+              if (matchCountRef.current >= 7) {
                 clearInterval(timerRef.current);
-                pitchBufferRef.current = [];
+                isTransitioningRef.current = true;
 
                 if (!isWaitingCorrectionRef.current) {
                   setPracticeScore((prev) => prev + 10);
                 }
 
                 setPracticeTargetWord(null);
+                setPracticeMsg(t("✅ ถูกต้อง!", "✅ Correct!"));
                 currentIdxRef.current += 1;
 
-                if (currentIdxRef.current < practiceQueueRef.current.length) {
-                  setTimeout(loadNextPracticeWord, 500);
-                } else {
-                  setTimeout(() => {
-                    alert(t(`🎉 ผ่านการทดสอบครบทุกคำแล้ว!\nคะแนนรวม: ${practiceScore + (isWaitingCorrectionRef.current ? 0 : 10)} คะแนน`,
-                            `🎉 Practice completed!\nTotal score: ${practiceScore + (isWaitingCorrectionRef.current ? 0 : 10)}`));
-                    cancelPractice();
-                  }, 400);
-                  return;
-                }
+                setTimeout(() => {
+                  if (currentIdxRef.current < practiceQueueRef.current.length) {
+                    loadNextPracticeWord();
+                  } else {
+                    finishPractice();
+                  }
+                }, 800);
               }
             } else {
-              // เด้งเตือนเมื่อไปตรงกับวรรณยุกต์อื่นในหน้าจอ
-              practiceQueueRef.current.forEach((item, idx) => {
-                if (idx !== currentIdxRef.current && item.toneId === detectedToneId) {
-                  setMismatchWord(item.word);
-                  setTimeout(() => setMismatchWord(null), 400);
-                }
-              });
+              if (lastMismatchToneRef.current === detectedToneId) {
+                mismatchDebounceRef.current += 1;
+              } else {
+                lastMismatchToneRef.current = detectedToneId;
+                mismatchDebounceRef.current = 1;
+              }
+
+              if (mismatchDebounceRef.current >= 5) {
+                practiceQueueRef.current.forEach((item, idx) => {
+                  if (idx !== currentIdxRef.current && item.toneId === detectedToneId) {
+                    setMismatchWord(item.word);
+                    setTimeout(() => setMismatchWord(null), 380);
+                  }
+                });
+                mismatchDebounceRef.current = 0;
+              }
             }
           }
         }
@@ -1729,6 +1716,7 @@ export default function App() {
         if (pitchBufferRef.current.length > 0) {
           pitchBufferRef.current = [];
           matchCountRef.current = 0;
+          mismatchDebounceRef.current = 0;
         }
       }
 
@@ -1751,7 +1739,9 @@ export default function App() {
     setMismatchWord(null);
     setPracticeScore(0);
     setPracticeMsg("");
+    setPracticeCompleted(false);
     pitchBufferRef.current = [];
+    isTransitioningRef.current = false;
   };
 
   useEffect(() => {
@@ -1817,7 +1807,7 @@ export default function App() {
   };
 
   const handleRowClick = (item) => {
-    if (!item.show) return;
+    if (!item.show || isPracticing) return;
     const isExpanding = activeRowId !== item.id;
     setActiveRowId(isExpanding ? item.id : null);
     if (isExpanding) {
@@ -2391,6 +2381,8 @@ export default function App() {
             practiceTimer={practiceTimer}
             practiceScore={practiceScore}
             practiceMsg={practiceMsg}
+            practiceCompleted={practiceCompleted}
+            totalPossibleScore={totalPossibleScore}
           />
         </main>
       </>
@@ -2454,6 +2446,8 @@ export default function App() {
                 practiceTimer={practiceTimer}
                 practiceScore={practiceScore}
                 practiceMsg={practiceMsg}
+                practiceCompleted={practiceCompleted}
+                totalPossibleScore={totalPossibleScore}
               />
             </section>
 
@@ -3267,7 +3261,7 @@ const styles = `
     transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
   }
 
-  .tone-row:not(.disabled-tone-row):hover { background: rgba(224,242,254,.45); }
+  .tone-row:not(.disabled-tone-row):not(.practice-locked):hover { background: rgba(224,242,254,.45); }
   .tone-row.active {
     background: rgba(224,242,254,.78);
     box-shadow: 0 4px 14px rgba(2,132,199,.13);
@@ -3275,6 +3269,7 @@ const styles = `
   }
 
   .disabled-tone-row { cursor: default; opacity: .72; }
+  .tone-row.practice-locked { cursor: default !important; }
 
   .tone-name {
     text-align: right;
@@ -3814,7 +3809,7 @@ const styles = `
   }
 
   .tone-circle.target-test-mismatch {
-    animation: mismatchBounce 0.4s ease !important;
+    animation: mismatchBounce 0.38s ease !important;
   }
 
   @keyframes mismatchBounce {
@@ -3900,6 +3895,37 @@ const styles = `
     font-size: 13px;
     font-weight: 700;
     animation: fadeInBanner .25s ease;
+  }
+
+  .practice-summary-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    background: #ecfdf5;
+    border: 1.5px solid #6ee7b7;
+    color: #065f46;
+    font-size: 14px;
+    font-weight: 700;
+    animation: fadeInBanner .25s ease;
+  }
+
+  .practice-summary-close-btn {
+    margin-left: auto;
+    background: none;
+    border: none;
+    color: #059669;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: background .15s ease;
+  }
+
+  .practice-summary-close-btn:hover {
+    background: rgba(5, 150, 105, 0.15);
   }
 
   @keyframes fadeInBanner {
