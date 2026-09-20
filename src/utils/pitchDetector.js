@@ -73,8 +73,9 @@ export function classifyToneContour(pitchPoints) {
   return 1;
 }
 
-// 3. ตัวแปรความถี่อ้างอิงเป้าหมาย (Hz) ที่ Vite ร้องขอ
+// 3. ค่าความถี่อ้างอิงเป้าหมายของแต่ละวรรณยุกต์ (Hz)
 export const TONE_TARGET_FREQS = {
+  0: 130,
   1: 130, // สามัญ (Mid)
   2: 105, // เอก (Low)
   3: 175, // โท (Falling)
