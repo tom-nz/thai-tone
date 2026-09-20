@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { autoCorrelate, TONE_TARGET_FREQS } from './utils/pitchDetector';
 
 /**
  * =============================================================================
@@ -72,7 +73,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
  *      - คำตายสระสั้น:
  *          โท = ่, ตรี = ไม่มีรูป
  *          (รูป/เสียงจัตวาในตำราบางชุดเป็นรูปประกอบ/ทางเลือก
- *           ไม่ควรนับเป็นรูปผันหลักโดยอัตโนมัติ)
+ *            ไม่ควรนับเป็นรูปผันหลักโดยอัตโนมัติ)
  *      - คำตายสระยาว:
  *          โท = ไม่มีรูป, ตรี = ้
  *
@@ -137,9 +138,9 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
  *    คำจริงระดับพื้นฐาน เพื่อป้องกันการแก้กฎในอนาคตแล้วทำให้กฎเดิมเสีย
  *
  * แหล่งอ้างอิงที่ใช้เป็นฐานการเรียนการสอน:
- *   - DLTV: ไตรยางศ์ / อักษรสูง กลาง ต่ำ / อักษรต่ำคู่ / ต่ำเดี่ยว
- *   - DLTV: ใบความรู้การผันวรรณยุกต์
- *   - บทเรียนไตรยางศ์ที่ให้ตารางคำเป็น/คำตายและพื้นเสียง
+ *    - DLTV: ไตรยางศ์ / อักษรสูง กลาง ต่ำ / อักษรต่ำคู่ / ต่ำเดี่ยว
+ *    - DLTV: ใบความรู้การผันวรรณยุกต์
+ *    - บทเรียนไตรยางศ์ที่ให้ตารางคำเป็น/คำตายและพื้นเสียง
  * =============================================================================
  */
 
@@ -252,10 +253,6 @@ const toneRows = [
  * =============================================================================
  * LOCAL AUDIO CACHE (IndexedDB) — ชั้นที่ 1 ของ Multi-tier Caching
  * =============================================================================
- * ใช้ IndexedDB เก็บไฟล์เสียง (Blob) ที่เคยเล่นแล้วไว้ในเครื่อง PC / มือถือ
- * เพื่อให้เล่นซ้ำได้ทันที (0 ms) โดยไม่ต้องเรียก Cloudflare R2 / Azure TTS ซ้ำ
- * ไม่ใช้ localStorage เพราะมีข้อจำกัดพื้นที่แค่ ~5MB และเก็บ Blob ไม่ได้ดี
- * =============================================================================
  */
 function openAudioCacheDB() {
   return new Promise((resolve, reject) => {
@@ -365,56 +362,22 @@ function ModeRadio({ value, checked, label, onChange }) {
   );
 }
 
-// ตารางอ้างอิงการผันวรรณยุกต์ตามไตรยางศ์
-// ห้ามสร้างกฎซ้ำภายนอก TONE_RULE_TABLE โดยไม่ปรับ self-tests ให้สอดคล้องกัน
-// - อักษรกลาง: คำเป็น 5 เสียง / คำตาย 4 เสียง
-// - อักษรสูง: คำเป็น 3 เสียง / คำตาย 2 เสียง
-// - อักษรต่ำ: คำเป็น 3 เสียง / คำตายสั้น 2 เสียง / คำตายยาว 2 เสียง
 const TONE_RULE_TABLE = Object.freeze({
   middle: {
-    live: Object.freeze({
-      1: "",   // สามัญ
-      2: "่", // เอก
-      3: "้", // โท
-      4: "๊", // ตรี
-      5: "๋", // จัตวา
-    }),
-    dead: Object.freeze({
-      2: "",  // เอก: พื้นเสียง
-      3: "้", // โท
-      4: "๊", // ตรี
-      5: "๋", // จัตวา
-    }),
+    live: Object.freeze({ 1: "", 2: "่", 3: "้", 4: "๊", 5: "๋" }),
+    dead: Object.freeze({ 2: "", 3: "้", 4: "๊", 5: "๋" }),
   },
   high: {
-    live: Object.freeze({
-      2: "่", // เอก
-      3: "้", // โท
-      5: "",  // จัตวา: พื้นเสียง
-    }),
-    dead: Object.freeze({
-      2: "",  // เอก: พื้นเสียง
-      3: "้", // โท
-    }),
+    live: Object.freeze({ 2: "่", 3: "้", 5: "" }),
+    dead: Object.freeze({ 2: "", 3: "้" }),
   },
   low: {
-    live: Object.freeze({
-      1: "",  // สามัญ: พื้นเสียง
-      3: "่", // โท
-      4: "้", // ตรี
-    }),
-    deadShort: Object.freeze({
-      3: "่", // โท
-      4: "",  // ตรี: พื้นเสียง
-    }),
-    deadLong: Object.freeze({
-      3: "่", // โท
-      4: "้", // ตรี
-    }),
+    live: Object.freeze({ 1: "", 3: "่", 4: "้" }),
+    deadShort: Object.freeze({ 3: "่", 4: "" }),
+    deadLong: Object.freeze({ 3: "่", 4: "้" }),
   },
 });
 
-// อักษรต่ำคู่ -> อักษรสูงคู่สำหรับ "รูปเทียบการผัน"
 const lowToHighPair = Object.freeze({
   ค: "ข", ฅ: "ฃ", ฆ: "ข",
   ช: "ฉ", ฌ: "ฉ",
@@ -425,7 +388,6 @@ const lowToHighPair = Object.freeze({
   ฮ: "ห",
 });
 
-// อักษรสูง -> ตัวแทนอักษรต่ำคู่สำหรับใช้สร้าง "รูปเทียบ"
 const highToLowPair = Object.freeze({
   ข: "ค", ฃ: "ฅ",
   ฉ: "ช",
@@ -444,31 +406,23 @@ const DEAD_FINAL_CONSONANTS = new Set([
 
 function getConsonantClass(initial = "", initialKind = "single") {
   if (!initial) return "unknown";
-
   if (initialKind === "leadingHo") return "high";
   if (initialKind === "leadingO") return "middle";
-
   const first = initial[0];
-
   if (midConsonants.includes(first)) return "middle";
   if (highConsonants.includes(first)) return "high";
   if (lowPairConsonants.includes(first)) return "low";
   if (lowSingleConsonants.includes(first)) return "low";
-
   return "unknown";
 }
 
 function getPairedInitial(initial = "", initialKind = "single", targetClass = "high") {
   if (!initial) return "";
-
   if (initialKind === "leadingHo") {
     const base = initial[1] || "";
     return targetClass === "high" ? initial : base;
   }
-
-  if (initialKind === "leadingO") {
-    return initial;
-  }
+  if (initialKind === "leadingO") return initial;
 
   const first = initial[0];
   const rest = initial.slice(1);
@@ -479,8 +433,6 @@ function getPairedInitial(initial = "", initialKind = "single", targetClass = "h
       : lowSingleConsonants.includes(first)
         ? `ห${first}`
         : lowToHighPair[first] || `ห${first}`;
-
-    // คำควบแท้คงตัวควบไว้ แล้วเปลี่ยนเฉพาะพยัญชนะตัวแรก
     return `${high}${rest}`;
   }
 
@@ -488,16 +440,13 @@ function getPairedInitial(initial = "", initialKind = "single", targetClass = "h
     const low = lowSingleConsonants.includes(first)
       ? first
       : highToLowPair[first] || first;
-
     return `${low}${rest}`;
   }
-
   return initial;
 }
 
 function isShortThaiVowel(frontVowel, aboveBelowVowel, rest) {
   const vowelPart = `${frontVowel}${aboveBelowVowel}${rest}`;
-
   return (
     vowelPart.includes("ะ") ||
     vowelPart.includes("ิ") ||
@@ -521,15 +470,8 @@ function isDeadFinalConsonant(consonant = "") {
   return DEAD_FINAL_CONSONANTS.has(consonant);
 }
 
-function getFinalConsonant(
-  rest = "",
-  frontVowel = "",
-  aboveBelowVowel = "",
-) {
+function getFinalConsonant(rest = "", frontVowel = "", aboveBelowVowel = "") {
   let finalPart = rest;
-
-  // ย / ว บางกรณีเป็นส่วนหนึ่งของรูปสระ ไม่ใช่ตัวสะกด
-  // เช่น เ◌ีย, เ◌ียะ, ◌ัว, ◌ัวะ
   if (
     frontVowel === "เ" &&
     aboveBelowVowel.includes("ี") &&
@@ -537,11 +479,9 @@ function getFinalConsonant(
   ) {
     finalPart = finalPart.slice(1);
   }
-
   if (aboveBelowVowel.includes("ั") && finalPart.startsWith("ว")) {
     finalPart = finalPart.slice(1);
   }
-
   const consonants = [...finalPart].filter((char) => /[ก-ฮ]/.test(char));
   return consonants[consonants.length - 1] || "";
 }
@@ -580,9 +520,7 @@ function parseThaiWord(word = "") {
     workStr = workStr.slice(1);
   }
 
-  const aboveBelowVowelChars = [
-    "ิ", "ี", "ึ", "ื", "ุ", "ู", "ั", "็", "ํ",
-  ];
+  const aboveBelowVowelChars = ["ิ", "ี", "ึ", "ื", "ุ", "ู", "ั", "็", "ํ"];
   const toneChars = ["่", "้", "๊", "๋"];
 
   let aboveBelowVowel = "";
@@ -595,14 +533,7 @@ function parseThaiWord(word = "") {
     else rest += char;
   }
 
-  return {
-    initial,
-    initialKind,
-    frontVowel,
-    aboveBelowVowel,
-    toneMark,
-    rest,
-  };
+  return { initial, initialKind, frontVowel, aboveBelowVowel, toneMark, rest };
 }
 
 function buildWord(frontVowel, initial, aboveBelowVowel, tone, rest) {
@@ -628,29 +559,15 @@ function analyzeSyllable(word, currentMode) {
       ? initial[1] || initial[0] || ""
       : initial[0] || "";
 
-  const finalConsonant = getFinalConsonant(
-    rest,
-    frontVowel,
-    aboveBelowVowel,
-  );
-  const isShort = isShortThaiVowel(
-    frontVowel,
-    aboveBelowVowel,
-    rest,
-  );
-
+  const finalConsonant = getFinalConsonant(rest, frontVowel, aboveBelowVowel);
+  const isShort = isShortThaiVowel(frontVowel, aboveBelowVowel, rest);
   const hasPronouncedFinal = Boolean(finalConsonant);
-  const isDead = hasPronouncedFinal
-    ? isDeadFinalConsonant(finalConsonant)
-    : isShort;
+  const isDead = hasPronouncedFinal ? isDeadFinalConsonant(finalConsonant) : isShort;
 
   const type = isDead ? "คำตาย" : "คำเป็น";
   const vowelLen = isShort ? "สระเสียงสั้น" : "สระเสียงยาว";
-
   const isCluster = initialKind === "trueCluster";
-  const clusterLabel = isCluster
-    ? ` (คำควบกล้ำแท้ "${initial}")`
-    : "";
+  const clusterLabel = isCluster ? ` (คำควบกล้ำแท้ "${initial}")` : "";
 
   const leadingLabel =
     initialKind === "leadingHo"
@@ -662,19 +579,14 @@ function analyzeSyllable(word, currentMode) {
           : "";
 
   let desc;
-
   if (consonantClass === "middle") {
     desc = isDead
-      ? `อักษรกลาง${clusterLabel}${leadingLabel} คำตาย ` +
-        `(ผันได้ 4 เสียง: เอก, โท, ตรี, จัตวา; พื้นเสียงเอก)`
-      : `อักษรกลาง${clusterLabel}${leadingLabel} คำเป็น ` +
-        `(ผันได้ครบ 5 เสียง; พื้นเสียงสามัญ)`;
+      ? `อักษรกลาง${clusterLabel}${leadingLabel} คำตาย (ผันได้ 4 เสียง: เอก, โท, ตรี, จัตวา; พื้นเสียงเอก)`
+      : `อักษรกลาง${clusterLabel}${leadingLabel} คำเป็น (ผันได้ครบ 5 เสียง; พื้นเสียงสามัญ)`;
   } else if (consonantClass === "high") {
     desc = isDead
-      ? `อักษรสูง${clusterLabel}${leadingLabel} คำตาย ` +
-        `(ผันได้ 2 เสียง: เอก, โท; พื้นเสียงเอก)`
-      : `อักษรสูง${clusterLabel}${leadingLabel} คำเป็น ` +
-        `(ผันได้ 3 เสียง: เอก, โท, จัตวา; พื้นเสียงจัตวา)`;
+      ? `อักษรสูง${clusterLabel}${leadingLabel} คำตาย (ผันได้ 2 เสียง: เอก, โท; พื้นเสียงเอก)`
+      : `อักษรสูง${clusterLabel}${leadingLabel} คำเป็น (ผันได้ 3 เสียง: เอก, โท, จัตวา; พื้นเสียงจัตวา)`;
   } else if (consonantClass === "low") {
     const lowSubtype = lowSingleConsonants.includes(primaryConsonant)
       ? "อักษรต่ำเดี่ยว"
@@ -682,12 +594,9 @@ function analyzeSyllable(word, currentMode) {
 
     desc = isDead
       ? isShort
-        ? `${lowSubtype}${clusterLabel}${leadingLabel} คำตายสระเสียงสั้น ` +
-          `(ผันได้ 2 เสียง: โท, ตรี; พื้นเสียงตรี)`
-        : `${lowSubtype}${clusterLabel}${leadingLabel} คำตายสระเสียงยาว ` +
-          `(ผันได้ 2 เสียง: โท, ตรี; พื้นเสียงโท)`
-      : `${lowSubtype}${clusterLabel}${leadingLabel} คำเป็น ` +
-        `(ผันได้ 3 เสียง: สามัญ, โท, ตรี; พื้นเสียงสามัญ)`;
+        ? `${lowSubtype}${clusterLabel}${leadingLabel} คำตายสระเสียงสั้น (ผันได้ 2 เสียง: โท, ตรี; พื้นเสียงตรี)`
+        : `${lowSubtype}${clusterLabel}${leadingLabel} คำตายสระเสียงยาว (ผันได้ 2 เสียง: โท, ตรี; พื้นเสียงโท)`
+      : `${lowSubtype}${clusterLabel}${leadingLabel} คำเป็น (ผันได้ 3 เสียง: สามัญ, โท, ตรี; พื้นเสียงสามัญ)`;
   } else {
     desc = "ยังจำแนกหมู่อักษรไม่ได้";
   }
@@ -748,13 +657,7 @@ function calculateTones(word, mode, colorMid, colorHigh, colorLow) {
     isComparison: false,
   });
 
-  const singleRow = (
-    id,
-    consonant,
-    mark,
-    color,
-    isComparison = false,
-  ) => ({
+  const singleRow = (id, consonant, mark, color, isComparison = false) => ({
     ...toneRows.find((item) => item.id === id),
     word: make(consonant, mark),
     color,
@@ -781,99 +684,34 @@ function calculateTones(word, mode, colorMid, colorHigh, colorLow) {
   const createRows = (ruleSet, consonant, color, isComparison = false) =>
     toneRows.map((row) => {
       const mark = ruleSet[row.id];
-
       if (mark === undefined) return blankRow(row.id, color);
-
-      return singleRow(
-        row.id,
-        consonant,
-        mark,
-        color,
-        isComparison,
-      );
+      return singleRow(row.id, consonant, mark, color, isComparison);
     });
 
-  const middleRules = isDead
-    ? TONE_RULE_TABLE.middle.dead
-    : TONE_RULE_TABLE.middle.live;
+  const middleRules = isDead ? TONE_RULE_TABLE.middle.dead : TONE_RULE_TABLE.middle.live;
 
   if (consonantClass === "middle") {
-    const fullRows = createRows(
-      middleRules,
-      initial,
-      colorMid,
-      false,
-    );
-
-    if (mode === "highOnly") {
-      return fullRows.map((row) => ({
-        ...row,
-        show: [5, 3, 2].includes(row.id),
-      }));
-    }
-
-    if (mode === "lowOnly") {
-      return fullRows.map((row) => ({
-        ...row,
-        show: [4, 3, 1].includes(row.id),
-      }));
-    }
-
-    if (mode === "pair") {
-      return fullRows.map((row) => ({
-        ...row,
-        show: [5, 1].includes(row.id),
-      }));
-    }
-
+    const fullRows = createRows(middleRules, initial, colorMid, false);
+    if (mode === "highOnly") return fullRows.map((row) => ({ ...row, show: [5, 3, 2].includes(row.id) }));
+    if (mode === "lowOnly") return fullRows.map((row) => ({ ...row, show: [4, 3, 1].includes(row.id) }));
+    if (mode === "pair") return fullRows.map((row) => ({ ...row, show: [5, 1].includes(row.id) }));
     return fullRows;
   }
 
-  const pairedHigh =
-    consonantClass === "high"
-      ? initial
-      : getPairedInitial(initial, initialKind, "high");
+  const pairedHigh = consonantClass === "high" ? initial : getPairedInitial(initial, initialKind, "high");
+  const pairedLow = consonantClass === "low" ? initial : getPairedInitial(initial, initialKind, "low");
 
-  const pairedLow =
-    consonantClass === "low"
-      ? initial
-      : getPairedInitial(initial, initialKind, "low");
-
-  const highRules = isDead
-    ? TONE_RULE_TABLE.high.dead
-    : TONE_RULE_TABLE.high.live;
-
+  const highRules = isDead ? TONE_RULE_TABLE.high.dead : TONE_RULE_TABLE.high.live;
   const lowRules = isDead
-    ? isShort
-      ? TONE_RULE_TABLE.low.deadShort
-      : TONE_RULE_TABLE.low.deadLong
+    ? isShort ? TONE_RULE_TABLE.low.deadShort : TONE_RULE_TABLE.low.deadLong
     : TONE_RULE_TABLE.low.live;
 
-  // โหมดเสียงสูง: ใช้ตารางอักษรสูงเท่านั้น
-  if (mode === "highOnly") {
-    return createRows(
-      highRules,
-      pairedHigh,
-      colorHigh,
-      consonantClass !== "high",
-    );
-  }
+  if (mode === "highOnly") return createRows(highRules, pairedHigh, colorHigh, consonantClass !== "high");
+  if (mode === "lowOnly") return createRows(lowRules, pairedLow, colorLow, consonantClass !== "low");
 
-  // โหมดเสียงต่ำ: ใช้ตารางอักษรต่ำเท่านั้น
-  if (mode === "lowOnly") {
-    return createRows(
-      lowRules,
-      pairedLow,
-      colorLow,
-      consonantClass !== "low",
-    );
-  }
-
-  // full5: รวมชุดอักษรคู่/ห นำ เฉพาะเสียงที่ตารางรองรับจริง
   const combined = toneRows.map((toneRow) => {
     const highMark = highRules[toneRow.id];
     const lowMark = lowRules[toneRow.id];
-
     const entries = [];
 
     if (lowMark !== undefined) {
@@ -894,7 +732,6 @@ function calculateTones(word, mode, colorMid, colorHigh, colorLow) {
       });
     }
 
-    // กรณีรูปเดียวกันจากคู่เสียง ไม่ต้องสร้างวงกลมซ้ำ
     const uniqueEntries = entries.filter(
       (entry, index, array) =>
         array.findIndex(
@@ -904,173 +741,42 @@ function calculateTones(word, mode, colorMid, colorHigh, colorLow) {
         ) === index,
     );
 
-    if (!uniqueEntries.length) {
-      return blankRow(toneRow.id, "#94a3b8");
-    }
-
+    if (!uniqueEntries.length) return blankRow(toneRow.id, "#94a3b8");
     if (uniqueEntries.length === 1) {
       const entry = uniqueEntries[0];
-      return singleRow(
-        toneRow.id,
-        entry.consonant,
-        entry.mark,
-        entry.color,
-        entry.isComparison,
-      );
+      return singleRow(toneRow.id, entry.consonant, entry.mark, entry.color, entry.isComparison);
     }
-
     return multiToneRow(toneRow.id, uniqueEntries);
   });
 
   if (mode === "pair") {
-    return combined.map((row) => ({
-      ...row,
-      show: [5, 1].includes(row.id),
-    }));
+    return combined.map((row) => ({ ...row, show: [5, 1].includes(row.id) }));
   }
 
   return combined;
 }
 
-
-
 const TONE_RULE_SELF_TESTS = Object.freeze([
-  {
-    name: "ตรวจจำนวนพยัญชนะครบ 44 ตัว",
-    type: "classification",
-  },
-  {
-    name: "อักษรกลางคำเป็น",
-    word: "กาน",
-    mode: "full5",
-    expectedClass: "middle",
-    expectedType: "คำเป็น",
-    expectedVisibleToneIds: [5, 4, 3, 2, 1],
-  },
-  {
-    name: "อักษรกลางคำตาย",
-    word: "กาด",
-    mode: "full5",
-    expectedClass: "middle",
-    expectedType: "คำตาย",
-    expectedVisibleToneIds: [5, 4, 3, 2],
-  },
-  {
-    name: "อักษรสูงคำเป็น",
-    word: "ขาน",
-    mode: "highOnly",
-    expectedClass: "high",
-    expectedType: "คำเป็น",
-    expectedVisibleToneIds: [5, 3, 2],
-  },
-  {
-    name: "อักษรสูงคำตาย",
-    word: "ขัด",
-    mode: "highOnly",
-    expectedClass: "high",
-    expectedType: "คำตาย",
-    expectedVisibleToneIds: [3, 2],
-  },
-  {
-    name: "อักษรต่ำคู่คำเป็น",
-    word: "คาน",
-    mode: "lowOnly",
-    expectedClass: "low",
-    expectedType: "คำเป็น",
-    expectedVisibleToneIds: [4, 3, 1],
-    expectedSubtype: "lowPair",
-  },
-  {
-    name: "อักษรต่ำคู่คำตายสระสั้น",
-    word: "คะ",
-    mode: "lowOnly",
-    expectedClass: "low",
-    expectedType: "คำตาย",
-    expectedVisibleToneIds: [4, 3],
-    expectedSubtype: "lowPair",
-  },
-  {
-    name: "อักษรต่ำคู่คำตายสระยาว",
-    word: "คาด",
-    mode: "lowOnly",
-    expectedClass: "low",
-    expectedType: "คำตาย",
-    expectedVisibleToneIds: [4, 3],
-    expectedSubtype: "lowPair",
-  },
-  {
-    name: "อักษรต่ำเดี่ยวคำเป็น",
-    word: "นาน",
-    mode: "lowOnly",
-    expectedClass: "low",
-    expectedType: "คำเป็น",
-    expectedVisibleToneIds: [4, 3, 1],
-    expectedSubtype: "lowSingle",
-  },
-  {
-    name: "อักษรต่ำเดี่ยวคำตายสระสั้น",
-    word: "นะ",
-    mode: "lowOnly",
-    expectedClass: "low",
-    expectedType: "คำตาย",
-    expectedVisibleToneIds: [4, 3],
-    expectedSubtype: "lowSingle",
-  },
-  {
-    name: "อักษรต่ำเดี่ยว full5 ใช้ ห นำ เทียบ",
-    word: "นา",
-    mode: "full5",
-    expectedClass: "low",
-    expectedType: "คำเป็น",
-    expectedVisibleToneIds: [5, 4, 3, 2, 1],
-    expectedSubtype: "lowSingle",
-  },
-  {
-    name: "ควบกล้ำแท้",
-    word: "กรา",
-    mode: "full5",
-    expectedClass: "middle",
-    expectedType: "คำเป็น",
-    expectedVisibleToneIds: [5, 4, 3, 2, 1],
-  },
-  {
-    name: "ห นำ",
-    word: "หนา",
-    mode: "highOnly",
-    expectedClass: "high",
-    expectedType: "คำเป็น",
-    expectedVisibleToneIds: [5, 3, 2],
-  },
-  {
-    name: "ตัวสะกดแม่กงเป็นคำเป็น",
-    word: "กาง",
-    mode: "full5",
-    expectedClass: "middle",
-    expectedType: "คำเป็น",
-    expectedVisibleToneIds: [5, 4, 3, 2, 1],
-  },
-  {
-    name: "ตัวสะกดแม่กนเป็นคำเป็น",
-    word: "กาน",
-    mode: "full5",
-    expectedClass: "middle",
-    expectedType: "คำเป็น",
-    expectedVisibleToneIds: [5, 4, 3, 2, 1],
-  },
-  {
-    name: "ตัวสะกดแม่กบเป็นคำตาย",
-    word: "กาบ",
-    mode: "full5",
-    expectedClass: "middle",
-    expectedType: "คำตาย",
-    expectedVisibleToneIds: [5, 4, 3, 2],
-  },
+  { name: "ตรวจจำนวนพยัญชนะครบ 44 ตัว", type: "classification" },
+  { name: "อักษรกลางคำเป็น", word: "กาน", mode: "full5", expectedClass: "middle", expectedType: "คำเป็น", expectedVisibleToneIds: [5, 4, 3, 2, 1] },
+  { name: "อักษรกลางคำตาย", word: "กาด", mode: "full5", expectedClass: "middle", expectedType: "คำตาย", expectedVisibleToneIds: [5, 4, 3, 2] },
+  { name: "อักษรสูงคำเป็น", word: "ขาน", mode: "highOnly", expectedClass: "high", expectedType: "คำเป็น", expectedVisibleToneIds: [5, 3, 2] },
+  { name: "อักษรสูงคำตาย", word: "ขัด", mode: "highOnly", expectedClass: "high", expectedType: "คำตาย", expectedVisibleToneIds: [3, 2] },
+  { name: "อักษรต่ำคู่คำเป็น", word: "คาน", mode: "lowOnly", expectedClass: "low", expectedType: "คำเป็น", expectedVisibleToneIds: [4, 3, 1], expectedSubtype: "lowPair" },
+  { name: "อักษรต่ำคู่คำตายสระสั้น", word: "คะ", mode: "lowOnly", expectedClass: "low", expectedType: "คำตาย", expectedVisibleToneIds: [4, 3], expectedSubtype: "lowPair" },
+  { name: "อักษรต่ำคู่คำตายสระยาว", word: "คาด", mode: "lowOnly", expectedClass: "low", expectedType: "คำตาย", expectedVisibleToneIds: [4, 3], expectedSubtype: "lowPair" },
+  { name: "อักษรต่ำเดี่ยวคำเป็น", word: "นาน", mode: "lowOnly", expectedClass: "low", expectedType: "คำเป็น", expectedVisibleToneIds: [4, 3, 1], expectedSubtype: "lowSingle" },
+  { name: "อักษรต่ำเดี่ยวคำตายสระสั้น", word: "นะ", mode: "lowOnly", expectedClass: "low", expectedType: "คำตาย", expectedVisibleToneIds: [4, 3], expectedSubtype: "lowSingle" },
+  { name: "อักษรต่ำเดี่ยว full5 ใช้ ห นำ เทียบ", word: "นา", mode: "full5", expectedClass: "low", expectedType: "คำเป็น", expectedVisibleToneIds: [5, 4, 3, 2, 1], expectedSubtype: "lowSingle" },
+  { name: "ควบกล้ำแท้", word: "กรา", mode: "full5", expectedClass: "middle", expectedType: "คำเป็น", expectedVisibleToneIds: [5, 4, 3, 2, 1] },
+  { name: "ห นำ", word: "หนา", mode: "highOnly", expectedClass: "high", expectedType: "คำเป็น", expectedVisibleToneIds: [5, 3, 2] },
+  { name: "ตัวสะกดแม่กงเป็นคำเป็น", word: "กาง", mode: "full5", expectedClass: "middle", expectedType: "คำเป็น", expectedVisibleToneIds: [5, 4, 3, 2, 1] },
+  { name: "ตัวสะกดแม่กนเป็นคำเป็น", word: "กาน", mode: "full5", expectedClass: "middle", expectedType: "คำเป็น", expectedVisibleToneIds: [5, 4, 3, 2, 1] },
+  { name: "ตัวสะกดแม่กบเป็นคำตาย", word: "กาบ", mode: "full5", expectedClass: "middle", expectedType: "คำตาย", expectedVisibleToneIds: [5, 4, 3, 2] },
 ]);
 
 function runToneRuleSelfTests() {
   const failures = [];
-
-  // Regression test ของโครงสร้างไตรยางศ์ 44 ตัว
   const allUnique = new Set(allThaiConsonants);
   const classificationCounts = {
     middle: midConsonants.length,
@@ -1090,14 +796,7 @@ function runToneRuleSelfTests() {
   ) {
     failures.push({
       name: "ตรวจจำนวนพยัญชนะครบ 44 ตัว",
-      expected: {
-        total: 44,
-        middle: 9,
-        high: 11,
-        low: 24,
-        lowPair: 14,
-        lowSingle: 10,
-      },
+      expected: { total: 44, middle: 9, high: 11, low: 24, lowPair: 14, lowSingle: 10 },
       actual: {
         total: allThaiConsonants.length,
         unique: allUnique.size,
@@ -1112,93 +811,41 @@ function runToneRuleSelfTests() {
 
   for (const testCase of TONE_RULE_SELF_TESTS) {
     if (testCase.type === "classification") continue;
-
     try {
-      const info = analyzeSyllable(
-        testCase.word,
-        testCase.mode,
-      );
-
-      const rows = calculateTones(
-        testCase.word,
-        testCase.mode,
-        "#22c55e",
-        "#ef4444",
-        "#007bff",
-      );
-
-      const visibleToneIds = rows
-        .filter((row) => row.show)
-        .map((row) => row.id);
-
-      const classOk =
-        info.consonantClass ===
-        testCase.expectedClass;
-
-      const typeOk =
-        info.type === testCase.expectedType;
-
-      const rowsOk =
-        JSON.stringify(visibleToneIds) ===
-        JSON.stringify(
-          testCase.expectedVisibleToneIds,
-        );
-
-      const primary =
-        info.primaryConsonant || "";
-
+      const info = analyzeSyllable(testCase.word, testCase.mode);
+      const rows = calculateTones(testCase.word, testCase.mode, "#22c55e", "#ef4444", "#007bff");
+      const visibleToneIds = rows.filter((row) => row.show).map((row) => row.id);
+      const classOk = info.consonantClass === testCase.expectedClass;
+      const typeOk = info.type === testCase.expectedType;
+      const rowsOk = JSON.stringify(visibleToneIds) === JSON.stringify(testCase.expectedVisibleToneIds);
+      const primary = info.primaryConsonant || "";
       const subtypeOk =
         !testCase.expectedSubtype ||
-        (
-          testCase.expectedSubtype === "lowPair" &&
-          lowPairConsonants.includes(primary)
-        ) ||
-        (
-          testCase.expectedSubtype === "lowSingle" &&
-          lowSingleConsonants.includes(primary)
-        );
+        (testCase.expectedSubtype === "lowPair" && lowPairConsonants.includes(primary)) ||
+        (testCase.expectedSubtype === "lowSingle" && lowSingleConsonants.includes(primary));
 
-      if (
-        !classOk ||
-        !typeOk ||
-        !rowsOk ||
-        !subtypeOk
-      ) {
+      if (!classOk || !typeOk || !rowsOk || !subtypeOk) {
         failures.push({
           ...testCase,
-          actualClass:
-            info.consonantClass,
+          actualClass: info.consonantClass,
           actualType: info.type,
           actualPrimary: primary,
-          actualVisibleToneIds:
-            visibleToneIds,
+          actualVisibleToneIds: visibleToneIds,
         });
       }
     } catch (error) {
       failures.push({
         ...testCase,
-        error:
-          error instanceof Error
-            ? error.message
-            : String(error),
+        error: error instanceof Error ? error.message : String(error),
       });
     }
   }
 
   if (failures.length > 0) {
-    console.error(
-      "[Thai Tone Rule Engine] Self-test FAILED:",
-      failures,
-    );
-  } else if (
-    typeof window !== "undefined" &&
-    window.location.hostname === "localhost"
-  ) {
-    console.info(
-      `[Thai Tone Rule Engine] ${TONE_RULE_SELF_TESTS.length + 1} regression checks passed.`,
-    );
+    console.error("[Thai Tone Rule Engine] Self-test FAILED:", failures);
+  } else if (typeof window !== "undefined" && window.location.hostname === "localhost") {
+    console.info(`[Thai Tone Rule Engine] ${TONE_RULE_SELF_TESTS.length + 1} regression checks passed.`);
   }
-
   return failures;
 }
 
@@ -1206,26 +853,11 @@ runToneRuleSelfTests();
 
 function validateEnteredToneMark(word = "") {
   const value = word.trim();
-
-  if (!value) {
-    return {
-      status: "idle",
-      toneMark: "",
-      message: "",
-      detail: "",
-    };
-  }
+  if (!value) return { status: "idle", toneMark: "", message: "", detail: "" };
 
   const parsed = parseThaiWord(value);
   const analysis = analyzeSyllable(value, "full5");
-  const baseWord = buildWord(
-    parsed.frontVowel,
-    parsed.initial,
-    parsed.aboveBelowVowel,
-    "",
-    parsed.rest,
-  );
-
+  const baseWord = buildWord(parsed.frontVowel, parsed.initial, parsed.aboveBelowVowel, "", parsed.rest);
   const ruleMode =
     analysis.consonantClass === "middle"
       ? "full5"
@@ -1233,34 +865,17 @@ function validateEnteredToneMark(word = "") {
         ? "highOnly"
         : "lowOnly";
 
-  const candidates = calculateTones(
-    baseWord,
-    ruleMode,
-    "#22c55e",
-    "#ef4444",
-    "#007bff",
-  );
-
+  const candidates = calculateTones(baseWord, ruleMode, "#22c55e", "#ef4444", "#007bff");
   const candidateMatches = [];
 
   for (const row of candidates) {
-    const words = row.isMulti
-      ? row.multi.map((item) => item.text)
-      : row.word
-        ? [row.word]
-        : [];
-
-    if (words.includes(value)) {
-      candidateMatches.push(row);
-    }
+    const words = row.isMulti ? row.multi.map((item) => item.text) : row.word ? [row.word] : [];
+    if (words.includes(value)) candidateMatches.push(row);
   }
 
   if (parsed.toneMark) {
     if (candidateMatches.length > 0) {
-      const toneNames = candidateMatches
-        .map((row) => row.tone)
-        .join(" / ");
-
+      const toneNames = candidateMatches.map((row) => row.tone).join(" / ");
       return {
         status: "valid",
         toneMark: parsed.toneMark,
@@ -1268,7 +883,6 @@ function validateEnteredToneMark(word = "") {
         detail: `ตรงกับ${toneNames}`,
       };
     }
-
     const available = candidates
       .filter((row) => row.show)
       .map((row) => `${row.tone} [${row.mark}]`)
@@ -1278,17 +892,12 @@ function validateEnteredToneMark(word = "") {
       status: "invalid",
       toneMark: parsed.toneMark,
       message: `❌ รูปวรรณยุกต์ไม่ถูกต้อง: ${parsed.toneMark}`,
-      detail: available
-        ? `รูปที่ใช้ได้สำหรับคำนี้: ${available}`
-        : "คำนี้ไม่มีกฎการผันที่ตรงกับรูปที่กรอก",
+      detail: available ? `รูปที่ใช้ได้สำหรับคำนี้: ${available}` : "คำนี้ไม่มีกฎการผันที่ตรงกับรูปที่กรอก",
     };
   }
 
   if (candidateMatches.length > 0) {
-    const toneNames = candidateMatches
-      .map((row) => row.tone)
-      .join(" / ");
-
+    const toneNames = candidateMatches.map((row) => row.tone).join(" / ");
     return {
       status: "neutral",
       toneMark: "",
@@ -1318,7 +927,6 @@ function buildAzureTtsSsml(text = "", voice = TTS_VOICE, speechRate = 1) {
   const safeText = escapeXmlText(
     String(text).normalize("NFC").replace(/\s+/g, " ").trim(),
   );
-
   const rate = Math.max(0.5, Math.min(1.4, Number(speechRate) || 1));
   const ratePercent = Math.round((rate - 1) * 100);
   const rateValue = `${ratePercent >= 0 ? "+" : ""}${ratePercent}%`;
@@ -1340,28 +948,20 @@ function getSpeechFallbackVoice(voices = [], selectedVoiceURI = "") {
       (item) =>
         item.voiceURI === selectedVoiceURI &&
         item.lang?.toLowerCase().startsWith("th"),
-    ) || voices.find((item) =>
-      item.lang?.toLowerCase().startsWith("th"),
-    )
+    ) || voices.find((item) => item.lang?.toLowerCase().startsWith("th"))
   );
 }
 
 function getSpeechText(item) {
   if (!item?.show) return "";
-
   if (item.isMulti) {
-    // บรรทัดที่ 3 ที่มีอักษรต่ำ-สูงคู่เสียงเดียวกัน ให้ออกเสียงคำในวงกลมเพียงคำเดียว (คำแรก)
     return item.multi[0]?.ttsText || item.multi[0]?.text || "";
   }
-
   return item.ttsText || item.word || "";
 }
 
 function normalizeThaiSpeechText(text = "") {
-  return String(text)
-    .normalize("NFC")
-    .replace(/\s+/g, " ")
-    .trim();
+  return String(text).normalize("NFC").replace(/\s+/g, " ").trim();
 }
 
 function Board({
@@ -1378,6 +978,13 @@ function Board({
   lang = "th",
   onPlayAllTones,
   isPlayingAll = false,
+  isPracticing = false,
+  practiceTargetWord = null,
+  mismatchWord = null,
+  onTogglePractice,
+  practiceTimer = 10,
+  practiceScore = 0,
+  practiceMsg = "",
 }) {
   const t = (th, en) => (lang === "en" ? en : th);
 
@@ -1398,9 +1005,7 @@ function Board({
   const ratio = Math.max(0.8, fontSize / 20);
   const circleSize = isDisplay ? `clamp(42px, ${4.2 * ratio}vw, 70px)` : "48px";
   const textSize = isDisplay ? `clamp(15px, ${1.5 * ratio}vw, 25px)` : "17px";
-  const circleFontSize = isDisplay
-    ? `clamp(16px, ${1.8 * ratio}vw, 27px)`
-    : "18px";
+  const circleFontSize = isDisplay ? `clamp(16px, ${1.8 * ratio}vw, 27px)` : "18px";
 
   const getCircleStyle = (color) => ({
     backgroundColor: color,
@@ -1559,15 +1164,10 @@ function Board({
           const short = inf.isShort;
 
           let cLabel = "";
-          if (initKind === "trueCluster") {
-            cLabel = ` (True Cluster "${init}")`;
-          } else if (initKind === "leadingHo") {
-            cLabel = ` (Leading ห- "${init}")`;
-          } else if (initKind === "leadingO") {
-            cLabel = ` (Leading อ- "${init}")`;
-          } else if (initKind === "falseCluster") {
-            cLabel = ` (False Cluster "${init}")`;
-          }
+          if (initKind === "trueCluster") cLabel = ` (True Cluster "${init}")`;
+          else if (initKind === "leadingHo") cLabel = ` (Leading ห- "${init}")`;
+          else if (initKind === "leadingO") cLabel = ` (Leading อ- "${init}")`;
+          else if (initKind === "falseCluster") cLabel = ` (False Cluster "${init}")`;
 
           if (cClass === "middle") {
             return dead
@@ -1647,7 +1247,7 @@ function Board({
                 <div className="tone-line" />
                 {item.show && !item.isMulti && item.word && (
                   <div
-                    className="tone-circle"
+                    className={`tone-circle ${practiceTargetWord === item.word ? "target-test-active" : ""} ${mismatchWord === item.word ? "target-test-mismatch" : ""}`}
                     style={{
                       ...getCircleStyle(item.color),
                       left: item.leftPos,
@@ -1663,7 +1263,7 @@ function Board({
                       <React.Fragment key={`${circle.text}-${index}`}>
                         {index > 0 && <span className="slash">/</span>}
                         <div
-                          className="tone-circle"
+                          className={`tone-circle ${practiceTargetWord === circle.text ? "target-test-active" : ""} ${mismatchWord === circle.text ? "target-test-mismatch" : ""}`}
                           style={{
                             ...getCircleStyle(circle.color),
                             position: "relative",
@@ -1697,81 +1297,82 @@ function Board({
         })}
       </div>
 
-      {/* เพิ่มการเช็ค inputText ว่าง เพื่อซ่อนปุ่ม */}
+      {/* แถบปุ่มด้านล่างกระดาน */}
       {inputText.trim() !== "" && linesData.some((item) => item.show && (item.word || (item.isMulti && item.multi.length > 0))) && (
         <div className="board-footer-actions">
-          <button
-            type="button"
-            className={`auto-play-tones-btn ${isPlayingAll ? "playing" : ""}`}
-            onClick={onPlayAllTones}
-            title={
-              mode === "pair"
-                ? t(
-                    isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์คู่เสียงสูง-ต่ำ (5 ➔ 1)",
-                    isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play paired tones (5 ➔ 1)"
-                  )
-                : mode === "highOnly"
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              type="button"
+              className={`auto-play-tones-btn ${isPlayingAll ? "playing" : ""}`}
+              onClick={onPlayAllTones}
+              disabled={isPracticing}
+              title={
+                mode === "pair"
                   ? t(
-                      isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์เฉพาะเสียงสูง (5 ➔ 2 ➔ 3)",
-                      isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play high tones (5 ➔ 2 ➔ 3)"
+                      isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์คู่เสียงสูง-ต่ำ (5 ➔ 1)",
+                      isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play paired tones (5 ➔ 1)"
                     )
-                  : mode === "lowOnly"
-                    ? t(
-                        isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์เฉพาะเสียงต่ำ (1 ➔ 3 ➔ 4)",
-                        isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play low tones (1 ➔ 3 ➔ 4)"
-                      )
-                    : t(
-                        isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์อัตโนมัติ 5 เสียง (1 ➔ 5)",
-                        isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play 5 tones ascending (1 ➔ 5)"
-                      )
-            }
-            aria-label="Auto play tones"
-          >
-            {mode === "pair" || mode === "highOnly" ? (
-              /* ลำโพงพร้อมลูกศรลง สำหรับเสียงสูง 5-2-3 หรือคู่เสียงสูง-ต่ำ 5+1 */
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polygon points="10 5 5 9 2 9 2 15 5 15 10 19 10 5" fill="currentColor" stroke="none" />
-                <path d="M15 9l6 6" stroke="currentColor" strokeWidth="2.2" />
-                <path d="M16 15h5v-5" stroke="currentColor" strokeWidth="2.2" />
-              </svg>
-            ) : (
-              /* ลำโพงพร้อมลูกศรขึ้น สำหรับเสียงต่ำ 1-3-4 หรือผัน 5 เสียง 1-5 */
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polygon points="10 5 5 9 2 9 2 15 5 15 10 19 10 5" fill="currentColor" stroke="none" />
-                <path d="M15 15l6-6" stroke="currentColor" strokeWidth="2.2" />
-                <path d="M16 9h5v5" stroke="currentColor" strokeWidth="2.2" />
-              </svg>
-            )}
-            <span className="auto-play-label">
-              {isPlayingAll
-                ? t("กำลังออกเสียง...", "Playing...")
-                : mode === "pair"
-                  ? t("ผันเสียง 5+1", "Play 5+1")
                   : mode === "highOnly"
-                    ? t("ผันเสียง 5-2-3", "Play 5-2-3")
+                    ? t(
+                        isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์เฉพาะเสียงสูง (5 ➔ 2 ➔ 3)",
+                        isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play high tones (5 ➔ 2 ➔ 3)"
+                      )
                     : mode === "lowOnly"
-                      ? t("ผันเสียง 1-3-4", "Play 1-3-4")
-                      : t("ผันเสียง 1-5", "Play 1-5")}
-            </span>
-          </button>
+                      ? t(
+                          isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์เฉพาะเสียงต่ำ (1 ➔ 3 ➔ 4)",
+                          isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play low tones (1 ➔ 3 ➔ 4)"
+                        )
+                      : t(
+                          isPlayingAll ? "กำลังเล่นเสียงผันวรรณยุกต์ (คลิกเพื่อหยุด)" : "ออกเสียงผันวรรณยุกต์อัตโนมัติ 5 เสียง (1 ➔ 5)",
+                          isPlayingAll ? "Playing tones... (Click to stop)" : "Auto-play 5 tones ascending (1 ➔ 5)"
+                        )
+              }
+              aria-label="Auto play tones"
+            >
+              {mode === "pair" || mode === "highOnly" ? (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="10 5 5 9 2 9 2 15 5 15 10 19 10 5" fill="currentColor" stroke="none" />
+                  <path d="M15 9l6 6" stroke="currentColor" strokeWidth="2.2" />
+                  <path d="M16 15h5v-5" stroke="currentColor" strokeWidth="2.2" />
+                </svg>
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="10 5 5 9 2 9 2 15 5 15 10 19 10 5" fill="currentColor" stroke="none" />
+                  <path d="M15 15l6-6" stroke="currentColor" strokeWidth="2.2" />
+                  <path d="M16 9h5v5" stroke="currentColor" strokeWidth="2.2" />
+                </svg>
+              )}
+              <span className="auto-play-label">
+                {isPlayingAll
+                  ? t("กำลังออกเสียง...", "Playing...")
+                  : mode === "pair"
+                    ? t("ผันเสียง 5+1", "Play 5+1")
+                    : mode === "highOnly"
+                      ? t("ผันเสียง 5-2-3", "Play 5-2-3")
+                      : mode === "lowOnly"
+                        ? t("ผันเสียง 1-3-4", "Play 1-3-4")
+                        : t("ผันเสียง 1-5", "Play 1-5")}
+              </span>
+            </button>
+
+            {/* ปุ่ม Toggle ฝึกออกเสียง / ยกเลิก */}
+            <button
+              type="button"
+              className={`practice-toggle-btn ${isPracticing ? "cancel" : ""}`}
+              onClick={onTogglePractice}
+            >
+              {isPracticing ? t("❌ ยกเลิก", "❌ Cancel") : t("🎙️ ฝึกออกเสียง", "🎙️ Practice")}
+            </button>
+          </div>
+
+          {/* แถบแสดงสถานะโหมดฝึก */}
+          {isPracticing && (
+            <div className="practice-status-banner">
+              <span className="practice-msg-text">{practiceMsg}</span>
+              <span className="practice-timer-text">⏱️ {practiceTimer}s</span>
+              <span className="practice-score-text">🏆 {t("คะแนน", "Score")}: {practiceScore}</span>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1794,6 +1395,7 @@ export default function App() {
       localStorage.setItem("thai_tone_lang", lang);
     }
   }, [lang]);
+
   const [mode, setMode] = useState("full5");
   const [viewLayout, setViewLayout] = useState("split");
   const [previousLayout, setPreviousLayout] = useState("split");
@@ -1821,7 +1423,24 @@ export default function App() {
   const [voices, setVoices] = useState([]);
   const [selectedVoiceURI, setSelectedVoiceURI] = useState("");
 
-  // สถานะสำหรับแผง "คลังเสียง" (เพิ่ม/แก้ไข/ลบคำในฐานข้อมูล Cloudflare D1 + R2)
+  // สถานะสำหรับโหมดฝึกออกเสียง
+  const [isPracticing, setIsPracticing] = useState(false);
+  const [practiceScore, setPracticeScore] = useState(0);
+  const [practiceTimer, setPracticeTimer] = useState(10);
+  const [practiceMsg, setPracticeMsg] = useState("");
+  const [practiceTargetWord, setPracticeTargetWord] = useState(null);
+  const [mismatchWord, setMismatchWord] = useState(null);
+
+  const micStreamRef = useRef(null);
+  const audioCtxRef = useRef(null);
+  const analyserRef = useRef(null);
+  const timerRef = useRef(null);
+  const practiceQueueRef = useRef([]);
+  const currentIdxRef = useRef(0);
+  const isWaitingCorrectionRef = useRef(false);
+  const matchCountRef = useRef(0);
+  const animFrameRef = useRef(null);
+
   const [soundManagerOpen, setSoundManagerOpen] = useState(false);
   const [soundWords, setSoundWords] = useState([]);
   const [soundLoading, setSoundLoading] = useState(false);
@@ -1876,8 +1495,6 @@ export default function App() {
     }
 
     const normalizedText = normalizeThaiSpeechText(text);
-    // คีย์ที่ใช้เก็บ/ค้นไฟล์เสียงใน Local Cache (IndexedDB) — อิงตามคำพูดล้วนๆ
-    // ให้สอดคล้องกับชื่อไฟล์ฝั่ง Cloudflare R2 (ดู functions/api/tts.js -> toAudioFilename)
     const cacheKey = normalizedText;
 
     const playAudioBlob = async (blob) => {
@@ -1908,7 +1525,6 @@ export default function App() {
       });
     };
 
-    // ชั้นที่ 1: Local Cache ในเครื่อง (IndexedDB) — เร็วที่สุด ออฟไลน์ได้
     try {
       const localBlob = await getLocalAudioBlob(cacheKey);
       if (localBlob) {
@@ -1919,14 +1535,10 @@ export default function App() {
       console.warn("Local audio cache read error:", err);
     }
 
-    // ชั้นที่ 2 & 3: Cloudflare R2 (แคชกลาง) -> Azure TTS (สังเคราะห์ใหม่)
-    // ผ่าน Cloudflare Pages Function เดียวกัน (ดู functions/api/tts.js)
     try {
       const response = await fetch(TTS_API_ENDPOINT, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: normalizedText,
           voice: TTS_VOICE,
@@ -1939,28 +1551,18 @@ export default function App() {
       }
 
       const audioBlob = await response.blob();
-      // เซฟลง Local Cache ไว้ใช้ครั้งถัดไป (fire-and-forget ไม่บล็อกการเล่นเสียง)
       setLocalAudioBlob(cacheKey, audioBlob);
       await playAudioBlob(audioBlob);
       return;
     } catch (err) {
-      console.warn(
-        "Azure Thai TTS unavailable; using browser Thai voice fallback:",
-        err,
-      );
+      console.warn("Azure Thai TTS unavailable; using browser Thai voice fallback:", err);
     }
 
-    // Fallback: browser Web Speech API โดยยอมใช้เฉพาะ Thai voice
     const availableVoices = window.speechSynthesis.getVoices();
-    const thaiVoice = getSpeechFallbackVoice(
-      availableVoices,
-      selectedVoiceURI,
-    );
+    const thaiVoice = getSpeechFallbackVoice(availableVoices, selectedVoiceURI);
 
     if (!thaiVoice) {
-      console.warn(
-        "ไม่พบเสียงภาษาไทย (th-TH/th-*). กรุณาเลือก/ติดตั้ง Thai TTS voice ในระบบ",
-      );
+      console.warn("ไม่พบเสียงภาษาไทย (th-TH/th-*). กรุณาเลือก/ติดตั้ง Thai TTS voice ในระบบ");
       return;
     }
 
@@ -1980,6 +1582,177 @@ export default function App() {
       window.speechSynthesis.speak(utterance);
     });
   };
+
+  // === ฟังก์ชันโหมดฝึกออกเสียง ===
+  const handleTogglePractice = () => {
+    if (isPracticing) {
+      cancelPractice();
+    } else {
+      startPractice();
+    }
+  };
+
+  const startPractice = async () => {
+    if (isPlayingAll) {
+      isCancelingAutoPlayRef.current = true;
+      setIsPlayingAll(false);
+    }
+
+    const wordsOnScreen = [];
+    const sortedRows = [...linesData].filter((l) => l.show).sort((a, b) => a.id - b.id);
+
+    sortedRows.forEach((row) => {
+      if (row.isMulti) {
+        row.multi.forEach((m) => {
+          if (m.text) wordsOnScreen.push({ word: m.text, toneId: row.id });
+        });
+      } else if (row.word) {
+        wordsOnScreen.push({ word: row.word, toneId: row.id });
+      }
+    });
+
+    if (wordsOnScreen.length === 0) {
+      alert(t("ไม่พบคำสำหรับฝึก กรุณาเลือกคำก่อนค่ะ", "No words to practice. Please select a word."));
+      return;
+    }
+
+    practiceQueueRef.current = wordsOnScreen;
+    currentIdxRef.current = 0;
+    setPracticeScore(0);
+    setIsPracticing(true);
+
+    try {
+      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      analyserRef.current = audioCtxRef.current.createAnalyser();
+      analyserRef.current.fftSize = 2048;
+
+      micStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioCtxRef.current.createMediaStreamSource(micStreamRef.current).connect(analyserRef.current);
+
+      loadNextPracticeWord();
+      runAudioDetectionLoop();
+    } catch (err) {
+      alert(t("ไม่สามารถเข้าถึงไมโครโฟนได้: " + err.message, "Microphone access denied: " + err.message));
+      cancelPractice();
+    }
+  };
+
+  const loadNextPracticeWord = () => {
+    const current = practiceQueueRef.current[currentIdxRef.current];
+    if (!current) return;
+    setPracticeTargetWord(current.word);
+    setPracticeTimer(10);
+    isWaitingCorrectionRef.current = false;
+    matchCountRef.current = 0;
+    setPracticeMsg(t(`กรุณาออกเสียง: "${current.word}"`, `Please say: "${current.word}"`));
+
+    clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setPracticeTimer((prev) => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current);
+          handlePracticeTimeout();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const handlePracticeTimeout = () => {
+    isWaitingCorrectionRef.current = true;
+    const current = practiceQueueRef.current[currentIdxRef.current];
+    if (!current) return;
+    setPracticeMsg(t(`ยังไม่ถูกต้อง ฟังเสียงต้นแบบแล้วออกเสียงตามนะคะ`, `Listen to sample and repeat`));
+    speak(current.word, true);
+  };
+
+  const runAudioDetectionLoop = () => {
+    const buffer = new Float32Array(analyserRef.current.fftSize);
+
+    const detect = () => {
+      if (!audioCtxRef.current || audioCtxRef.current.state === "closed") return;
+
+      analyserRef.current.getFloatTimeDomainData(buffer);
+      const freq = autoCorrelate(buffer, audioCtxRef.current.sampleRate);
+
+      if (freq !== -1) {
+        const current = practiceQueueRef.current[currentIdxRef.current];
+        if (current) {
+          const targetFreq = TONE_TARGET_FREQS[current.toneId] || 140;
+          const tolerance = 28;
+
+          // เสียงตรงกับคำเป้าหมาย
+          if (Math.abs(freq - targetFreq) <= tolerance) {
+            matchCountRef.current += 1;
+            if (matchCountRef.current >= 6) {
+              clearInterval(timerRef.current);
+
+              if (!isWaitingCorrectionRef.current) {
+                setPracticeScore((prev) => prev + 10);
+              }
+
+              // ย่อกลับขนาดและคืนสีเดิมทันที
+              setPracticeTargetWord(null);
+              currentIdxRef.current += 1;
+
+              if (currentIdxRef.current < practiceQueueRef.current.length) {
+                setTimeout(loadNextPracticeWord, 500);
+              } else {
+                setTimeout(() => {
+                  alert(t(`🎉 ผ่านการทดสอบครบทุกคำแล้ว!\nคะแนนรวม: ${practiceScore + (isWaitingCorrectionRef.current ? 0 : 10)} คะแนน`,
+                          `🎉 Practice completed!\nTotal score: ${practiceScore + (isWaitingCorrectionRef.current ? 0 : 10)}`));
+                  cancelPractice();
+                }, 400);
+                return;
+              }
+            }
+          } else {
+            // เช็คว่าตรงกับคำอื่นบนหน้าจอหรือไม่ (เด้งเตือนชั่วคราวแต่ไม่ได้คะแนน)
+            practiceQueueRef.current.forEach((item, idx) => {
+              if (idx !== currentIdxRef.current) {
+                const otherFreq = TONE_TARGET_FREQS[item.toneId] || 140;
+                if (Math.abs(freq - otherFreq) <= tolerance) {
+                  setMismatchWord(item.word);
+                  setTimeout(() => setMismatchWord(null), 400);
+                }
+              }
+            });
+          }
+        }
+      }
+
+      animFrameRef.current = requestAnimationFrame(detect);
+    };
+
+    animFrameRef.current = requestAnimationFrame(detect);
+  };
+
+  const cancelPractice = () => {
+    clearInterval(timerRef.current);
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    if (micStreamRef.current) micStreamRef.current.getTracks().forEach((track) => track.stop());
+    if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
+      audioCtxRef.current.close();
+    }
+
+    setIsPracticing(false);
+    setPracticeTargetWord(null);
+    setMismatchWord(null);
+    setPracticeScore(0);
+    setPracticeMsg("");
+  };
+
+  useEffect(() => {
+    return () => {
+      clearInterval(timerRef.current);
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (micStreamRef.current) micStreamRef.current.getTracks().forEach((track) => track.stop());
+      if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
+        audioCtxRef.current.close();
+      }
+    };
+  }, []);
 
   const handlePlayAllTones = async () => {
     if (isDisplayWindow && typeof window !== "undefined" && "BroadcastChannel" in window) {
@@ -2002,15 +1775,10 @@ export default function App() {
       return;
     }
 
-    // กำหนดลำดับการออกเสียงตามโหมดที่เลือก
     let targetSequence = [1, 2, 3, 4, 5];
-    if (mode === "pair") {
-      targetSequence = [5, 1]; // จับคู่อักษรสูง-ต่ำ: เส้น 5 -> เส้น 1
-    } else if (mode === "highOnly") {
-      targetSequence = [5, 2, 3]; // เฉพาะเสียงสูง: 5 -> 2 -> 3
-    } else if (mode === "lowOnly") {
-      targetSequence = [1, 3, 4]; // เฉพาะเสียงต่ำ: 1 -> 3 -> 4
-    }
+    if (mode === "pair") targetSequence = [5, 1];
+    else if (mode === "highOnly") targetSequence = [5, 2, 3];
+    else if (mode === "lowOnly") targetSequence = [1, 3, 4];
 
     const playableItems = targetSequence
       .map((id) => linesData.find((item) => item.id === id))
@@ -2029,7 +1797,6 @@ export default function App() {
         await speak(textToSpeak, true);
       }
       if (isCancelingAutoPlayRef.current) break;
-      // เว้นช่วงสั้นๆ ระหว่างแต่ละเสียงเพื่อให้ฟังชัดเจนและออกเสียงตามได้ทัน
       await new Promise((resolve) => setTimeout(resolve, 320));
     }
 
@@ -2049,29 +1816,23 @@ export default function App() {
 
   const validateInput = (word) => {
     const value = word.trim();
-
     if (!value) {
       setToneValidation(validateEnteredToneMark(""));
       setInputError("กรุณากรอกคำศัพท์");
       return false;
     }
-
     if (/\s/.test(value)) {
       setToneValidation(validateEnteredToneMark(""));
       setInputError("กรุณากรอกเพียง 1 คำเท่านั้น ห้ามเว้นวรรค");
       return false;
     }
-
-    // ตรวจสอบคำภาษาไทย 1 พยางค์อย่างเคร่งครัด
     if (!STRICT_THAI_SYLLABLE_PATTERN.test(value)) {
       setToneValidation(validateEnteredToneMark(""));
       setInputError("กรุณากรอก 1 พยางค์ให้ถูกหลักภาษาไทย (เช่น พยัญชนะ สระ ตัวสะกด วรรณยุกต์)");
       return false;
     }
-
     const toneResult = validateEnteredToneMark(value);
     setToneValidation(toneResult);
-
     setInputError("");
     return true;
   };
@@ -2088,7 +1849,6 @@ export default function App() {
       }
       return;
     }
-    
     setLastValidInput(word);
 
     const fallback = () => {
@@ -2106,15 +1866,12 @@ export default function App() {
 
     try {
       const prompt = `วิเคราะห์การผันวรรณยุกต์ภาษาไทยของคำว่า "${word}" ส่งคืนเฉพาะ JSON array 5 รายการ เรียง จัตวา ตรี โท เอก สามัญ รูปแบบ [{"word":"...","type":"high"},{"word":"...","type":"low"},{"words":["...","..."],"type":"pair"},{"word":"...","type":"high"},{"word":"...","type":"low"}]`;
-
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${activeKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-          }),
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
         },
       );
 
@@ -2171,13 +1928,10 @@ export default function App() {
   const handleModeChange = (newMode) => {
     setMode(newMode);
     if (newMode === "pair") {
-      // หากมีคำอยู่แล้ว ให้ดึงพยัญชนะตัวแรกมาประสมสระออ หากไม่มีให้เริ่มที่ "ขอ"
       let pairWord = "ขอ";
       if (inputText.trim() !== "") {
         const match = inputText.match(/([ก-ฮ])/);
-        if (match) {
-          pairWord = `${match[1]}อ`;
-        }
+        if (match) pairWord = `${match[1]}อ`;
       }
       setInputText(pairWord);
       validateInput(pairWord);
@@ -2198,7 +1952,7 @@ export default function App() {
   };
 
   const handleQuickVowelClick = (vowel) => {
-    if (mode === "pair") return; // ป้องกันไม่ให้กดเปลี่ยนสระในโหมดจับคู่
+    if (mode === "pair") return;
     const { initial } = parseThaiWord(inputText);
     const newWord = `${vowel.front}${initial || "ก"}${vowel.rear}`;
     setInputText(newWord);
@@ -2227,12 +1981,6 @@ export default function App() {
     window.setTimeout(() => setApiSaveStatus(""), 3000);
   };
 
-  /**
-   * =============================================================================
-   * SOUND LIBRARY MANAGER — เรียก /api/words (Cloudflare Pages Function + D1 + R2)
-   * เพื่อ เรียกดู(browse) / เพิ่ม(add) / แก้ไข(edit) / ลบ(delete) ไฟล์เสียงคำอ่าน
-   * =============================================================================
-   */
   const fetchSoundWords = useCallback(async () => {
     setSoundLoading(true);
     setSoundError("");
@@ -2352,15 +2100,8 @@ export default function App() {
     const screenWidth = window.screen?.availWidth || 1440;
     const screenHeight = window.screen?.availHeight || 900;
 
-    const popupWidth = Math.max(
-      960,
-      Math.min(1600, Math.floor(screenWidth * 0.86)),
-    );
-    const popupHeight = Math.max(
-      640,
-      Math.min(900, Math.floor(screenHeight * 0.82)),
-    );
-
+    const popupWidth = Math.max(960, Math.min(1600, Math.floor(screenWidth * 0.86)));
+    const popupHeight = Math.max(640, Math.min(900, Math.floor(screenHeight * 0.82)));
     const popupLeft = Math.max(0, Math.floor((screenWidth - popupWidth) / 2));
     const popupTop = Math.max(0, Math.floor((screenHeight - popupHeight) / 2));
 
@@ -2399,6 +2140,7 @@ export default function App() {
       speechEnabled,
       speechRate,
       selectedVoiceURI,
+      lang,
     }),
     [
       linesData,
@@ -2449,13 +2191,8 @@ export default function App() {
           Number(b.lang?.toLowerCase().startsWith("th")) -
           Number(a.lang?.toLowerCase().startsWith("th")),
       );
-
       setVoices(thaiFirst);
-
-      const thaiVoice = thaiFirst.find((voice) =>
-        voice.lang?.toLowerCase().startsWith("th"),
-      );
-
+      const thaiVoice = thaiFirst.find((voice) => voice.lang?.toLowerCase().startsWith("th"));
       setSelectedVoiceURI((previous) => previous || thaiVoice?.voiceURI || "");
     };
 
@@ -2552,7 +2289,6 @@ export default function App() {
     channel.close();
   };
 
-  // Component สำหรับสร้าง Top Bar แบบใช้ซ้ำ
   const renderTopBar = (extraStyle = {}) => (
     <section className="top-bar panel" style={extraStyle}>
       <div className="view-buttons">
@@ -2605,13 +2341,9 @@ export default function App() {
           title={lang === "th" ? "Switch interface to English" : "เปลี่ยนอินเทอร์เฟซเป็นภาษาไทย"}
         >
           <span>🌐</span>
-          <span style={{ color: lang === "th" ? "#0284c7" : "#94a3b8", fontWeight: lang === "th" ? "800" : "500" }}>
-            ไทย
-          </span>
+          <span style={{ color: lang === "th" ? "#0284c7" : "#94a3b8", fontWeight: lang === "th" ? "800" : "500" }}>ไทย</span>
           <span style={{ color: "#94a3b8" }}>/</span>
-          <span style={{ color: lang === "en" ? "#16a34a" : "#94a3b8", fontWeight: lang === "en" ? "800" : "500" }}>
-            English
-          </span>
+          <span style={{ color: lang === "en" ? "#16a34a" : "#94a3b8", fontWeight: lang === "en" ? "800" : "500" }}>English</span>
         </button>
       </div>
     </section>
@@ -2640,8 +2372,14 @@ export default function App() {
             lang={lang}
             onPlayAllTones={handlePlayAllTones}
             isPlayingAll={isPlayingAll}
+            isPracticing={isPracticing}
+            practiceTargetWord={practiceTargetWord}
+            mismatchWord={mismatchWord}
+            onTogglePractice={handleTogglePractice}
+            practiceTimer={practiceTimer}
+            practiceScore={practiceScore}
+            practiceMsg={practiceMsg}
           />
-          
         </main>
       </>
     );
@@ -2653,8 +2391,6 @@ export default function App() {
 
       <main className="app-page" style={containerBackground}>
         <div className="app-shell">
-          
-          {/* ในโหมด present แสดงไอคอนสลับมุมมองที่มุมบนขวา เพื่อให้กระดานขยายเต็มพื้นที่จอ */}
           {viewLayout === "present" && (
             <button
               type="button"
@@ -2666,16 +2402,7 @@ export default function App() {
               )}
               aria-label="Switch back view"
             >
-              <svg
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M16 3l4 4-4 4M20 7H4M8 21l-4-4 4-4M4 17h16" />
               </svg>
             </button>
@@ -2707,10 +2434,16 @@ export default function App() {
                 lang={lang}
                 onPlayAllTones={handlePlayAllTones}
                 isPlayingAll={isPlayingAll}
+                isPracticing={isPracticing}
+                practiceTargetWord={practiceTargetWord}
+                mismatchWord={mismatchWord}
+                onTogglePractice={handleTogglePractice}
+                practiceTimer={practiceTimer}
+                practiceScore={practiceScore}
+                practiceMsg={practiceMsg}
               />
             </section>
 
-            {/* กรณีที่ไม่ใช่โหมด present ให้ Top bar และแผงควบคุมอยู่ในกล่องด้านขวา */}
             {viewLayout !== "present" && (
               <div
                 className="right-panel-wrapper"
@@ -2723,12 +2456,10 @@ export default function App() {
                   top: "20px"
                 }}
               >
-                {/* เฟรมมุมมองอยู่ด้านบน */}
                 {renderTopBar({ marginBottom: 0 })}
 
-                {/* เฟรมแผงควบคุมอยู่ด้านล่าง และสามารถเลื่อน Scroll ได้อิสระ */}
-                <aside 
-                  className="control-panel panel" 
+                <aside
+                  className="control-panel panel"
                   style={{ flex: 1, overflowY: "auto", position: "static", maxHeight: "none", margin: 0 }}
                 >
                   <h3>{t("⚙️ แผงควบคุม", "⚙️ Control Panel")}</h3>
@@ -2751,7 +2482,7 @@ export default function App() {
                       <ModeRadio value="lowOnly" checked={mode === "lowOnly"} label={t("เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)", "Low tone set only (Mid, Falling, High)")} onChange={handleModeChange} />
                       <ModeRadio value="pair" checked={mode === "pair"} label={t("จับคู่อักษร(เสียง)สูงและต่ำ เพื่อระบุกลุ่มอักษร", "Pair High & Low Class Consonants")} onChange={handleModeChange} />
                     </div>
-                    
+
                     <div className="input-row">
                       <input
                         value={inputText}
@@ -2759,7 +2490,6 @@ export default function App() {
                         onChange={(event) => {
                           let val = event.target.value;
                           if (mode === "pair") {
-                            // บังคับให้เป็นพยัญชนะไทย 1 ตัวตามด้วยสระออ หากลบข้อความหมดให้กลับไปเริ่มที่ "ขอ"
                             const match = val.match(/([ก-ฮ])/);
                             val = match ? `${match[1]}อ` : "ขอ";
                           }
@@ -2780,8 +2510,6 @@ export default function App() {
                     </div>
 
                     {inputError && <div className="error-text">{inputError}</div>}
-
-
                   </section>
 
                   <section>
@@ -2817,9 +2545,7 @@ export default function App() {
                               key={`low-pair-${consonant}`}
                               type="button"
                               className="consonant-btn low-pair-btn"
-                              onClick={() =>
-                                handleQuickConsonantClick(consonant)
-                              }
+                              onClick={() => handleQuickConsonantClick(consonant)}
                             >
                               {consonant}
                             </button>
@@ -2837,9 +2563,7 @@ export default function App() {
                               key={`low-single-${consonant}`}
                               type="button"
                               className="consonant-btn low-single-btn"
-                              onClick={() =>
-                                handleQuickConsonantClick(consonant)
-                              }
+                              onClick={() => handleQuickConsonantClick(consonant)}
                             >
                               {consonant}
                             </button>
@@ -2859,9 +2583,7 @@ export default function App() {
                               key={cluster}
                               type="button"
                               className="cluster-btn true-cluster"
-                              onClick={() =>
-                                handleQuickConsonantClick(cluster)
-                              }
+                              onClick={() => handleQuickConsonantClick(cluster)}
                             >
                               {cluster}
                             </button>
@@ -2879,9 +2601,7 @@ export default function App() {
                               key={cluster}
                               type="button"
                               className="cluster-btn leading-ho-cluster"
-                              onClick={() =>
-                                handleQuickConsonantClick(cluster)
-                              }
+                              onClick={() => handleQuickConsonantClick(cluster)}
                             >
                               {cluster}
                             </button>
@@ -2899,9 +2619,7 @@ export default function App() {
                               key={cluster}
                               type="button"
                               className="cluster-btn false-cluster"
-                              onClick={() =>
-                                handleQuickConsonantClick(cluster)
-                              }
+                              onClick={() => handleQuickConsonantClick(cluster)}
                             >
                               {cluster}
                             </button>
@@ -2959,9 +2677,7 @@ export default function App() {
                       >
                         <option value="">{t("เลือกอัตโนมัติ", "Auto Select")}</option>
                         {voices
-                          .filter((voice) =>
-                            voice.lang?.toLowerCase().startsWith("th"),
-                          )
+                          .filter((voice) => voice.lang?.toLowerCase().startsWith("th"))
                           .map((voice) => (
                             <option key={voice.voiceURI} value={voice.voiceURI}>
                               {voice.name} ({voice.lang})
@@ -2970,9 +2686,7 @@ export default function App() {
                       </select>
                     </label>
 
-                    {voices.every(
-                      (voice) => !voice.lang?.toLowerCase().startsWith("th"),
-                    ) && (
+                    {voices.every((voice) => !voice.lang?.toLowerCase().startsWith("th")) && (
                       <div className="error-text">
                         ⚠️ เครื่อง/เบราว์เซอร์นี้ยังไม่มี Thai TTS voice —
                         ติดตั้งเสียงภาษาไทยก่อนจึงจะอ่านเป็นคำได้
@@ -3392,17 +3106,16 @@ const styles = `
   .main-grid > section {
     min-width: 0;
     min-height: 0;
-    overflow-y: auto; /* เปลียนจาก hidden เป็นเลื่อนแนวตั้งได้ */
+    overflow-y: auto;
     overflow-x: hidden;
   }
 
-  /* กล่องบรรทัด 5 เส้น: ซ่อนแถบเลื่อนขึ้น-ลง แต่ยังคงเลื่อนดูเนื้อหาด้วยเมาส์ได้ตามปกติ */
   .staff-board-section,
   .main-grid > section:first-of-type,
   .display-board,
   .tone-board {
-    scrollbar-width: none; /* Firefox */
-    -ms-overflow-style: none; /* IE / Edge */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
 
   .staff-board-section::-webkit-scrollbar,
@@ -3421,8 +3134,9 @@ const styles = `
 
   .board-footer-actions {
     display: flex;
-    justify-content: flex-end;
-    align-items: center;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
     margin-top: 14px;
     padding-right: 6px;
   }
@@ -3463,7 +3177,8 @@ const styles = `
     70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
     100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
   }
-  .board-title { text-align: center; color: #4A148C !important; margin-bottom: 18px; } /* สีม่วงเข้มสำหรับทุกอุปกรณ์ */
+
+  .board-title { text-align: center; color: #4A148C !important; margin-bottom: 18px; }
   .board-title h2 { margin: 0; font-size: clamp(23px, 2.3vw, 30px); color: #4A148C !important; }
   .board-title div { font-size: clamp(16px, 1.5vw, 19px); font-weight: 600; color: #4A148C !important; }
 
@@ -3481,9 +3196,7 @@ const styles = `
   }
 
   .analysis-box strong { color: #0284c7; }
-  .analysis-item + .analysis-item {
-    margin-top: 6px;
-  }
+  .analysis-item + .analysis-item { margin-top: 6px; }
   .analysis-tag {
     padding: 2px 7px;
     border-radius: 5px;
@@ -3506,9 +3219,7 @@ const styles = `
     transition: transform .18s ease, color .18s ease;
   }
 
-  .tone-row.active .tone-line-number {
-    transform: scale(1.18);
-  }
+  .tone-row.active .tone-line-number { transform: scale(1.18); }
 
   .tone-header {
     color: #0284c7;
@@ -3523,9 +3234,9 @@ const styles = `
     display: flex;
     flex-direction: column;
     gap: 24px;
-    padding-top: 28px; /* เว้นระยะด้านบน 28px ป้องกันก้านโน้ต/ไม้จัตวาของคำว่า ก๋อ ชนหรือล้นขอบบน */
+    padding-top: 28px;
     overflow: visible;
-    min-height: min-content; /* บังคับให้รักษาความสูงตามเนื้อหาจริง ไม่หดจนทับกัน */
+    min-height: min-content;
   }
 
   .tone-row {
@@ -3534,7 +3245,7 @@ const styles = `
     background: transparent;
     text-align: inherit;
     border-radius: 12px;
-    overflow: visible; /* ป้องกัน browser ตัดส่วนที่ยื่นออกนอก button */
+    overflow: visible;
     transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
   }
 
@@ -3591,15 +3302,13 @@ const styles = `
     white-space: nowrap;
     font-weight: 700;
     overflow: visible;
-    isolation: isolate; /* จัด Stacking Context ภายใน ไม่ให้ก้านโน้ตมุดหายใต้แถวหรือการ์ด */
+    isolation: isolate;
     box-sizing: border-box;
     box-shadow: 0 4px 11px rgba(0,0,0,.24);
-    transition: transform .18s ease, box-shadow .18s ease, filter .18s ease;
+    transition: transform .25s cubic-bezier(0.175, 0.885, 0.32, 1.275), background-color .25s ease, box-shadow .25s ease, filter .18s ease;
   }
 
-  .tone-line-wrap > .tone-circle {
-    top: 50%;
-  }
+  .tone-line-wrap > .tone-circle { top: 50%; }
 
   .tone-row.active .tone-circle {
     transform: translate3d(-50%, -50%, 0) scale(1.23);
@@ -3621,9 +3330,7 @@ const styles = `
     transform: translate3d(-50%, -50%, 0) scale(1.16);
   }
 
-  .tone-row.active .multi-circles .tone-circle {
-    transform: none;
-  }
+  .tone-row.active .multi-circles .tone-circle { transform: none; }
   .slash { color: #64748b; font-size: 21px; font-weight: 700; }
   .fixed-tone-label { text-align: center; font-size: 16px; font-weight: 700; }
 
@@ -3677,35 +3384,6 @@ const styles = `
   .error-text { color: #dc2626; font-size: 12px; font-weight: 700; }
   .success-text { color: #059669; font-size: 12px; font-weight: 700; }
 
-  .tone-validation {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 7px 9px;
-    border-radius: 7px;
-    font-size: 12px;
-    line-height: 1.45;
-    border: 1px solid #cbd5e1;
-  }
-
-  .tone-validation-valid {
-    color: #166534;
-    background: #f0fdf4;
-    border-color: #bbf7d0;
-  }
-
-  .tone-validation-invalid {
-    color: #991b1b;
-    background: #fef2f2;
-    border-color: #fecaca;
-  }
-
-  .tone-validation-neutral {
-    color: #475569;
-    background: #f8fafc;
-    border-color: #e2e8f0;
-  }
-
   .section-label {
     margin-bottom: 6px;
     color: #64748b;
@@ -3745,13 +3423,8 @@ const styles = `
     background: #f8fafc;
   }
 
-  .low-pair-label {
-    color: #7c3aed;
-  }
-
-  .low-single-label {
-    color: #2563eb;
-  }
+  .low-pair-label { color: #7c3aed; }
+  .low-single-label { color: #2563eb; }
 
   .low-consonant-grid {
     display: grid;
@@ -3778,9 +3451,7 @@ const styles = `
     margin-top: 12px;
   }
 
-  .cluster-label {
-    margin-bottom: 5px;
-  }
+  .cluster-label { margin-bottom: 5px; }
 
   .cluster-grid {
     display: grid;
@@ -3999,7 +3670,7 @@ const styles = `
     box-shadow: 0 16px 42px rgba(0,0,0,.18);
     display: flex;
     flex-direction: column;
-    overflow-y: auto; /* เปลียนจาก hidden เป็นเลื่อนแนวตั้งได้ */
+    overflow-y: auto;
     overflow-x: hidden;
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -4031,22 +3702,10 @@ const styles = `
   }
 
   @media (max-width: 980px) {
-    .app-page {
-      overflow: hidden;
-    }
-
-    .main-grid {
-      height: calc(100dvh - 44px);
-    }
-
-    .main-grid.split-layout {
-      grid-template-columns: 1fr;
-    }
-
-    .control-panel {
-      position: static;
-      min-height: 0;
-    }
+    .app-page { overflow: hidden; }
+    .main-grid { height: calc(100dvh - 44px); }
+    .main-grid.split-layout { grid-template-columns: 1fr; }
+    .control-panel { position: static; min-height: 0; }
   }
 
   @media (max-width: 640px) {
@@ -4101,10 +3760,10 @@ const styles = `
   .tone-circle::before {
     content: "";
     position: absolute;
-    right: 0px; /* ก้านเริ่มจากเส้นรอบวงกึ่งกลางด้านขวาพอดี */
+    right: 0px;
     bottom: 50%;
-    width: 4px; /* ความหนาก้าน */
-    height: 42px; /* ความสูงก้าน */
+    width: 4px;
+    height: 42px;
     background-color: var(--note-color, transparent);
     z-index: -1;
   }
@@ -4112,14 +3771,106 @@ const styles = `
   .tone-circle::after {
     content: "";
     position: absolute;
-    right: -12px; /* ยื่นธงออกไปทางขวาให้เชื่อมกับก้าน */
-    bottom: calc(50% + 18px); /* เลื่อนธงขึ้นไปแตะยอดก้านพอดี */
-    width: 12px; /* ความกว้างธง (ไม่ยาวมาก) */
-    height: 20px; /* ความยาวหางธง */
+    right: -12px;
+    bottom: calc(50% + 18px);
+    width: 12px;
+    height: 20px;
     border-right: 4px solid var(--note-color, transparent);
     border-top: 6px solid var(--note-color, transparent);
-    border-top-right-radius: 20px 22px; /* โค้งตวัดเหมือนหางโน้ตดนตรี */
+    border-top-right-radius: 20px 22px;
     border-bottom-right-radius: 4px;
     z-index: -1;
   }
+
+  /* ========================================= */
+  /* สไตล์เสริมโหมดฝึกออกเสียง (Practice Mode)    */
+  /* ========================================= */
+  .tone-circle.target-test-active {
+    transform: translate3d(-50%, -50%, 0) scale(1.48) !important;
+    background-color: #ff6b35 !important;
+    --note-color: #ff6b35 !important;
+    border: 2.5px solid #ffffff !important;
+    box-shadow: 0 0 22px rgba(255, 107, 53, 0.95) !important;
+    z-index: 100 !important;
+  }
+
+  .multi-circles .tone-circle.target-test-active {
+    transform: scale(1.48) !important;
+  }
+
+  .tone-circle.target-test-mismatch {
+    animation: mismatchBounce 0.4s ease !important;
+  }
+
+  @keyframes mismatchBounce {
+    0% { transform: translate3d(-50%, -50%, 0) scale(1); }
+    50% { transform: translate3d(-50%, -50%, 0) scale(1.25); filter: brightness(1.25); }
+    100% { transform: translate3d(-50%, -50%, 0) scale(1); }
+  }
+
+  .multi-circles .tone-circle.target-test-mismatch {
+    animation: mismatchBounceMulti 0.4s ease !important;
+  }
+
+  @keyframes mismatchBounceMulti {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.25); filter: brightness(1.25); }
+    100% { transform: scale(1); }
+  }
+
+  .practice-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 15px;
+    border-radius: 999px;
+    background: #0284c7;
+    border: 1.5px solid #0284c7;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(2, 132, 199, 0.25);
+    transition: all .18s ease;
+  }
+
+  .practice-toggle-btn:hover {
+    background: #0369a1;
+    border-color: #0369a1;
+    transform: scale(1.04);
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
+  }
+
+  .practice-toggle-btn.cancel {
+    background: #ef4444 !important;
+    border-color: #ef4444 !important;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25) !important;
+  }
+
+  .practice-toggle-btn.cancel:hover {
+    background: #dc2626 !important;
+    border-color: #dc2626 !important;
+  }
+
+  .practice-status-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 14px;
+    border-radius: 8px;
+    background: #fff7ed;
+    border: 1.5px solid #fdba74;
+    font-size: 13px;
+    font-weight: 700;
+    animation: fadeInBanner .25s ease;
+  }
+
+  @keyframes fadeInBanner {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .practice-msg-text { color: #c2410c; }
+  .practice-timer-text { color: #dc2626; }
+  .practice-score-text { color: #16a34a; }
 `;
