@@ -2,13 +2,22 @@ import { useState, useEffect, useCallback } from 'react';
 import { playThaiAudio, clearLocalAudioCache } from '../utils/audioService';
 
 export default function ControlPanel(props) {
-  // คง props และ logic เดิมไว้ครบถ้วน
+  // คง props และ logic เดิมไว้ครบถ้วน พร้อมรับ props ส่วนเสริมสำหรับโหมดฝึกออกเสียง
   const {
     currentConsonant,
     currentVowel,
     onPlay,
     onReset,
+    // Props เสริมสำหรับโหมดฝึกออกเสียง
+    isPracticing = false,
+    onTogglePractice,
+    practiceTimer = 10,
+    practiceScore = 0,
+    practiceMsg = '',
+    lang = 'th',
   } = props;
+
+  const t = (th, en) => (lang === 'en' ? en : th);
 
   const [activeSubTab, setActiveSubTab] = useState('controls'); // 'controls' | 'audioDb'
   const [audioRecords, setAudioRecords] = useState([]);
@@ -87,6 +96,7 @@ export default function ControlPanel(props) {
       {/* แท็บสลับหน้าควบคุมเดิม และระบบจัดการฐานข้อมูลเสียง */}
       <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>
         <button
+          type="button"
           onClick={() => setActiveSubTab('controls')}
           style={{
             padding: '6px 14px',
@@ -98,9 +108,10 @@ export default function ControlPanel(props) {
             fontWeight: 'bold'
           }}
         >
-          🎛️ แผงควบคุมหลัก
+          🎛️ {t('แผงควบคุมหลัก', 'Main Controls')}
         </button>
         <button
+          type="button"
           onClick={() => setActiveSubTab('audioDb')}
           style={{
             padding: '6px 14px',
@@ -112,65 +123,130 @@ export default function ControlPanel(props) {
             fontWeight: 'bold'
           }}
         >
-          🗄️ จัดการฐานข้อมูลเสียง (Cloudflare R2/D1)
+          🗄️ {t('จัดการฐานข้อมูลเสียง (Cloudflare R2/D1)', 'Audio DB (R2/D1)')}
         </button>
       </div>
 
       {activeSubTab === 'controls' ? (
-        <div className="default-controls" style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* UI เดิมสำหรับการกดเล่นและรีเซ็ต */}
-          <button
-            onClick={() => onPlay ? onPlay() : playThaiAudio(currentConsonant + currentVowel)}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#10b981',
-              color: '#ffffff',
-              borderRadius: '8px',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: '16px',
-              fontWeight: 'bold'
-            }}
-          >
-            🔊 ฟังเสียงผันคำ
-          </button>
-          {onReset && (
+        <div className="default-controls" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* ปุ่มฟังเสียงผันคำเดิม */}
             <button
-              onClick={onReset}
+              type="button"
+              onClick={() => onPlay ? onPlay() : playThaiAudio(currentConsonant + currentVowel)}
+              disabled={isPracticing}
               style={{
-                padding: '10px 16px',
-                backgroundColor: '#ef4444',
+                padding: '10px 20px',
+                backgroundColor: isPracticing ? '#94a3b8' : '#10b981',
                 color: '#ffffff',
                 borderRadius: '8px',
                 border: 'none',
-                cursor: 'pointer'
+                cursor: isPracticing ? 'not-allowed' : 'pointer',
+                fontSize: '16px',
+                fontWeight: 'bold',
+                boxShadow: '0 2px 8px rgba(16, 185, 129, 0.25)',
+                transition: 'all 0.2s ease'
               }}
             >
-              🔄 รีเซ็ต
+              🔊 {t('ฟังเสียงผันคำ', 'Play Tone Audio')}
             </button>
+
+            {/* ปุ่มสลับโหมดฝึกออกเสียง / ยกเลิก */}
+            {onTogglePractice && (
+              <button
+                type="button"
+                onClick={onTogglePractice}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: isPracticing ? '#ef4444' : '#0284c7',
+                  color: '#ffffff',
+                  borderRadius: '8px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  fontWeight: 'bold',
+                  boxShadow: isPracticing 
+                    ? '0 2px 8px rgba(239, 68, 68, 0.3)' 
+                    : '0 2px 8px rgba(2, 132, 199, 0.3)',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {isPracticing ? t('❌ ยกเลิก', '❌ Cancel') : t('🎙️ ฝึกออกเสียง', '🎙️ Practice Mode')}
+              </button>
+            )}
+
+            {/* ปุ่มรีเซ็ตเดิม */}
+            {onReset && (
+              <button
+                type="button"
+                onClick={onReset}
+                disabled={isPracticing}
+                style={{
+                  padding: '10px 16px',
+                  backgroundColor: '#64748b',
+                  color: '#ffffff',
+                  borderRadius: '8px',
+                  border: 'none',
+                  cursor: isPracticing ? 'not-allowed' : 'pointer',
+                  fontSize: '15px',
+                  fontWeight: 'bold'
+                }}
+              >
+                🔄 {t('รีเซ็ต', 'Reset')}
+              </button>
+            )}
+          </div>
+
+          {/* แถบแสดงสถานะ เวลา 10 วินาที และคะแนน (จะแสดงเฉพาะตอนอยู่ในโหมดฝึก) */}
+          {isPracticing && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '10px',
+                backgroundColor: '#fff7ed',
+                border: '1.5px solid #fdba74',
+                padding: '8px 16px',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                marginTop: '4px'
+              }}
+            >
+              <span style={{ color: '#c2410c' }}>{practiceMsg}</span>
+              <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                <span style={{ color: '#dc2626' }}>⏱️ {t('เหลือเวลา', 'Time')}: {practiceTimer}s</span>
+                <span style={{ color: '#16a34a' }}>🏆 {t('คะแนน', 'Score')}: {practiceScore}</span>
+              </div>
+            </div>
           )}
         </div>
       ) : (
         <div className="audio-db-panel" style={{ backgroundColor: '#ffffff', padding: '16px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
-          <h4 style={{ margin: '0 0 12px 0', color: '#1e293b' }}>จัดการคลังเสียงและฐานข้อมูลคำศัพท์</h4>
+          <h4 style={{ margin: '0 0 12px 0', color: '#1e293b' }}>
+            {t('จัดการคลังเสียงและฐานข้อมูลคำศัพท์', 'Manage Sound Library & Word DB')}
+          </h4>
           
           {/* ฟอร์มเพิ่มคำศัพท์ใหม่ / เจนเสียงล่วงหน้า */}
           <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
             <input
               type="text"
-              placeholder="คำศัพท์ (เช่น กา, ป่า, ม้า)"
+              placeholder={t('คำศัพท์ (เช่น กา, ป่า, ม้า)', 'Word (e.g. กา, ป่า, ม้า)')}
               value={newWord}
               onChange={(e) => setNewWord(e.target.value)}
               style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #cbd5e1' }}
             />
             <input
               type="text"
-              placeholder="สัทอักษร IPA (ถ้ามี)"
+              placeholder={t('สัทอักษร IPA (ถ้ามี)', 'IPA (Optional)')}
               value={newIpa}
               onChange={(e) => setNewIpa(e.target.value)}
               style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid #cbd5e1' }}
             />
             <button
+              type="button"
               onClick={() => handleCreateOrUpdate(newWord, newIpa, true)}
               disabled={loadingAudio || !newWord}
               style={{
@@ -182,37 +258,39 @@ export default function ControlPanel(props) {
                 cursor: 'pointer'
               }}
             >
-              + สังเคราะห์และบันทึก
+              + {t('สังเคราะห์และบันทึก', 'Synthesize & Save')}
             </button>
           </div>
 
           {/* ค้นหาและรายชื่อคำศัพท์ */}
           <input
             type="text"
-            placeholder="🔍 ค้นหาคำในฐานข้อมูล..."
+            placeholder={t('🔍 ค้นหาคำในฐานข้อมูล...', '🔍 Search DB...')}
             value={searchFilter}
             onChange={(e) => setSearchFilter(e.target.value)}
             style={{ width: '100%', padding: '6px 10px', borderRadius: '4px', border: '1px solid #cbd5e1', marginBottom: '12px' }}
           />
 
           {loadingAudio ? (
-            <div style={{ color: '#64748b', textAlign: 'center', padding: '12px' }}>กำลังประมวลผลข้อมูล...</div>
+            <div style={{ color: '#64748b', textAlign: 'center', padding: '12px' }}>
+              {t('กำลังประมวลผลข้อมูล...', 'Processing...')}
+            </div>
           ) : (
             <div style={{ maxHeight: '250px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
                 <thead>
                   <tr style={{ backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                    <th style={{ padding: '8px' }}>คำ</th>
+                    <th style={{ padding: '8px' }}>{t('คำ', 'Word')}</th>
                     <th style={{ padding: '8px' }}>IPA</th>
-                    <th style={{ padding: '8px' }}>ไฟล์</th>
-                    <th style={{ padding: '8px', textAlign: 'center' }}>การจัดการ</th>
+                    <th style={{ padding: '8px' }}>{t('ไฟล์', 'File')}</th>
+                    <th style={{ padding: '8px', textAlign: 'center' }}>{t('การจัดการ', 'Actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredRecords.length === 0 ? (
                     <tr>
                       <td colSpan="4" style={{ textAlign: 'center', padding: '12px', color: '#94a3b8' }}>
-                        ไม่พบข้อมูลคำศัพท์ใน D1/R2
+                        {t('ไม่พบข้อมูลคำศัพท์ใน D1/R2', 'No words found in D1/R2')}
                       </td>
                     </tr>
                   ) : (
@@ -223,22 +301,25 @@ export default function ControlPanel(props) {
                         <td style={{ padding: '8px', color: '#64748b' }}>{row.audio_filename}</td>
                         <td style={{ padding: '8px', textAlign: 'center' }}>
                           <button
+                            type="button"
                             onClick={() => playThaiAudio(row.word)}
-                            title="ฟังเสียง"
+                            title={t('ฟังเสียง', 'Play')}
                             style={{ marginRight: '6px', cursor: 'pointer', border: 'none', background: 'none' }}
                           >
                             🔊
                           </button>
                           <button
+                            type="button"
                             onClick={() => handleCreateOrUpdate(row.word, row.ipa, true)}
-                            title="แปลงเสียงใหม่จาก Azure ทับไฟล์เดิม"
+                            title={t('แปลงเสียงใหม่จาก Azure ทับไฟล์เดิม', 'Re-synthesize via Azure')}
                             style={{ marginRight: '6px', cursor: 'pointer', border: 'none', background: 'none' }}
                           >
                             🔄
                           </button>
                           <button
+                            type="button"
                             onClick={() => handleDelete(row.word)}
-                            title="ลบคำศัพท์และไฟล์เสียง"
+                            title={t('ลบคำศัพท์และไฟล์เสียง', 'Delete')}
                             style={{ cursor: 'pointer', border: 'none', background: 'none', color: '#ef4444' }}
                           >
                             🗑️

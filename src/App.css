@@ -182,12 +182,14 @@
     border-right-color: var(--border);
   }
 }
-/* =========================================
-   Tone Practice Test Mode Styles
-   ========================================= */
 
-/* วงกลมโน้ตปกติ - กำหนด transition ให้ลื่นไหล */
-.tone-circle, .note-circle {
+/* =======================================================
+   Tone Practice Test Mode Styles (ปรับแก้จุดศูนย์กลาง & สีก้านโน้ต)
+   ======================================================= */
+
+/* วงกลมโน้ตปกติ: กำหนด transition ให้ขยาย/ย่อและเปลี่ยนสีอย่างนุ่มนวล */
+.tone-circle,
+.note-circle {
   transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), 
               background-color 0.25s ease, 
               border-color 0.25s ease,
@@ -195,60 +197,108 @@
   transform-origin: center center;
 }
 
-/* คำเป้าหมายทดสอบ: ขยายใหญ่ + บังคับเปลี่ยนเป็นสีส้ม */
+/* คำเป้าหมายทดสอบ: ขยายใหญ่ขึ้น 1.48 เท่า + ล็อกจุดกึ่งกลาง + เปลี่ยนเป็นสีส้มสดทั้งลูกและก้าน */
+.tone-circle.target-test-active,
+.note-circle.target-test-active,
 .target-test-active {
-  transform: scale(1.48) !important;
+  transform: translate3d(-50%, -50%, 0) scale(1.48) !important;
   background-color: #ff6b35 !important;
-  border-color: #ffffff !important;
-  box-shadow: 0 0 18px rgba(255, 107, 53, 0.95) !important;
+  --note-color: #ff6b35 !important; /* เปลี่ยนสีก้านและหางโน้ตเป็นสีส้มตามลูกกลม */
+  border: 2.5px solid #ffffff !important;
+  box-shadow: 0 0 22px rgba(255, 107, 53, 0.95) !important;
   z-index: 100 !important;
 }
 
-/* วงกลมอื่นที่เผลอออกเสียงไปโดน: เด้งเตือนแต่ไม่ได้คะแนน */
+/* กรณีวงกลมคู่อยู่ในกลุ่ม multi-circles (ไม่ต้องใช้ translate3d) */
+.multi-circles .tone-circle.target-test-active,
+.multi-circles .target-test-active {
+  transform: scale(1.48) !important;
+}
+
+/* วงกลมอื่นที่เผลอออกเสียงไปโดน: เด้งเตือน (Bounce Alert) โดยรักษาแกนกลางไว้ */
+.tone-circle.target-test-mismatch,
+.note-circle.target-test-mismatch,
 .target-test-mismatch {
-  animation: mismatchBounce 0.4s ease;
+  animation: mismatchBounce 0.4s ease !important;
 }
 
 @keyframes mismatchBounce {
+  0% { transform: translate3d(-50%, -50%, 0) scale(1); }
+  50% { transform: translate3d(-50%, -50%, 0) scale(1.25); filter: brightness(1.25); }
+  100% { transform: translate3d(-50%, -50%, 0) scale(1); }
+}
+
+/* อนิเมชันเด้งเตือนสำหรับวงกลมคู่ */
+.multi-circles .tone-circle.target-test-mismatch,
+.multi-circles .target-test-mismatch {
+  animation: mismatchBounceMulti 0.4s ease !important;
+}
+
+@keyframes mismatchBounceMulti {
   0% { transform: scale(1); }
-  50% { transform: scale(1.22); filter: brightness(1.25); }
+  50% { transform: scale(1.25); filter: brightness(1.25); }
   100% { transform: scale(1); }
 }
 
-/* ปุ่มสลับฝึกออกเสียง */
-.btn-practice-toggle {
+/* ปุ่มสลับฝึกออกเสียง / ยกเลิก */
+.btn-practice-toggle,
+.practice-toggle-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: 6px;
-  font-size: 0.88rem;
-  font-weight: 600;
+  gap: 7px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.92rem;
+  font-weight: 700;
   cursor: pointer;
   border: 1px solid #ced4da;
-  background-color: #228be6;
+  background-color: #0284c7;
   color: #ffffff;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.25);
   transition: all 0.2s ease;
-  margin-left: 8px;
 }
 
-.btn-practice-toggle:hover {
-  background-color: #1c7ed6;
+.btn-practice-toggle:hover,
+.practice-toggle-btn:hover {
+  background-color: #0369a1;
+  border-color: #0369a1;
+  transform: scale(1.03);
 }
 
-.btn-practice-toggle.cancel-mode {
-  background-color: #fa5252 !important;
-  border-color: #e03131 !important;
+.btn-practice-toggle.cancel-mode,
+.btn-practice-toggle.cancel,
+.practice-toggle-btn.cancel {
+  background-color: #ef4444 !important;
+  border-color: #dc2626 !important;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25) !important;
 }
 
-.practice-banner {
+.btn-practice-toggle.cancel-mode:hover,
+.practice-toggle-btn.cancel:hover {
+  background-color: #dc2626 !important;
+}
+
+/* แถบแจ้งสถานะคำที่ต้องออกเสียง เวลา 10 วินาที และคะแนน */
+.practice-banner,
+.practice-status-banner {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: rgba(255, 107, 53, 0.1);
-  border: 1px solid rgba(255, 107, 53, 0.35);
-  padding: 6px 14px;
-  border-radius: 6px;
+  background: #fff7ed;
+  border: 1.5px solid #fdba74;
+  padding: 8px 16px;
+  border-radius: 8px;
   margin-top: 8px;
-  font-size: 0.9rem;
+  font-size: 0.92rem;
+  font-weight: 700;
+  animation: fadeInPracticeBanner 0.25s ease;
 }
+
+@keyframes fadeInPracticeBanner {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.practice-msg-text { color: #c2410c; }
+.practice-timer-text { color: #dc2626; }
+.practice-score-text { color: #16a34a; }
