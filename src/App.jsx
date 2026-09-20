@@ -169,6 +169,106 @@ import { autoCorrelate, classifyToneContour, TONE_TARGET_FREQS } from './utils/p
  * =============================================================================
  */
 
+const apiKey = "";
+const CHANNEL_NAME = "thai_tone_sync_channel";
+const STORAGE_KEY = "thai_tone_live_sync_data";
+const TTS_API_ENDPOINT = "/api/tts";
+const WORDS_API_ENDPOINT = "/api/words";
+const TTS_VOICE = "th-TH-PremwadeeNeural";
+
+const LOCAL_AUDIO_DB_NAME = "thai_tone_audio_cache";
+const LOCAL_AUDIO_STORE_NAME = "audio_blobs";
+
+const STRICT_THAI_SYLLABLE_PATTERN = /^[เแโใไ]?[ก-ฮ]{1,2}[ิีึืุูั็ํ]?[่้๊๋]?(?:[ายวอ]|ำ)?[ก-ฮ]?(?:ะ|์)?$/;
+
+const midConsonants = ["ก", "จ", "ด", "ต", "บ", "ป", "อ", "ฎ", "ฏ"];
+const highConsonants = ["ข", "ฃ", "ฉ", "ฐ", "ถ", "ผ", "ฝ", "ศ", "ษ", "ส", "ห"];
+const lowSingleConsonants = ["ง", "ญ", "ณ", "น", "ม", "ย", "ร", "ล", "ฬ", "ว"];
+
+const lowPairConsonants = [
+  "ค", "ฅ", "ฆ", "ช", "ฌ", "ซ", "ฑ", "ฒ",
+  "ท", "ธ", "พ", "ภ", "ฟ", "ฮ",
+];
+
+const lowConsonants = [
+  ...lowPairConsonants,
+  ...lowSingleConsonants,
+];
+
+const allThaiConsonants = [
+  ...midConsonants,
+  ...highConsonants,
+  ...lowConsonants,
+];
+
+const quickConsonants = [
+  "ก", "ข", "ฃ", "ค", "ฅ", "ฆ", "ง", "จ", "ฉ", "ช", "ซ",
+  "ฌ", "ญ", "ฎ", "ฏ", "ฐ", "ฑ", "ฒ", "ณ", "ด", "ต", "ถ",
+  "ท", "ธ", "น", "บ", "ป", "ผ", "ฝ", "พ", "ฟ", "ภ", "ม",
+  "ย", "ร", "ล", "ว", "ศ", "ษ", "ส", "ห", "ฬ", "อ", "ฮ",
+];
+
+const trueClusters = [
+  "กร", "กล", "กว", "ขร", "ขล", "ขว", "คร", "คล", "คว",
+  "ตร", "ปร", "ปล", "พร", "พล", "ฟร", "ฟล",
+];
+
+const leadingHoClusters = [
+  "หง", "หญ", "หน", "หม", "หย", "หร", "หล", "หว",
+];
+
+const leadingOClusters = ["อย"];
+const falseClusters = ["ทร", "ศร", "สร", "จร", "ซร"];
+
+const thaiClusters = [
+  ...trueClusters,
+  ...leadingHoClusters,
+  ...leadingOClusters,
+  ...falseClusters,
+];
+
+const longVowels = [
+  { label: "◌า", front: "", rear: "า" },
+  { label: "◌ี", front: "", rear: "ี" },
+  { label: "◌ือ", front: "", rear: "ือ" },
+  { label: "◌ู", front: "", rear: "ู" },
+  { label: "เ◌", front: "เ", rear: "" },
+  { label: "แ◌", front: "แ", rear: "" },
+  { label: "โ◌", front: "โ", rear: "" },
+  { label: "◌อ", front: "", rear: "อ" },
+  { label: "เ◌อ", front: "เ", rear: "อ" },
+  { label: "เ◌ีย", front: "เ", rear: "ีย" },
+  { label: "เ◌ือ", front: "เ", rear: "ือ" },
+  { label: "◌ัว", front: "", rear: "ัว" },
+  { label: "◌ำ", front: "", rear: "ำ" },
+  { label: "ใ◌", front: "ใ", rear: "" },
+  { label: "ไ◌", front: "ไ", rear: "" },
+  { label: "เ◌า", front: "เ", rear: "า" },
+];
+
+const shortVowels = [
+  { label: "◌ะ", front: "", rear: "ะ" },
+  { label: "◌ิ", front: "", rear: "ิ" },
+  { label: "◌ึ", front: "", rear: "ึ" },
+  { label: "◌ุ", front: "", rear: "ุ" },
+  { label: "เ◌ะ", front: "เ", rear: "ะ" },
+  { label: "แ◌ะ", front: "แ", rear: "ะ" },
+  { label: "โ◌ะ", front: "โ", rear: "ะ" },
+  { label: "เ◌าะ", front: "เ", rear: "าะ" },
+  { label: "เ◌อะ", front: "เ", rear: "อะ" },
+  { label: "เ◌ียะ", front: "เ", rear: "ียะ" },
+  { label: "เ◌ือะ", front: "เ", rear: "ือะ" },
+  { label: "◌ัวะ", front: "", rear: "ัวะ" },
+];
+
+const toneRows = [
+  { id: 5, tone: "เสียงจัตวา", mark: "◌๋", leftPos: "80%" },
+  { id: 4, tone: "เสียงตรี", mark: "◌๊", leftPos: "65%" },
+  { id: 3, tone: "เสียงโท", mark: "◌้", leftPos: "52%" },
+  { id: 2, tone: "เสียงเอก", mark: "◌่", leftPos: "40%" },
+  { id: 1, tone: "เสียงสามัญ", mark: "-", leftPos: "28%" },
+];
+
 function openAudioCacheDB() {
   return new Promise((resolve, reject) => {
     if (typeof indexedDB === "undefined") {
@@ -1127,7 +1227,6 @@ function Board({
 
       <div className="tone-rows">
         {linesData.map((item) => {
-          // ยกเลิกสถานะย่อ-ขยายแถว (Active/Click) ขณะทดสอบออกเสียง เพื่อป้องกันการรบกวน
           const isActive = !isPracticing && activeRowId === item.id;
           const fixedRight = fixedRightLabels[item.id];
           const rowColor = item.show
@@ -1211,7 +1310,7 @@ function Board({
         })}
       </div>
 
-      {/* แถบปุ่มด้านล่างกระดาน: แสดงผลเสมอ ไม่ซ่อน */}
+      {/* แถบปุ่มด้านล่างกระดาน */}
       <div className="board-footer-actions">
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
           <button
