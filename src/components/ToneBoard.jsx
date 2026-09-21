@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from "react";
 import StaffQuizMode from "./StaffQuizMode";
-import { midConsonants, lowSingleConsonants, analyzeSyllable } from "../utils/toneRules";
 
 export default function ToneBoard({
-  channelName = "thai_tone_sync_channel",
+  channelName,
   linesData,
   analysisInfo,
   inputText,
@@ -57,12 +56,6 @@ export default function ToneBoard({
   const textSize = isDisplay ? `clamp(15px, ${1.5 * ratio}vw, 25px)` : "17px";
   const circleFontSize = isDisplay ? `clamp(16px, ${1.8 * ratio}vw, 27px)` : "18px";
 
-  const getSpeechText = (item) => {
-    if (!item?.show) return "";
-    if (item.isMulti) return item.multi[0]?.ttsText || item.multi[0]?.text || "";
-    return item.ttsText || item.word || "";
-  };
-
   const getCircleStyle = (color) => ({
     backgroundColor: color,
     color: circleTextColor,
@@ -77,15 +70,10 @@ export default function ToneBoard({
     flex: `0 0 ${circleSize}`,
   });
 
-  const handlePlayAllClick = () => {
-    if (isDisplay && typeof window !== "undefined" && "BroadcastChannel" in window) {
-      const ch = new BroadcastChannel(channelName);
-      ch.postMessage({ type: "TRIGGER_PLAY_ALL" });
-      ch.close();
-    }
-    if (onPlayAllTones) {
-      onPlayAllTones();
-    }
+  const getSpeechText = (item) => {
+    if (!item?.show) return "";
+    if (item.isMulti) return item.multi[0]?.ttsText || item.multi[0]?.text || "";
+    return item.ttsText || item.word || "";
   };
 
   return (
@@ -93,31 +81,42 @@ export default function ToneBoard({
       className={`tone-board ${isDisplay ? "display-board" : ""}`}
       style={{
         ...(isDisplay ? { backgroundColor: staffBgColor } : {}),
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        width: "100%",
+        overflowY: "auto",
         scrollbarWidth: "none",
         msOverflowStyle: "none",
       }}
     >
-      <div className="board-title" style={{ color: "#4A148C" }}>
-        <h2 style={{ color: "#4A148C" }}>{t("ไตรยางศ์ หรือ อักษร 3 หมู่", "Three Consonant Classes (Triyang)")}</h2>
-        <div style={{ color: "#4A148C" }}>{t("และการผันวรรณยุกต์", "Tone Rules & Musical Staves")}</div>
+      <div className="board-title" style={{ color: "#4A148C", flexShrink: 0 }}>
+        <h2 style={{ color: "#4A148C", margin: "0 0 4px 0" }}>
+          {t("ไตรยางศ์ หรือ อักษร 3 หมู่", "Three Consonant Classes (Triyang)")}
+        </h2>
+        <div style={{ color: "#4A148C" }}>
+          {t("และการผันวรรณยุกต์", "Tone Rules & Musical Staves")}
+        </div>
       </div>
 
+      {/* กล่องวิเคราะห์หลักภาษา: ไม่แสดงเมื่อไม่มีคำ และในโหมด Quiz แสดงเฉพาะเมื่อตอบถูก/เฉลยแล้ว */}
       {(!isQuizMode || (isQuizMode && resolvedQuizItem)) && Boolean(inputText.trim() || resolvedQuizItem) && (() => {
         const visibleItems = linesData.filter((item) => item.show);
         const topItem = visibleItems[0];
         const bottomItem = visibleItems[visibleItems.length - 1];
-        const isMid = midConsonants.includes(analysisInfo?.primaryConsonant);
+        const isMid = ["ก", "จ", "ด", "ต", "บ", "ป", "อ", "ฎ", "ฏ"].includes(analysisInfo?.primaryConsonant);
 
-        const getTargetWord = (item) => getSpeechText(item);
         const analyses = [];
 
         if (mode === "pair") {
-          const topWord = getTargetWord(topItem);
-          const bottomWord = getTargetWord(bottomItem);
+          const topWord = getSpeechText(topItem);
+          const bottomWord = getSpeechText(bottomItem);
           const pConsonant = analysisInfo?.primaryConsonant || "";
-          const isSingle = lowSingleConsonants.includes(pConsonant);
+          const isSingle = ["ง", "ญ", "ณ", "น", "ม", "ย", "ร", "ล", "ฬ", "ว"].includes(pConsonant);
 
-          let pairTitle, pairDesc;
+          let pairTitle;
+          let pairDesc;
+
           if (isMid) {
             pairTitle = t("อักษรกลาง (Soloist / ศิลปินเดี่ยว)", "Mid Class (Soloist)");
             pairDesc = t(
@@ -141,7 +140,7 @@ export default function ToneBoard({
           if (!topWord && !bottomWord) return null;
 
           return (
-            <div className="analysis-box">
+            <div className="analysis-box" style={{ flexShrink: 0 }}>
               <div className="analysis-item">
                 📌 <strong>{pairTitle}</strong>: {pairDesc}
               </div>
@@ -155,18 +154,18 @@ export default function ToneBoard({
             analyses.push({
               label: "อักษรกลาง",
               word,
-              info: analyzeSyllable(word, mode),
+              info: analysisInfo,
             });
           }
         } else if (mode === "full5") {
-          const topWord = getTargetWord(topItem);
-          const bottomWord = getTargetWord(bottomItem);
+          const topWord = getSpeechText(topItem);
+          const bottomWord = getSpeechText(bottomItem);
 
           if (topWord) {
             analyses.push({
               label: "เสียงสูง",
               word: topWord,
-              info: analyzeSyllable(topWord, "highOnly"),
+              info: analysisInfo,
             });
           }
 
@@ -174,136 +173,126 @@ export default function ToneBoard({
             analyses.push({
               label: "เสียงต่ำ",
               word: bottomWord,
-              info: analyzeSyllable(bottomWord, "lowOnly"),
+              info: analysisInfo,
             });
           }
         } else if (mode === "highOnly") {
-          const word = getTargetWord(topItem);
+          const word = getSpeechText(topItem);
           if (word) {
             analyses.push({
               label: "เสียงสูง",
-              word,
-              info: analyzeSyllable(word, "highOnly"),
+              word: word,
+              info: analysisInfo,
             });
           }
         } else if (mode === "lowOnly") {
-          const word = getTargetWord(bottomItem);
+          const word = getSpeechText(bottomItem);
           if (word) {
             analyses.push({
               label: "เสียงต่ำ",
-              word,
-              info: analyzeSyllable(word, "lowOnly"),
+              word: word,
+              info: analysisInfo,
             });
           }
         }
 
         if (!analyses.length) return null;
 
-        const getLabelText = (lbl) => {
-          if (lbl === "อักษรกลาง") return t("อักษรกลาง", "Mid Class");
-          if (lbl === "เสียงสูง") return t("เสียงสูง", "High Tone");
-          if (lbl === "เสียงต่ำ") return t("เสียงต่ำ", "Low Tone");
-          return lbl;
-        };
-
-        const translateType = (type) => {
-          if (type === "คำเป็น") return t("คำเป็น", "Live Syllable");
-          if (type === "คำตาย") return t("คำตาย", "Dead Syllable");
-          return type;
-        };
-
-        const translateVowel = (v) => {
-          if (v === "สระเสียงยาว") return t("สระเสียงยาว", "Long Vowel");
-          if (v === "สระเสียงสั้น") return t("สระเสียงสั้น", "Short Vowel");
-          return v;
-        };
-
-        const getAnalysisDesc = (inf) => {
-          if (lang !== "en") return inf.desc;
-          const cClass = inf.consonantClass;
-          const pConsonant = inf.primaryConsonant || "";
-          const init = inf.initial || "";
-          const initKind = inf.initialKind || "single";
-          const dead = inf.isDead;
-          const short = inf.isShort;
-
-          let cLabel = "";
-          if (initKind === "trueCluster") cLabel = ` (True Cluster "${init}")`;
-          else if (initKind === "leadingHo") cLabel = ` (Leading ห- "${init}")`;
-          else if (initKind === "leadingO") cLabel = ` (Leading อ- "${init}")`;
-          else if (initKind === "falseCluster") cLabel = ` (False Cluster "${init}")`;
-
-          if (cClass === "middle") {
-            return dead
-              ? `Mid Class${cLabel} Dead Syllable (Inflects 4 tones: Low, Falling, High, Rising; Natural pitch: Low)`
-              : `Mid Class${cLabel} Live Syllable (Inflects all 5 tones; Natural pitch: Mid)`;
-          }
-          if (cClass === "high") {
-            return dead
-              ? `High Class${cLabel} Dead Syllable (Inflects 2 tones: Low, Falling; Natural pitch: Low)`
-              : `High Class${cLabel} Live Syllable (Inflects 3 tones: Low, Falling, Rising; Natural pitch: Rising)`;
-          }
-          if (cClass === "low") {
-            const subtype = lowSingleConsonants.includes(pConsonant) ? "Single Low Class" : "Paired Low Class";
-            return dead
-              ? short
-                ? `${subtype}${cLabel} Dead Syllable (Short Vowel) (Inflects 2 tones: Falling, High; Natural pitch: High)`
-                : `${subtype}${cLabel} Dead Syllable (Long Vowel) (Inflects 2 tones: Falling, High; Natural pitch: Falling)`
-              : `${subtype}${cLabel} Live Syllable (Inflects 3 tones: Mid, Falling, High; Natural pitch: Mid)`;
-          }
-          return inf.desc;
-        };
-
         return (
-          <div className="analysis-box">
+          <div className="analysis-box" style={{ flexShrink: 0 }}>
             {analyses.map(({ label, word, info }, index) => (
               <div className="analysis-item" key={`${label}-${word}-${index}`}>
-                📌 {t("ผลวิเคราะห์หลักภาษา", "Linguistic Analysis")} ({getLabelText(label)}): <strong>"{word}"</strong> {t("เป็น", "is")}{" "}
+                📌 {t("ผลวิเคราะห์หลักภาษา", "Linguistic Analysis")} ({t(label, label)}): <strong>"{word}"</strong> {t("เป็น", "is")}{" "}
                 <span className="analysis-tag">
-                  {translateType(info.type)} ({translateVowel(info.vowelLen)})
+                  {t(info.type, info.type)} ({t(info.vowelLen, info.vowelLen)})
                 </span>{" "}
-                — {getAnalysisDesc(info)}
+                — {info.desc}
               </div>
             ))}
           </div>
         );
       })()}
 
-      {/* เส้นบรรทัด 5 เส้น */}
-      <div className="tone-rows" style={{ paddingTop: "10px" }}>
+      {/* บรรทัด 5 เส้น (ยืดหยุ่นเต็มความสูง ไม่เกิด Scrollbar กวนใจ) */}
+      <div
+        className="tone-rows"
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-around",
+          gap: "12px",
+          padding: "10px 0",
+          minHeight: "360px",
+        }}
+      >
         {linesData.map((item) => {
           const isActive = !isPracticing && !isQuizMode && activeRowId === item.id;
           const fixedRight = fixedRightLabels[item.id];
-          const lineThemeColor = isQuizMode ? "#94a3b8" : (item.show ? (item.isMulti ? item.multi[0]?.color : item.color) : "#94a3b8");
+
+          // คำนวณสีข้อความหน้าเส้นบรรทัด:
+          // 1. เริ่มต้นไม่มีคำ หรือในโหมด Quiz -> แสดงสีดำ/เทามาตรฐาน (#1e293b)
+          // 2. เมื่อผันคำ -> แสดงสีประจำหมู่อักษร
+          // 3. พิเศษ: เส้นที่ 3 (เสียงโท) ของชุดคู่เสียงที่มี 2 คำ -> ใช้สีของอักษรต่ำ (item.multi[0]?.color หรือ #007bff)
+          let labelColor = "#1e293b";
+          if (!isQuizMode && Boolean(inputText.trim())) {
+            if (item.id === 3 && item.isMulti) {
+              labelColor = item.multi[0]?.color || "#007bff";
+            } else if (item.show) {
+              labelColor = item.isMulti ? item.multi[0]?.color : item.color;
+            }
+          }
+
+          const lineThemeColor = isQuizMode
+            ? "#94a3b8"
+            : item.show
+              ? item.isMulti
+                ? item.multi[0]?.color
+                : item.color
+              : "#94a3b8";
+
           const isQuizResolvedHere = isQuizMode && resolvedQuizItem && resolvedQuizItem.placedLine === item.id;
 
           return (
             <button
               type="button"
               data-tone-line-id={item.id}
-              className={`tone-row ${isActive ? "active" : ""} ${!item.show && !isQuizMode ? "disabled-tone-row" : ""} ${isPracticing ? "practice-locked" : ""}`}
+              className={`tone-row ${isActive ? "active" : ""} ${isPracticing ? "practice-locked" : ""}`}
               key={item.id}
               onClick={() => {
                 if (!isPracticing && !isQuizMode) onRowClick(item);
               }}
-              style={isPracticing || isQuizMode ? { cursor: 'default' } : {}}
-              title={item.show && !isPracticing && !isQuizMode ? `${t("คลิกเพื่อขยายและอ่านคำ", "Click to zoom and speak")} ${getSpeechText(item)}` : ""}
+              style={{
+                cursor: isPracticing || isQuizMode ? "default" : "pointer",
+                padding: "8px 0",
+              }}
+              title={!isPracticing && !isQuizMode ? `${t("คลิกเพื่อขยายและอ่านคำ", "Click to zoom and speak")} ${getSpeechText(item)}` : ""}
             >
+              {/* ข้อความชื่อเสียง: สีตามหมู่อักษร และย่อขยายได้เมื่อคลิกแม้ไม่มีคำ */}
               <div
                 className="tone-name clickable-tone-text"
                 style={{
-                  color: "#1e293b",
+                  color: labelColor,
                   fontSize: textSize,
                   transform: isActive ? "scale(1.08)" : "none",
                   transition: "transform .18s ease, color .18s ease",
+                  fontWeight: 700,
                 }}
               >
-                {t(item.tone, toneNames[item.id]?.en || item.tone)} <span style={{ color: "#475569" }}>[ {item.mark} ]</span>
+                {t(item.tone, toneNames[item.id]?.en || item.tone)}{" "}
+                <span style={{ color: labelColor, opacity: 0.85 }}>[ {item.mark} ]</span>
               </div>
 
               <div className="tone-line-wrap">
-                <div className="tone-line" style={{ backgroundColor: isQuizMode ? "#cbd5e1" : (isActive ? "#475569" : "#94a3b8") }} />
+                <div
+                  className="tone-line"
+                  style={{
+                    backgroundColor: isQuizMode ? "#cbd5e1" : isActive ? "#475569" : "#94a3b8",
+                    height: isActive ? "4px" : "2px",
+                  }}
+                />
 
+                {/* โหมดปกติ: แสดงตัวโน้ตคำบนเส้นเมื่อมีคำ */}
                 {!isQuizMode && item.show && !item.isMulti && item.word && (
                   <div
                     className={`tone-circle ${practiceTargetWord === item.word ? "target-test-active" : ""} ${mismatchWord === item.word ? "target-test-mismatch" : ""}`}
@@ -337,6 +326,7 @@ export default function ToneBoard({
                   </div>
                 )}
 
+                {/* โหมดแบบฝึกหัด: แสดงเฉพาะตัวโน้ตที่ตอบถูกหรือเฉลยแล้วเท่านั้น */}
                 {isQuizMode && isQuizResolvedHere && (
                   <div
                     className={`tone-circle ${resolvedQuizItem.isRevealed ? "quiz-revealing-node" : "quiz-snap-node"}`}
@@ -350,11 +340,11 @@ export default function ToneBoard({
                 )}
               </div>
 
-              <div className="tone-line-number" style={{ color: lineThemeColor }}>
+              <div className="tone-line-number" style={{ color: lineThemeColor, fontWeight: 800 }}>
                 {item.id}
               </div>
 
-              <div className="fixed-tone-label" style={{ color: fixedRight?.color || "#94a3b8" }}>
+              <div className="fixed-tone-label" style={{ color: fixedRight?.color || "#94a3b8", fontWeight: 700 }}>
                 {fixedRight?.text || ""}
               </div>
             </button>
@@ -362,26 +352,30 @@ export default function ToneBoard({
         })}
       </div>
 
+      {/* ส่วนคอมโพเนนต์แบบฝึกหัดลากวางคำ */}
       {isQuizMode && (
-        <StaffQuizMode
-          linesData={linesData}
-          lang={lang}
-          circleTextColor={circleTextColor}
-          fontSize={fontSize}
-          isDisplay={isDisplay}
-          speak={speak}
-          onResolveQuestion={(item) => setResolvedQuizItem(item)}
-          onExit={() => onToggleQuiz(false)}
-        />
+        <div style={{ flexShrink: 0 }}>
+          <StaffQuizMode
+            linesData={linesData}
+            lang={lang}
+            circleTextColor={circleTextColor}
+            fontSize={fontSize}
+            isDisplay={isDisplay}
+            speak={speak}
+            onResolveQuestion={(item) => setResolvedQuizItem(item)}
+            onExit={() => onToggleQuiz(false)}
+          />
+        </div>
       )}
 
       {/* แถบปุ่มควบคุมด้านล่างกระดาน */}
-      <div className="board-footer-actions">
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+      <div className="board-footer-actions" style={{ flexShrink: 0, marginTop: "10px" }}>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+          {/* ปุ่มผันเสียง 1-5 */}
           <button
             type="button"
             className={`auto-play-tones-btn ${isPlayingAll ? "playing" : ""}`}
-            onClick={handlePlayAllClick}
+            onClick={onPlayAllTones}
             disabled={isPracticing || isQuizMode || !linesData.some((item) => item.show && (item.word || (item.isMulti && item.multi.length > 0)))}
             style={isPracticing || isQuizMode ? { opacity: 0.45, cursor: "not-allowed" } : {}}
             title={
@@ -394,32 +388,12 @@ export default function ToneBoard({
                     : t("ออกเสียงผันวรรณยุกต์อัตโนมัติ 5 เสียง (1 ➔ 5)", "Auto-play 5 tones ascending (1 ➔ 5)")
             }
           >
-            {mode === "pair" || mode === "highOnly" ? (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="10 5 5 9 2 9 2 15 5 15 10 19 10 5" fill="currentColor" stroke="none" />
-                <path d="M15 9l6 6" stroke="currentColor" strokeWidth="2.2" />
-                <path d="M16 15h5v-5" stroke="currentColor" strokeWidth="2.2" />
-              </svg>
-            ) : (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="10 5 5 9 2 9 2 15 5 15 10 19 10 5" fill="currentColor" stroke="none" />
-                <path d="M15 15l6-6" stroke="currentColor" strokeWidth="2.2" />
-                <path d="M16 9h5v5" stroke="currentColor" strokeWidth="2.2" />
-              </svg>
-            )}
             <span className="auto-play-label">
-              {isPlayingAll
-                ? t("กำลังออกเสียง...", "Playing...")
-                : mode === "pair"
-                  ? t("ผันเสียง 5+1", "Play 5+1")
-                  : mode === "highOnly"
-                    ? t("ผันเสียง 5-2-3", "Play 5-2-3")
-                    : mode === "lowOnly"
-                      ? t("ผันเสียง 1-3-4", "Play 1-3-4")
-                      : t("ผันเสียง 1-5", "Play 1-5")}
+              {isPlayingAll ? t("กำลังออกเสียง...", "Playing...") : t("ผันเสียง 1-5", "Play 1-5")}
             </span>
           </button>
 
+          {/* ปุ่มฝึกออกเสียง (จางเมื่ออยู่ในโหมด Quiz) */}
           <button
             type="button"
             className={`practice-toggle-btn ${isPracticing ? "cancel" : ""}`}
@@ -430,6 +404,7 @@ export default function ToneBoard({
             {isPracticing ? t("❌ ยกเลิก", "❌ Cancel") : t("🎙️ ฝึกออกเสียง", "🎙️ Practice")}
           </button>
 
+          {/* ปุ่มแบบฝึกหัดวางคำ (จางเมื่ออยู่ในโหมดฝึกออกเสียง) */}
           <button
             type="button"
             className={`quiz-toggle-btn ${isQuizMode ? "cancel" : ""}`}
@@ -440,6 +415,7 @@ export default function ToneBoard({
             {isQuizMode ? t("❌ ยกเลิกแบบฝึกหัด", "❌ Cancel Quiz") : t("🎯 วางคำบนเส้นบรรทัด", "🎯 Staff Drop Quiz")}
           </button>
 
+          {/* ปุ่มข้ามคำในโหมดฝึกออกเสียง */}
           {isPracticing && !practiceCompleted && (
             <button
               type="button"
@@ -452,6 +428,7 @@ export default function ToneBoard({
           )}
         </div>
 
+        {/* แถบสถานะโหมดออกเสียง */}
         {isPracticing && !practiceCompleted && (
           <div className="practice-status-banner">
             <span className="practice-msg-text">{practiceMsg}</span>
@@ -460,6 +437,7 @@ export default function ToneBoard({
           </div>
         )}
 
+        {/* แถบสรุปคะแนนโหมดออกเสียง */}
         {practiceCompleted && (
           <div className="practice-summary-banner">
             <span style={{ fontSize: "16px" }}>🎉</span>
@@ -467,12 +445,7 @@ export default function ToneBoard({
               {t(`การทดสอบเสร็จสมบูรณ์! คะแนนรวมของคุณ: ${practiceScore} / ${totalPossibleScore} คะแนน`,
                  `Practice completed! Total score: ${practiceScore} / ${totalPossibleScore}`)}
             </span>
-            <button
-              type="button"
-              onClick={onTogglePractice}
-              className="practice-summary-close-btn"
-              title={t("ปิดสรุปคะแนน", "Close summary")}
-            >
+            <button type="button" onClick={onTogglePractice} className="practice-summary-close-btn">
               ✕
             </button>
           </div>

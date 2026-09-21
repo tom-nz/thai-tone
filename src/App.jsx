@@ -5,7 +5,7 @@ import "@fontsource/sarabun/600.css";
 import "@fontsource/sarabun/700.css";
 import "./App.css";
 
-import { autoCorrelate, classifyToneContour } from "./utils/pitchDetector";
+import { autoCorrelate, classifyToneContour, TONE_TARGET_FREQS } from "./utils/pitchDetector";
 import {
   STRICT_THAI_SYLLABLE_PATTERN,
   toneRows,
@@ -33,342 +33,98 @@ import ControlPanel from "./components/ControlPanel";
  *    เพื่อป้องกันการแก้ logic การผันวรรณยุกต์โดยอาศัยการคาดเดาเฉพาะกรณี
  *
  * 1) ไตรยางศ์ = การแบ่งพยัญชนะไทยตามหลักการผันวรรณยุกต์เป็น 3 หมู่
- *
- *      อักษรกลาง 9 ตัว:
- *        ก จ ฎ ฏ ด ต บ ป อ
- *
- *      อักษรสูง 11 ตัว:
- *        ข ฃ ฉ ฐ ถ ผ ฝ ศ ษ ส ห
- *
- *      อักษรต่ำ 24 ตัว แบ่งเป็น:
- *        อักษรต่ำคู่ 14 ตัว:
- *          ค ฅ ฆ ช ฌ ซ ฑ ฒ ท ธ พ ภ ฟ ฮ
- *        อักษรต่ำเดี่ยว 10 ตัว:
- *          ง ญ ณ น ม ย ร ล ว ฬ
- *
- *      รวมทั้งหมด 44 ตัวพอดี (9 + 11 + 14 + 10 = 44)
+ *     อักษรกลาง 9 ตัว: ก จ ฎ ฏ ด ต บ ป อ
+ *     อักษรสูง 11 ตัว: ข ฃ ฉ ฐ ถ ผ ฝ ศ ษ ส ห
+ *     อักษรต่ำ 24 ตัว แบ่งเป็น:
+ *       - ต่ำคู่ 14 ตัว: ค ฅ ฆ ช ฌ ซ ฑ ฒ ท ธ พ ภ ฟ ฮ
+ *       - ต่ำเดี่ยว 10 ตัว: ง ญ ณ น ม ย ร ล ว ฬ
+ *     รวมทั้งหมด 44 ตัวพอดี (9 + 11 + 14 + 10 = 44)
  *
  * 2) "พื้นเสียง" คือเสียงของพยางค์เมื่อไม่มีรูปวรรณยุกต์กำกับ
- *      อักษรสูง:
- *        - คำเป็น  -> จัตวา
- *        - คำตาย  -> เอก
- *      อักษรกลาง:
- *        - คำเป็น  -> สามัญ
- *        - คำตาย  -> เอก
- *      อักษรต่ำ:
- *        - คำเป็น          -> สามัญ
- *        - คำตายสระสั้น    -> ตรี
- *        - คำตายสระยาว     -> โท
+ *     - อักษรสูง: คำเป็น -> จัตวา, คำตาย -> เอก
+ *     - อักษรกลาง: คำเป็น -> สามัญ, คำตาย -> เอก
+ *     - อักษรต่ำ: คำเป็น -> สามัญ, คำตายสระสั้น -> ตรี, คำตายสระยาว -> โท
  *
- * 3) จำนวน "เสียง" ที่ผันได้ไม่เท่ากับจำนวนรูปวรรณยุกต์
- *      มีรูปวรรณยุกต์ 4 รูป: ่ ้ ๊ ๋
- *      แต่การผันจริงขึ้นกับ:
- *        - หมู่อักษร (กลาง, สูง, ต่ำคู่, ต่ำเดี่ยว)
- *        - คำเป็น / คำตาย
- *        - สระสั้น / สระยาว (โดยเฉพาะคำตายอักษรต่ำ)
- *        - การมีตัวสะกด (มาตราตัวสะกด กบด = คำตาย, นมยวง = คำเป็น)
- *        - อักษรคู่ / อักษรเดี่ยว
+ * 3) จำนวน "เสียง" ที่ผันได้ไม่เท่ากับจำนวนรูปวรรณยุกต์ (่ ้ ๊ ๋)
+ *     การผันจริงขึ้นกับ: หมู่อักษร, คำเป็น/คำตาย, สระสั้น/ยาว, มาตราตัวสะกด (กบด vs นมยวง)
  *
  * 4) ตารางแกนหลักที่ใช้ใน Rule Engine
- *      อักษรกลาง:
- *        - คำเป็น:  5 เสียง (สามัญ = ไม่มีรูป, เอก = ่, โท = ้, ตรี = ๊, จัตวา = ๋)
- *        - คำตาย:  4 เสียง (เอก = ไม่มีรูป, โท = ้, ตรี = ๊, จัตวา = ๋)
- *      อักษรสูง:
- *        - คำเป็น:  3 เสียง (เอก = ่, โท = ้, จัตวา = ไม่มีรูป)
- *        - คำตาย:  2 เสียง (เอก = ไม่มีรูป, โท = ้)
- *      อักษรต่ำ:
- *        - คำเป็น:  3 เสียง (สามัญ = ไม่มีรูป, โท = ่, ตรี = ้)
- *        - คำตายสระสั้น: 2 เสียง (โท = ่, ตรี = ไม่มีรูป)
- *        - คำตายสระยาว:  2 เสียง (โท = ไม่มีรูป, ตรี = ้)
+ *     - อักษรกลาง: คำเป็น 5 เสียง, คำตาย 4 เสียง (เอก, โท, ตรี, จัตวา)
+ *     - อักษรสูง: คำเป็น 3 เสียง (เอก, โท, จัตวา), คำตาย 2 เสียง (เอก, โท)
+ *     - อักษรต่ำ: คำเป็น 3 เสียง (สามัญ, โท, ตรี), คำตายสระสั้น 2 เสียง (โท, ตรี), คำตายสระยาว 2 เสียง (โท, ตรี)
  *
  * 5) คำเป็น / คำตาย
- *      คำตายหลัก:
- *        - สระเสียงสั้น ไม่มีตัวสะกด
- *        - มีตัวสะกดในแม่กก แม่กด แม่กบ (มาตรา กบด)
- *      คำเป็นหลัก:
- *        - สระเสียงยาว ไม่มีตัวสะกด
- *        - มีตัวสะกดในแม่กง แม่กน แม่กม แม่เกย แม่เกอว (มาตรา นมยวง)
- *      ข้อควรระวัง:
- *        การตรวจจาก "อักขระตัวสุดท้าย" อย่างเดียวไม่เพียงพอ เพราะ ย/ว
- *        อาจเป็นส่วนของรูปสระ เช่น เ◌ีย / ◌ียะ / ◌ัว / ◌ัวะ
+ *     - คำตาย: สระสั้นไม่มีตัวสะกด หรือ สะกดด้วยแม่กก แม่กด แม่กบ (กบด)
+ *     - คำเป็น: สระยาวไม่มีตัวสะกด หรือ สะกดด้วยแม่กง แม่กน แม่กม แม่เกย แม่เกอว (นมยวง)
  *
- * 6) อักษรต่ำคู่ / ต่ำเดี่ยว
- *      ต่ำคู่: มีอักษรสูงเป็นคู่เสียง ช่วยเทียบผันให้ครบ 5 เสียง
- *      ต่ำเดี่ยว: ไม่มีคู่เสียงสูงโดยตรง การผันครบ 5 เสียงต้องใช้ "ห นำ"
- *
- * 7) ห นำ / อ นำ / ควบกล้ำ
- *      - ห นำ: ห ทำหน้าที่นำระดับเสียงให้พยัญชนะต่ำเดี่ยว เช่น หง หน หม หร
- *      - อ นำ: ใช้เฉพาะกรณีคำยกเว้น เช่น อย่า อยู่ อย่าง อยาก
- *      - ควบกล้ำแท้: ตัวพยัญชนะต้น 2 ตัวออกเสียงควบกันจริง เช่น กร กล กว
- *      - ควบกล้ำไม่แท้: ถือเป็นข้อมูลเฉพาะคำ เช่น ทร ออกเสียง ซ
- *
- * 8) Rule Engine ต้องเป็นแหล่งความจริงหลัก
- *      calculateTones() / analyzeSyllable() เป็นแหล่งตัดสินผลการผัน
- *      AI ห้าม overwrite ผลการผันที่ Rule Engine คำนวณแล้ว
- *
- * 9) รูป "เทียบการผัน" ไม่เท่ากับ "คำศัพท์ไทยที่ยืนยันความหมาย"
- * 10) ตัวตรวจรูปวรรณยุกต์ validateEnteredToneMark() ต้องเรียก Rule Engine ชุดเดียวกัน
- * 11) TONE_RULE_SELF_TESTS เป็น regression tests เพื่อป้องกันการแก้กฎเดิมเสีย
- *
- * แหล่งอ้างอิง:
- *      - DLTV: ไตรยางศ์ / อักษรสูง กลาง ต่ำ / อักษรต่ำคู่ / ต่ำเดี่ยว
- *      - DLTV: ใบความรู้การผันวรรณยุกต์ และตารางคำเป็น/คำตาย
+ * 6) อักษรต่ำคู่ / ต่ำเดี่ยว: ต่ำคู่มีอักษรสูงช่วยเทียบเสียง, ต่ำเดี่ยวใช้ "ห-นำ" ช่วยผัน
+ * 7) Rule Engine ต้องเป็นแหล่งความจริงหลัก: calculateTones() และ analyzeSyllable()
+ * 8) TONE_RULE_SELF_TESTS ใน utils/toneRules.js ทำหน้าที่ regression test 16 เคสหลัก
  *
  * =============================================================================
- * 2. SYSTEM ARCHITECTURE & RELATED FILES MAPPING (MODULAR REFACTORING)
+ * 2. MODULAR SYSTEM ARCHITECTURE & INTER-MODULE COMMUNICATION FLOW
  * =============================================================================
  *
- *  - src/App.jsx (Main Controller & Orchestrator Hub):
- *      ศูนย์กลาง State Management หลักของโปรแกรม, Web Audio Context Controller,
- *      Microphone Pitch Detection Listener Loop, ระบบซิงค์ Dual Screen ด้วย BroadcastChannel,
- *      และการสลับ View Layouts (Standard, Split, Preview)
- *
- *  - src/components/ToneBoard.jsx:
- *      กระดานแสดงผลบรรทัด 5 เส้น, การเรนเดอร์โน้ตดนตรีไทย (Tone Circles), ก้านโน้ต (Stem),
- *      กล่องแสดงผลวิเคราะห์หลักภาษา (Dynamic Linguistic Analysis Box),
- *      ปุ่มคำสั่งออกเสียงผันวรรณยุกต์ 1-5, และปุ่มเปิด-ปิด Practice / Quiz Mode
- *
- *  - src/components/ControlPanel.jsx:
- *      แผงควบคุมระบบด้านขวา: ปุ่มสลับโหมดการผัน (5 เสียง / เสียงสูง / เสียงต่ำ / คู่เสียง),
- *      Input กรอกคำ, แป้นเลือกพยัญชนะด่วน 44 ตัว, แป้นสระสั้น-ยาว,
- *      แถบตั้งค่าเสียงอ่าน TTS, แผงจัดการคลังเสียง (IndexedDB/D1), และ Gemini AI API Input
- *
- *  - src/components/StaffQuizMode.jsx:
- *      คอมโพเนนต์แบบฝึกหัดลากวางคำบนเส้นบรรทัด 5 เส้น (Component-Driven Isolation)
- *      จัดการ State การลากวาง (Pointer Drag & Drop), การตรวจจับพิกัด Hitbox,
- *      ระบบการนับคะแนน (2, 1, 0 คะแนน), แอนิเมชันสั่นเตือนเมื่อผิด,
- *      และการส่ง Event กลับมา Snap ตัวโน้ตลงบนเส้นบรรทัดของ ToneBoard
- *
- *  - src/utils/toneRules.js:
- *      Rule Engine แกนหลักของภาษาไทย:
- *        1) parseThaiWord(word): แยกสระหน้า, พยัญชนะต้น/ควบกล้ำ/ห-นำ, สระบน-ล่าง, รูปวรรณยุกต์, ตัวสะกด
- *        2) analyzeSyllable(word, mode): จำแนกหมู่อักษร, คำเป็น/ตาย, สระสั้น/ยาว, อธิบายหลักภาษา
- *        3) calculateTones(word, mode, ...): คำนวณกระจายคำลงเส้นบรรทัด 5 ระดับเสียงตามหลักไตรยางศ์
- *        4) validateEnteredToneMark(word): ตรวจสอบความถูกต้องของรูปวรรณยุกต์ที่กรอก
- *        5) runToneRuleSelfTests(): Regression test suite ป้องกันการแก้กฎหลักเสียหาย
- *
- *  - src/utils/audioCache.js:
- *      ระบบ Local Multi-tier Audio Caching ผ่าน IndexedDB (DB: thai_tone_audio_cache, Store: audio_blobs)
- *      บันทึกไฟล์เสียง Blob ที่ดาวน์โหลดมาจาก Cloudflare R2 / Azure ช่วยให้เล่นซ้ำได้แบบ 0 Latency และออฟไลน์
- *
- *  - src/utils/pitchDetector.js:
- *      โมดูลวิเคราะห์สัญญาณเสียงไมโครโฟน ประกอบด้วย:
- *        1) autoCorrelate(buf, sampleRate): คำนวณ Fundamental Frequency (F0 in Hz)
- *        2) classifyToneContour(pitchPoints): วิเคราะห์ความชันเส้นเสียง (Contour Slope)
- *           เพื่อจำแนกวรรณยุกต์ (สามัญ, เอก, โท=ตกวูบ, ตรี=สูง, จัตวา=ช้อนขึ้น)
- *        3) TONE_TARGET_FREQS: ตัวแปรค่าความถี่อ้างอิงของแต่ละระดับเสียง
- *
- *  - src/App.css:
- *      ไฟล์รวมสไตล์ชีต CSS ทั้งหมดของทั้งหน้าจอหลัก, จอที่ 2, โน้ตเพลง, และแอนิเมชัน
- *
- *  - functions/api/tts.js & functions/api/words.js:
- *      Cloudflare Pages Functions (Serverless Backend) เชื่อมต่อกับ:
- *        - Cloudflare D1 (ฐานข้อมูล SQL สำหรับจัดเก็บดัชนีคำศัพท์)
- *        - Cloudflare R2 (Object Storage สำหรับแคชไฟล์เสียง mp3/wav)
- *        - Azure Cognitive Services Speech API (สังเคราะห์เสียงภาษาไทย th-TH)
+ *                    ┌────────────────────────────────────────────────┐
+ *                    │              src/App.jsx (Main Hub)            │
+ *                    │ - Master State: inputText, mode, linesData     │
+ *                    │ - Web Audio API & Microphone Pitch Engine      │
+ *                    │ - Dual Screen Sync (BroadcastChannel)          │
+ *                    └───────┬───────────────────┬────────────────┬───┘
+ *                            │                   │                │
+ *         ┌──────────────────┘                   │                └──────────────────┐
+ *         │ Props: linesData,                    │ Props: input,                     │ Props: linesData,
+ *         │ activeRowId, mode,                   │ quickPadClick,                    │ audio callbacks
+ *         │ audio handlers                       │ layout setters                    │
+ *         ▼                                      ▼                                   ▼
+ *  ┌───────────────┐                      ┌───────────────┐                   ┌───────────────┐
+ *  │ ToneBoard.jsx │                      │ControlPanel.js│                   │StaffQuizMode.j│
+ *  │ - 5-Line Staff│                      │ - 44 Cons Pad │                   │ - Drag & Drop │
+ *  │ - Note Heads  │                      │ - Vowel Pad   │                   │ - Score (2,1,0│
+ *  │ - Analysis Box│                      │ - Sound Vault │                   │ - Reset to org│
+ *  └───────┬───────┘                      └───────┬───────┘                   └───────┬───────┘
+ *          │                                      │                                   │
+ *          └───────────────────────┬──────────────┴───────────────────────────────────┘
+ *                                  ▼
+ *                  ┌─────────────────────────────────────┐
+ *                  │      SHARED UTILITIES & ENGINES     │
+ *                  │ 1. utils/toneRules.js:              │
+ *                  │    Rule Engine, parser, tests       │
+ *                  │ 2. utils/audioCache.js:             │
+ *                  │    IndexedDB multi-tier client cache│
+ *                  │ 3. utils/pitchDetector.js:          │
+ *                  │    autoCorrelate & contour classifier│
+ *                  └─────────────────────────────────────┘
  *
  * =============================================================================
- * 3. PROGRAM FLOWCHART, ALGORITHMS & STATE MACHINES
+ * 3. DETAILED WORKFLOW & STATE MACHINES
  * =============================================================================
  *
- * [A] โมดูลาร์และทิศทางการส่งข้อมูล (Module Architecture Flow):
+ * [A] เริ่มต้นโปรแกรม (Initial Boot):
+ *     1. inputText = "" -> บรรทัด 5 เส้นว่างเปล่า ไม่มีวงกลมคำ
+ *     2. ซ่อนกล่องวิเคราะห์หลักภาษา และไม่มีข้อความคำว่า "รูปวรรณยุกต์"
+ *     3. ชื่อระดับเสียงหน้าเส้นแสดงเป็นสีดำ (#1e293b) เสมอทุกอุปกรณ์
+ *     4. สามารถคลิกที่เส้นเปล่าเพื่อขยาย/ย่อ (Active) ได้ตามปกติ
  *
- *                        ┌──────────────────────────────┐
- *                        │      App.jsx (Main Hub)      │
- *                        │   State, Web Audio, Sync     │
- *                        └──────────────┬───────────────┘
- *                                       │
- *         ┌─────────────────────────────┼─────────────────────────────┐
- *         ▼ (Props: linesData, etc.)     ▼ (Props: handlers, states)   ▼ (Mode, linesData)
- *  ┌───────────────┐            ┌─────────────────┐           ┌─────────────────┐
- *  │ ToneBoard.jsx │            │ControlPanel.jsx │           │StaffQuizMode.jsx│
- *  │ - Render Staves│           │ - Word Input    │           │ - Drag & Drop   │
- *  │ - Note Stems  │            │ - Consonant Pad │           │ - Hitbox Check  │
- *  │ - Analysis Box│            │ - Sound Vault   │           │ - Score Tracking│
- *  └───────┬───────┘            └────────┬────────┘           └────────┬────────┘
- *          │                             │                              │
- *          └───────────────────────┐     │     ┌────────────────────────┘
- *                                  ▼     ▼     ▼
- *  ┌────────────────────────────────────────────────────────────────────────┐
- *  │                       CORE UTILITIES & SERVICES                        │
- *  │  - utils/toneRules.js      (Rule Engine, Grammar Analysis, Self-Tests) │
- *  │  - utils/audioCache.js     (IndexedDB Client Blob Cache)               │
- *  │  - utils/pitchDetector.js  (AutoCorrelation, Slope & Contour Matching) │
- *  └────────────────────────────────────────────────────────────────────────┘
+ * [B] เมื่อผันคำ (Word Inflection):
+ *     1. ข้อความหน้าเส้น (เสียงเอก [ ่ ]) เปลี่ยนเป็นสีประจำหมู่อักษร
+ *     2. เส้นที่ 3 สำหรับคำคู่เทียบ (เสียงโท) จะแสดงเป็นสีของอักษรต่ำ (#007bff)
+ *     3. ตัวโน้ตคำศัพท์แสดงบนเส้นบรรทัดตามตำแหน่งระดับเสียง
  *
- * -----------------------------------------------------------------------------
- * [B] ลำดับการเรียกไฟล์เสียง (Multi-tier Audio Strategy Pipeline):
+ * [C] สลับโหมดแบบฝึกหัดวางคำ (Staff Quiz Mode):
+ *     1. บรรทัด 5 เส้นจะว่างเปล่าทันที (ซ่อนคำเดิมทั้งหมด)
+ *     2. สีเส้นบรรทัดและตัวเลขเป็นสีเทากลาง (#94a3b8) ป้องกันการเดาหมู่อักษร
+ *     3. สุ่มคำถามแบบกระจาย 3 หมู่อักษร (กลาง, สูง, ต่ำ) ไม่ให้ซ้ำกลุ่มเดิม
+ *     4. วงกลมคำถามล่างจอมีขนาดมาตรฐาน (48px) และเป็นสีส้มปริศนา (#f97316)
+ *     5. ปล่อยเมาส์/นิ้วหลุดมือ -> ดีดกลับแท่นวางเริ่มต้นล่างจอเสมอ
+ *     6. ปุ่ม "ฝึกออกเสียง" จะถูก Disabled และ Dimmed จางลง
  *
- *   คลิกตัวโน้ต / กดผันเสียง 1-5 / ฝึกพูด / เสียงเฉลย
- *                           │
- *                           ▼
- *   [Tier 1] ตรวจสอบ Cache ในเบราว์เซอร์ (IndexedDB: thai_tone_audio_cache)
- *          ├── [ พบ Blob ] ────────────────► เล่นเสียงทันที (Zero Latency / Offline 100%)
- *          └── [ ไม่พบในเครื่อง ]
- *                           │
- *                           ▼
- *   [Tier 2 & 3] ส่ง HTTP Request ไปยัง Pages Function: /api/tts
- *          ├── [ Tier 2: พบบน Cloudflare R2 Cache ] ──► โหลดกลับ ➔ เก็บลง IndexedDB ➔ เล่นเสียง
- *          └── [ Tier 3: R2 ยังไม่มี ]
- *                           │
- *                           ▼
- *   [Cloudflare Pages] ร้องขอ Azure Cognitive Services Speech API (th-TH-PremwadeeNeural)
- *          └──► ได้รับเสียงสังเคราะห์ ➔ อัปโหลดเก็บเข้า R2 ➔ ส่งกลับเบราว์เซอร์ ➔ บันทึก IndexedDB ➔ เล่นเสียง
- *                           │
- *          (กรณีไม่มีเน็ต / Azure ติดขัด)
- *                           ▼
- *   [Tier 4] Web Speech API Fallback (window.speechSynthesis) ดึงเสียง th-TH ประจำเครื่อง
- *
- * -----------------------------------------------------------------------------
- * [C] อัลกอริทึมการวิเคราะห์คำและการผัน (Syllable Grammar Engine Logic):
- *
- *   คำศัพท์นำเข้า (inputText)
- *          │
- *          ▼
- *   1. parseThaiWord(): ตรวจสระหน้า (เ, แ, โ, ใ, ไ), พยัญชนะต้น/ควบกล้ำ/ห-นำ,
- *      สระบน-ล่าง (ิ, ี, ึ, ื, ุ, ู, ั, ็), รูปวรรณยุกต์ (่, ้, ๊, ๋), ตัวสะกด
- *          │
- *          ▼
- *   2. getConsonantClass(): จำแนกพยัญชนะต้นตามไตรยางศ์
- *      - อักษรกลาง (9 ตัว: ก จ ฎ ฏ ด ต บ ป อ)
- *      - อักษรสูง (11 ตัว: ข ฃ ฉ ฐ ถ ผ ฝ ศ ษ ส ห)
- *      - อักษรต่ำ (24 ตัว) แยกย่อย:
- *          * ต่ำคู่ (14 ตัว: ค ฅ ฆ ช ฌ ซ ฑ ฒ ท ธ พ ภ ฟ ฮ) มีคู่เสียงสูง ข ฉ ฐ ถ ผ ฝ ศ ษ ส ห
- *          * ต่ำเดี่ยว (10 ตัว: ง ญ ณ น ม ย ร ล ฬ ว) ไม่มีคู่เสียงสูง ต้องใช้ "ห-นำ"
- *          │
- *          ▼
- *   3. ตรวจสอบคำเป็น/คำตาย (Live vs Dead Syllable):
- *      - มีตัวสะกด:
- *          * แม่กก, แม่กด, แม่กบ (มาตรา กบด) = คำตาย
- *          * แม่กง, แม่กน, แม่กม, แม่เกย, แม่เกอว (มาตรา นมยวง) = คำเป็น
- *      - ไม่มีตัวสะกด:
- *          * สระเสียงสั้น (ะ, ิ, ึ, ุ, เ◌ะ, แ◌ะ, โ◌ะ, ฯลฯ) = คำตาย
- *          * สระเสียงยาว (า, ี, ือ, ู, เ◌, แ◌, โ◌, ฯลฯ) = คำเป็น
- *          │
- *          ▼
- *   4. ตรวจสอบพื้นเสียง (Base Tone):
- *      - อักษรกลาง: คำเป็น = สามัญ, คำตาย = เอก
- *      - อักษรสูง: คำเป็น = จัตวา, คำตาย = เอก
- *      - อักษรต่ำ: คำเป็น = สามัญ, คำตายสระสั้น = ตรี, คำตายสระยาว = โท
- *          │
- *          ▼
- *   5. calculateTones(): แมปคำและรูปวรรณยุกต์ลงในโครงสร้าง 5 ระดับเสียง (1=สามัญ, 2=เอก, 3=โท, 4=ตรี, 5=จัตวา)
- *
- * -----------------------------------------------------------------------------
- * [D] โหมดการเรียนปกติ & โหมดฝึกออกเสียง (Normal & Practice Mode State Machine):
- *
- *  [ โหมดการเรียนปกติ (Normal Mode) ]
- *          │
- *          ├──► เริ่มต้นโปรแกรม: บรรทัด 5 เส้นว่างเปล่า, กล่องวิเคราะห์ยังไม่แสดง
- *          ├──► พิมพ์คำศัพท์ / กดปุ่มพยัญชนะ-สระด่วน ──► Rule Engine วิเคราะห์และเรนเดอร์บน 5 เส้น
- *          ├──► คลิกที่แถวคำ / ชื่อระดับเสียง ──► ขยายขนาด + เล่นเสียงอ่านคำนั้น (IndexedDB -> R2 -> Azure)
- *          ├──► คลิกปุ่ม "ผันเสียง 1-5" ──► เล่นเสียงไล่ระดับอัตโนมัติ (1 -> 5 หรือตามโหมด)
- *          │
- *          ▼ ผู้ใช้คลิกปุ่ม "🎙️ ฝึกออกเสียง" (ปุ่มแบบฝึกหัดวางคำจะถูก Disabled และเป็นสีจาง)
- *  ┌────────────────────────────────────────────────────────────────────────┐
- *  │ [ เริ่มต้นโหมดฝึกออกเสียง (Practice Mode) ]                             │
- *  │ 1. ดึงคำศัพท์ที่กำลังแสดงอยู่บนหน้าจอปัจจุบันเข้าคิว (Queue)               │
- *  │ 2. ล็อกปุ่มคลิกคำอื่นบนกระดาน (practice-locked) ป้องกันการขยายทับซ้อน        │
- *  │ 3. รีเซ็ตคะแนน Score = 0, ซ่อนปุ่มผันเสียง, เปิดไมโครโฟน Web Audio     │
- *  └───────────────────────────────────┬────────────────────────────────────┘
- *                                      │
- *                                      ▼ ◄──────────────────────────────────┐
- *  ┌──────────────────────────────────────────────────────────────────┐     │
- *  │ [ คำเป้าหมายปัจจุบัน (Target Word) ]                                │     │
- *  │ - ขยายใหญ่ 1.48x + เปลี่ยนเป็นสีส้มสด (#ff6b35) ทั้งลูกกลมและก้านโน้ต│     │
- *  │ - เริ่มนับถอยหลัง Timer 10 วินาที                                  │     │
- *  │ - เริ่มต้นลูปตรวจจับเสียงไมค์ (Contour Slope Analysis)            │     │
- *  └───────────────────────────────────┬──────────────────────────────┘     │
- *                                      │                                    │
- *            ┌──────────────────────────┼──────────────────────────┐         │
- *            ▼                          ▼                          ▼         │
- *   [ ผู้เรียนเปล่งเสียงตรง ]      [ เสียงไปโดนคำอื่น ]       [ หมดเวลา 10 วินาที ]│
- *   - ต้องตรงต่อเนื่อง ~120ms    - กรอง Debounce 5 เฟรม    - เล่นเสียงเฉลยต้นแบบ   │
- *   - ได้คะแนน (+10 แต้ม)       - เด้งเตือนชั่วขณะ            - ขึ้นข้อความให้พูดตาม   │
- *   - หดกลับขนาด & สีเดิม        - ไม่คิดคะแนน              - รอจนกว่าจะออกเสียงถูก  │
- *   - เข้าสู่ Cooldown 800ms      - เวลาเดินต่อปกติ                                 │
- *            │                                                     │         │
- *            └──────────────────────────┬──────────────────────────┘         │
- *                                      │                                    │
- *                         [ ตรวจสอบว่ายังมีคำถัดไป? ]                         │
- *                         ├── [ มีคำถัดไป ] ────────────────────────────────┘
- *                         │
- *                         ▼ [ ครบทุกคำ หรือกดปุ่ม ⏭️ ข้าม จนจบ ]
- *  ┌────────────────────────────────────────────────────────────────────────┐
- *  │ [ จบการทดสอบ (Finish Practice) ]                                       │
- *  │ - ปิดไมโครโฟน คืนขนาดและสีวงกลมทุกตัวกลับสู่สภาวะปกติ                     │
- *  │ - แสดงแบนเนอร์สรุปคะแนนรวมบนหน้าจอ (บรรทัดถัดจากปุ่มทดสอบ) ไม่ใช้ Alert   │
- *  │ - ปลดล็อกปุ่มคลิกคำบนกระดานกลับสู่สภาวะปกติ                               │
- *  └───────────────────────────────────┬────────────────────────────────────┘
- *                                      │
- *                                      ▼ เมื่อคลิก "❌ ยกเลิก" หรือปิดสรุปคะแนน
- *                         [ รีเซ็ตกลับสู่หน้าจอการเรียนปกติ ]
- *
- * -----------------------------------------------------------------------------
- * [E] โหมดแบบฝึกหัดวางคำบนเส้นบรรทัด 5 เส้น (Drag-to-Staff Quiz Mode State Machine):
- *
- *  [ โหมดการเรียนปกติ ]
- *          │
- *          ▼ ผู้ใช้คลิกปุ่ม "🎯 วางคำบนเส้นบรรทัด" (ปุ่มฝึกออกเสียงจะถูก Disabled และเป็นสีจาง)
- *  ┌────────────────────────────────────────────────────────────────────────┐
- *  │ [ เริ่มต้นโหมดแบบฝึกหัดวางคำบนเส้น (Staff Quiz Init) ]                   │
- *  │ 1. ดึงคำศัพท์จาก linesData หรือ Word Bank สุ่มกระจายหมู่อักษร 3 หมู่     │
- *  │ 2. เส้นบรรทัด 5 เส้นจะ "ว่างเปล่าทันที" (ซ่อนตัวโน้ตเดิมทั้งหมด)           │
- *  │ 3. ตัวเลขและเส้นบรรทัดแสดงเป็นสีเทากลาง (#94a3b8) เพื่อไม่ให้เดาหมู่อักษร │
- *  │ 4. ซ่อนกล่องวิเคราะห์หลักภาษาเดิมชั่วคราว เพื่อให้ผู้เรียนวิเคราะห์เอง    │
- *  │ 5. ตัวโน้ตคำถามด้านล่างมีขนาดใหญ่เท่าตัวโน้ตปกติ (48px)                 │
- *  │    และเริ่มต้นด้วย "สีส้มปริศนา (#f97316)" เพื่อไม่ให้ทราบหมู่อักษร     │
- *  └───────────────────────────────────┬────────────────────────────────────┘
- *                                      │
- *                                      ▼
- *  ┌────────────────────────────────────────────────────────────────────────┐
- *  │ [ ผู้เรียนลากคำ (Pointer Down & Drag) ไปวางบนเส้นบรรทัด 1 - 5 ]         │
- *  │ - หากปล่อยเมาส์/นิ้ว ตัวโน้ตจะดีดกลับไปจุดเริ่มต้นด้านล่างเสมอ             │
- *  │ - ตรวจจับ Hitbox ด้วย data-tone-line-id (1=สามัญ, 2=เอก, 3=โท, 4=ตรี, 5=จัตวา) │
- *  └───────────────────────────────────┬────────────────────────────────────┘
- *                                      │
- *                    ┌─────────────────┴─────────────────┐
- *                    ▼                                   ▼
- *          [ วางตรงกับระดับเสียงจริง ]         [ วางผิดระดับเสียง ]
- *                    │                                   │
- *          ┌──────────┴──────────┐               attempts = attempts + 1
- *     attempts == 0         attempts == 1                 │
- *          │                     │                        ▼
- *      +2 คะแนน              +1 คะแนน              ┌──────────┴──────────┐
- *          │                     │                 ▼                     ▼
- *          └──────────┬──────────┘           attempts < 3          attempts == 3
- *                     │                      สั่นเตือน (Shake)       [ เฉลยคำตอบ ]
- *                     │                      เด้งกลับแท่นวางล่าง     - attempts ไม่ได้คะแนน
- *                     │                      ให้ผู้เรียนลองวางใหม่ - วิ่งไปเส้นที่ถูก
- *                     │                                            - ขยายใหญ่ 1.45x สีส้ม
- *                     │                                            - หดกลับขนาดปกติ
- *                     │                                                  │
- *                     ▼ ◄───────────────────────────────────────────────┘
- *  ┌────────────────────────────────────────────────────────────────────────┐
- *  │ [ สถานะสำเร็จประจำข้อ (Question Resolved) ]                             │
- *  │ 1. Snap ตัวโน้ตลงประจำเส้นเสียงที่ถูกต้อง (1 - 5)                        │
- *  │ 2. เปลี่ยนสีตัวโน้ตจากสีส้มเป็น "สีประจำหมู่อักษรเดิม" (เขียว/แดง/น้ำเงิน) │
- *  │ 3. กล่อง "📌 ผลวิเคราะห์หลักภาษา" ปรากฏขึ้นมาด้านบนเส้นบรรทัด             │
- *  │ 4. เล่นเสียงอ่านออกเสียงคำนั้นอัตโนมัติ (Web Audio / TTS API)           │
- *  │ 5. ปรากฏปุ่ม "ข้อต่อไป ❯ (Next)"                                       │
- *  └───────────────────────────────────┬────────────────────────────────────┘
- *                                      │
- *                    ┌─────────────────┴─────────────────┐
- *                    ▼                                   ▼
- *            คลิกปุ่ม "ข้อต่อไป ❯"                 คลิกปุ่ม "❌ ยกเลิกแบบฝึกหัด"
- *                    │                                   │
- *            [ มีข้อถัดไปในคิว ]                           ▼
- *            ├── โหลดข้อถัดไป (attempts = 0)        [ ออกจากแบบฝึกหัดทันที ]
- *            │   เส้นบรรทัดกลับมาว่างเปล่า          - เคลียร์ State ของ Quiz
- *            │   ซ่อนกล่องวิเคราะห์ภาษา             - คืนสู่หน้าจอการเรียนปกติ
- *            │   ตัวโน้ตล่างจอกลับเป็นสีส้ม
- *            │
- *            [ ครบทุกข้อในชุดแบบฝึกหัด ]
- *            └──► แสดง Banner สรุปคะแนนรวมที่ทำได้ / คะแนนเต็ม
+ * [D] สลับโหมดฝึกออกเสียง (Practice Mode):
+ *     1. ปุ่ม "วางคำบนเส้นบรรทัด" จะถูก Disabled และ Dimmed จางลง
+ *     2. ตรวจจับเส้นเสียงไมโครโฟน F0 -> Contour Matching
  * =============================================================================
  */
 
-const apiKey = "";
 const CHANNEL_NAME = "thai_tone_sync_channel";
 const STORAGE_KEY = "thai_tone_live_sync_data";
 const TTS_API_ENDPOINT = "/api/tts";
@@ -441,7 +197,7 @@ export default function App() {
   const [voices, setVoices] = useState([]);
   const [selectedVoiceURI, setSelectedVoiceURI] = useState("");
 
-  // สถานะสำหรับโหมดฝึกออกเสียง
+  // สถานะโหมดฝึกออกเสียง
   const [isPracticing, setIsPracticing] = useState(false);
   const [practiceScore, setPracticeScore] = useState(0);
   const [totalPossibleScore, setTotalPossibleScore] = useState(0);
@@ -451,7 +207,7 @@ export default function App() {
   const [practiceTargetWord, setPracticeTargetWord] = useState(null);
   const [mismatchWord, setMismatchWord] = useState(null);
 
-  // สถานะสำหรับโหมดแบบฝึกหัดวางคำบนเส้นบรรทัด 5 เส้น (Drag-to-Staff Quiz)
+  // สถานะโหมดแบบฝึกหัดวางคำบนเส้นบรรทัด 5 เส้น
   const [isQuizMode, setIsQuizMode] = useState(false);
 
   const micStreamRef = useRef(null);
@@ -514,12 +270,15 @@ export default function App() {
     const playAudioBlob = async (blob) => {
       const audioUrl = URL.createObjectURL(blob);
       const audio = new Audio(audioUrl);
+
       const previousAudio = speechRef.current;
       if (previousAudio instanceof HTMLAudioElement) {
         previousAudio.pause();
         previousAudio.currentTime = 0;
       }
+
       speechRef.current = audio;
+
       await new Promise((resolve) => {
         audio.onended = () => {
           URL.revokeObjectURL(audioUrl);
@@ -554,13 +313,15 @@ export default function App() {
           rate: Number(speechRate),
         }),
       });
+
       if (!response.ok) throw new Error(`Azure TTS HTTP ${response.status}`);
+
       const audioBlob = await response.blob();
       setLocalAudioBlob(cacheKey, audioBlob);
       await playAudioBlob(audioBlob);
       return;
     } catch (err) {
-      console.warn("Azure Thai TTS unavailable; using browser Thai voice fallback:", err);
+      console.warn("Azure Thai TTS fallback:", err);
     }
 
     const availableVoices = window.speechSynthesis.getVoices();
@@ -852,11 +613,15 @@ export default function App() {
     isCancelingAutoPlayRef.current = false;
   };
 
+  // ปรับให้สามารถคลิก Active ขยายย่อเส้นบรรทัดได้เสมอแม้ไม่มีคำ
   const handleRowClick = (item) => {
-    if (!item.show || isPracticing || isQuizMode) return;
+    if (isPracticing || isQuizMode) return;
     const isExpanding = activeRowId !== item.id;
     setActiveRowId(isExpanding ? item.id : null);
-    if (isExpanding) speak(getSpeechText(item));
+    if (isExpanding) {
+      const wordToSpeak = getSpeechText(item);
+      if (wordToSpeak) speak(wordToSpeak);
+    }
   };
 
   const validateInput = (word) => {
@@ -901,7 +666,7 @@ export default function App() {
       setAnalysisInfo(analyzeSyllable(word, mode));
     };
 
-    const activeKey = customApiKey.trim() || apiKey;
+    const activeKey = customApiKey.trim();
     if (!activeKey) {
       fallback();
       return;
@@ -1117,9 +882,11 @@ export default function App() {
 
   const handleOpenDualMonitor = () => {
     if (typeof window === "undefined") return;
+
     const currentUrl = window.location.href.split("?")[0];
     const screenWidth = window.screen?.availWidth || 1440;
     const screenHeight = window.screen?.availHeight || 900;
+
     const popupWidth = Math.max(960, Math.min(1600, Math.floor(screenWidth * 0.86)));
     const popupHeight = Math.max(640, Math.min(900, Math.floor(screenHeight * 0.82)));
     const popupLeft = Math.max(0, Math.floor((screenWidth - popupWidth) / 2));
@@ -1281,6 +1048,7 @@ export default function App() {
       if (event.data?.type === "SYNC_STATE") apply(event.data);
       if (event.data?.type === "TOGGLE_FULLSCREEN") toggleFullscreen();
     };
+
     channel.addEventListener("message", listener);
     channel.postMessage({ type: "REQUEST_SYNC" });
 
@@ -1417,11 +1185,14 @@ export default function App() {
             style={{
               backgroundColor: staffBgColor,
               borderRadius: "16px",
-              padding: viewLayout === "present" ? "40px 50px" : "35px 25px",
+              padding: viewLayout === "present" ? "35px 45px" : "25px 20px",
               boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
               backdropFilter: "blur(6px)",
-              scrollbarWidth: "none",
-              msOverflowStyle: "none",
+              display: "flex",
+              flexDirection: "column",
+              height: "100%",
+              minHeight: 0,
+              overflow: "hidden",
             }}
           >
             <ToneBoard

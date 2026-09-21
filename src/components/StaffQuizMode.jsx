@@ -35,10 +35,8 @@ function generateBalancedQuizQueue(linesData) {
     }
   });
 
-  // หากหน้าจอมีคำอยู่ให้ใช้คำบนหน้าจอเป็นหลัก หากไม่มีคำให้ใช้ Word Bank สลับกลุ่ม
   const basePool = currentWords.length >= 3 ? currentWords : QUIZ_WORD_BANK;
   
-  // แบ่งคำตามกลุ่ม
   const midList = basePool.filter(w => w.originalColor === "#22c55e" || w.group === "middle").sort(() => Math.random() - 0.5);
   const highList = basePool.filter(w => w.originalColor === "#ef4444" || w.group === "high").sort(() => Math.random() - 0.5);
   const lowList = basePool.filter(w => w.originalColor === "#007bff" || w.group === "low").sort(() => Math.random() - 0.5);
@@ -195,6 +193,7 @@ export default function StaffQuizMode({
             )}
           </div>
 
+          {/* วงกลมคำถามขนาดมาตรฐาน 48px สีส้มปริศนา */}
           {!isResolved && (
             <div
               className={`tone-circle quiz-draggable-node ${shakeAnim ? "shake-error" : ""}`}
