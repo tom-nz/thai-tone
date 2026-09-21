@@ -2,11 +2,11 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { autoCorrelate, classifyToneContour, TONE_TARGET_FREQS } from './utils/pitchDetector';
 import StaffQuizMode from "./components/StaffQuizMode";
 
-// นำเข้าฟอนต์ Noto Sans Thai (แบบมีหัว / Looped) แบบ Local/Offline
-import "@fontsource/noto-sans-thai/400.css";
-import "@fontsource/noto-sans-thai/500.css";
-import "@fontsource/noto-sans-thai/600.css";
-import "@fontsource/noto-sans-thai/700.css";
+// นำเข้าฟอนต์ Sarabun (มีหัวชัดเจน อ่านง่าย) แบบ Local/Offline
+import "@fontsource/sarabun/400.css";
+import "@fontsource/sarabun/500.css";
+import "@fontsource/sarabun/600.css";
+import "@fontsource/sarabun/700.css";
 
 /**
  * =============================================================================
@@ -1744,7 +1744,7 @@ export default function App() {
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(normalizedText);
-    utter.lang = "th-TH";
+    utterance.lang = "th-TH";
     utterance.voice = thaiVoice;
     utterance.rate = Number(speechRate);
     utterance.pitch = 1;
@@ -3253,7 +3253,7 @@ const styles = `
   html, body, #root { width: 100%; height: 100%; }
   body {
     margin: 0;
-    font-family: "Noto Sans Thai", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: "Sarabun", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     overflow: hidden;
   }
   button, input, select { font-family: inherit; }
