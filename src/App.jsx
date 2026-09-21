@@ -1,12 +1,27 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { autoCorrelate, classifyToneContour, TONE_TARGET_FREQS } from './utils/pitchDetector';
-import StaffQuizMode from "./components/StaffQuizMode";
-
-// นำเข้าฟอนต์ Sarabun (มีหัวชัดเจน อ่านง่าย) แบบ Local/Offline
 import "@fontsource/sarabun/400.css";
 import "@fontsource/sarabun/500.css";
 import "@fontsource/sarabun/600.css";
 import "@fontsource/sarabun/700.css";
+import "./App.css";
+
+import { autoCorrelate, classifyToneContour } from "./utils/pitchDetector";
+import {
+  STRICT_THAI_SYLLABLE_PATTERN,
+  toneRows,
+  analyzeSyllable,
+  calculateTones,
+  validateEnteredToneMark,
+} from "./utils/toneRules";
+import {
+  getLocalAudioBlob,
+  setLocalAudioBlob,
+  deleteLocalAudioBlob,
+  clearAllLocalAudioBlobs,
+} from "./utils/audioCache";
+
+import ToneBoard from "./components/ToneBoard";
+import ControlPanel from "./components/ControlPanel";
 
 /**
  * =============================================================================
@@ -100,19 +115,41 @@ import "@fontsource/sarabun/700.css";
  *      - DLTV: ใบความรู้การผันวรรณยุกต์ และตารางคำเป็น/คำตาย
  *
  * =============================================================================
- * 2. SYSTEM ARCHITECTURE & RELATED FILES MAPPING
+ * 2. SYSTEM ARCHITECTURE & RELATED FILES MAPPING (MODULAR REFACTORING)
  * =============================================================================
  *
- *  - src/App.jsx:
- *      หัวใจหลักของแอปพลิเคชัน รวบรวม Rule Engine, State Management,
- *      คอมโพเนนต์ ToneBoard, ControlPanel, ระบบ Multi-tier Caching (IndexedDB),
- *      ระบบ BroadcastChannel ซิงค์จอที่ 2, โหมดฝึกออกเสียง (Practice Mode)
- *      และโหมดแบบฝึกหัดวางคำบนเส้นบรรทัด 5 เส้น (Drag-to-Staff Quiz Mode)
+ *  - src/App.jsx (Main Controller & Orchestrator Hub):
+ *      ศูนย์กลาง State Management หลักของโปรแกรม, Web Audio Context Controller,
+ *      Microphone Pitch Detection Listener Loop, ระบบซิงค์ Dual Screen ด้วย BroadcastChannel,
+ *      และการสลับ View Layouts (Standard, Split, Preview)
+ *
+ *  - src/components/ToneBoard.jsx:
+ *      กระดานแสดงผลบรรทัด 5 เส้น, การเรนเดอร์โน้ตดนตรีไทย (Tone Circles), ก้านโน้ต (Stem),
+ *      กล่องแสดงผลวิเคราะห์หลักภาษา (Dynamic Linguistic Analysis Box),
+ *      ปุ่มคำสั่งออกเสียงผันวรรณยุกต์ 1-5, และปุ่มเปิด-ปิด Practice / Quiz Mode
+ *
+ *  - src/components/ControlPanel.jsx:
+ *      แผงควบคุมระบบด้านขวา: ปุ่มสลับโหมดการผัน (5 เสียง / เสียงสูง / เสียงต่ำ / คู่เสียง),
+ *      Input กรอกคำ, แป้นเลือกพยัญชนะด่วน 44 ตัว, แป้นสระสั้น-ยาว,
+ *      แถบตั้งค่าเสียงอ่าน TTS, แผงจัดการคลังเสียง (IndexedDB/D1), และ Gemini AI API Input
  *
  *  - src/components/StaffQuizMode.jsx:
  *      คอมโพเนนต์แบบฝึกหัดลากวางคำบนเส้นบรรทัด 5 เส้น (Component-Driven Isolation)
- *      จัดการ State การลากวาง, การตรวจจับพิกัด Drop, การนับคะแนน (2, 1, 0),
- *      และการส่ง Event กลับมา Snap ตัวโน้ตลงบนเส้นบรรทัดของกระดานหลัก
+ *      จัดการ State การลากวาง (Pointer Drag & Drop), การตรวจจับพิกัด Hitbox,
+ *      ระบบการนับคะแนน (2, 1, 0 คะแนน), แอนิเมชันสั่นเตือนเมื่อผิด,
+ *      และการส่ง Event กลับมา Snap ตัวโน้ตลงบนเส้นบรรทัดของ ToneBoard
+ *
+ *  - src/utils/toneRules.js:
+ *      Rule Engine แกนหลักของภาษาไทย:
+ *        1) parseThaiWord(word): แยกสระหน้า, พยัญชนะต้น/ควบกล้ำ/ห-นำ, สระบน-ล่าง, รูปวรรณยุกต์, ตัวสะกด
+ *        2) analyzeSyllable(word, mode): จำแนกหมู่อักษร, คำเป็น/ตาย, สระสั้น/ยาว, อธิบายหลักภาษา
+ *        3) calculateTones(word, mode, ...): คำนวณกระจายคำลงเส้นบรรทัด 5 ระดับเสียงตามหลักไตรยางศ์
+ *        4) validateEnteredToneMark(word): ตรวจสอบความถูกต้องของรูปวรรณยุกต์ที่กรอก
+ *        5) runToneRuleSelfTests(): Regression test suite ป้องกันการแก้กฎหลักเสียหาย
+ *
+ *  - src/utils/audioCache.js:
+ *      ระบบ Local Multi-tier Audio Caching ผ่าน IndexedDB (DB: thai_tone_audio_cache, Store: audio_blobs)
+ *      บันทึกไฟล์เสียง Blob ที่ดาวน์โหลดมาจาก Cloudflare R2 / Azure ช่วยให้เล่นซ้ำได้แบบ 0 Latency และออฟไลน์
  *
  *  - src/utils/pitchDetector.js:
  *      โมดูลวิเคราะห์สัญญาณเสียงไมโครโฟน ประกอบด้วย:
@@ -121,8 +158,8 @@ import "@fontsource/sarabun/700.css";
  *           เพื่อจำแนกวรรณยุกต์ (สามัญ, เอก, โท=ตกวูบ, ตรี=สูง, จัตวา=ช้อนขึ้น)
  *        3) TONE_TARGET_FREQS: ตัวแปรค่าความถี่อ้างอิงของแต่ละระดับเสียง
  *
- *  - src/utils/audioService.js:
- *      เซอร์วิสจัดการไฟล์เสียงและการเชื่อมต่อ API ฝั่ง Cloudflare / Azure
+ *  - src/App.css:
+ *      ไฟล์รวมสไตล์ชีต CSS ทั้งหมดของทั้งหน้าจอหลัก, จอที่ 2, โน้ตเพลง, และแอนิเมชัน
  *
  *  - functions/api/tts.js & functions/api/words.js:
  *      Cloudflare Pages Functions (Serverless Backend) เชื่อมต่อกับ:
@@ -131,10 +168,94 @@ import "@fontsource/sarabun/700.css";
  *        - Azure Cognitive Services Speech API (สังเคราะห์เสียงภาษาไทย th-TH)
  *
  * =============================================================================
- * 3. PROGRAM FLOWCHART & STATE MACHINES
+ * 3. PROGRAM FLOWCHART, ALGORITHMS & STATE MACHINES
  * =============================================================================
  *
- * [A] โหมดการเรียนปกติ & โหมดฝึกออกเสียง (Normal & Practice Mode):
+ * [A] โมดูลาร์และทิศทางการส่งข้อมูล (Module Architecture Flow):
+ *
+ *                        ┌──────────────────────────────┐
+ *                        │      App.jsx (Main Hub)      │
+ *                        │   State, Web Audio, Sync     │
+ *                        └──────────────┬───────────────┘
+ *                                       │
+ *         ┌─────────────────────────────┼─────────────────────────────┐
+ *         ▼ (Props: linesData, etc.)     ▼ (Props: handlers, states)   ▼ (Mode, linesData)
+ *  ┌───────────────┐            ┌─────────────────┐           ┌─────────────────┐
+ *  │ ToneBoard.jsx │            │ControlPanel.jsx │           │StaffQuizMode.jsx│
+ *  │ - Render Staves│           │ - Word Input    │           │ - Drag & Drop   │
+ *  │ - Note Stems  │            │ - Consonant Pad │           │ - Hitbox Check  │
+ *  │ - Analysis Box│            │ - Sound Vault   │           │ - Score Tracking│
+ *  └───────┬───────┘            └────────┬────────┘           └────────┬────────┘
+ *          │                             │                              │
+ *          └───────────────────────┐     │     ┌────────────────────────┘
+ *                                  ▼     ▼     ▼
+ *  ┌────────────────────────────────────────────────────────────────────────┐
+ *  │                       CORE UTILITIES & SERVICES                        │
+ *  │  - utils/toneRules.js      (Rule Engine, Grammar Analysis, Self-Tests) │
+ *  │  - utils/audioCache.js     (IndexedDB Client Blob Cache)               │
+ *  │  - utils/pitchDetector.js  (AutoCorrelation, Slope & Contour Matching) │
+ *  └────────────────────────────────────────────────────────────────────────┘
+ *
+ * -----------------------------------------------------------------------------
+ * [B] ลำดับการเรียกไฟล์เสียง (Multi-tier Audio Strategy Pipeline):
+ *
+ *   คลิกตัวโน้ต / กดผันเสียง 1-5 / ฝึกพูด / เสียงเฉลย
+ *                           │
+ *                           ▼
+ *   [Tier 1] ตรวจสอบ Cache ในเบราว์เซอร์ (IndexedDB: thai_tone_audio_cache)
+ *          ├── [ พบ Blob ] ────────────────► เล่นเสียงทันที (Zero Latency / Offline 100%)
+ *          └── [ ไม่พบในเครื่อง ]
+ *                           │
+ *                           ▼
+ *   [Tier 2 & 3] ส่ง HTTP Request ไปยัง Pages Function: /api/tts
+ *          ├── [ Tier 2: พบบน Cloudflare R2 Cache ] ──► โหลดกลับ ➔ เก็บลง IndexedDB ➔ เล่นเสียง
+ *          └── [ Tier 3: R2 ยังไม่มี ]
+ *                           │
+ *                           ▼
+ *   [Cloudflare Pages] ร้องขอ Azure Cognitive Services Speech API (th-TH-PremwadeeNeural)
+ *          └──► ได้รับเสียงสังเคราะห์ ➔ อัปโหลดเก็บเข้า R2 ➔ ส่งกลับเบราว์เซอร์ ➔ บันทึก IndexedDB ➔ เล่นเสียง
+ *                           │
+ *          (กรณีไม่มีเน็ต / Azure ติดขัด)
+ *                           ▼
+ *   [Tier 4] Web Speech API Fallback (window.speechSynthesis) ดึงเสียง th-TH ประจำเครื่อง
+ *
+ * -----------------------------------------------------------------------------
+ * [C] อัลกอริทึมการวิเคราะห์คำและการผัน (Syllable Grammar Engine Logic):
+ *
+ *   คำศัพท์นำเข้า (inputText)
+ *          │
+ *          ▼
+ *   1. parseThaiWord(): ตรวจสระหน้า (เ, แ, โ, ใ, ไ), พยัญชนะต้น/ควบกล้ำ/ห-นำ,
+ *      สระบน-ล่าง (ิ, ี, ึ, ื, ุ, ู, ั, ็), รูปวรรณยุกต์ (่, ้, ๊, ๋), ตัวสะกด
+ *          │
+ *          ▼
+ *   2. getConsonantClass(): จำแนกพยัญชนะต้นตามไตรยางศ์
+ *      - อักษรกลาง (9 ตัว: ก จ ฎ ฏ ด ต บ ป อ)
+ *      - อักษรสูง (11 ตัว: ข ฃ ฉ ฐ ถ ผ ฝ ศ ษ ส ห)
+ *      - อักษรต่ำ (24 ตัว) แยกย่อย:
+ *          * ต่ำคู่ (14 ตัว: ค ฅ ฆ ช ฌ ซ ฑ ฒ ท ธ พ ภ ฟ ฮ) มีคู่เสียงสูง ข ฉ ฐ ถ ผ ฝ ศ ษ ส ห
+ *          * ต่ำเดี่ยว (10 ตัว: ง ญ ณ น ม ย ร ล ฬ ว) ไม่มีคู่เสียงสูง ต้องใช้ "ห-นำ"
+ *          │
+ *          ▼
+ *   3. ตรวจสอบคำเป็น/คำตาย (Live vs Dead Syllable):
+ *      - มีตัวสะกด:
+ *          * แม่กก, แม่กด, แม่กบ (มาตรา กบด) = คำตาย
+ *          * แม่กง, แม่กน, แม่กม, แม่เกย, แม่เกอว (มาตรา นมยวง) = คำเป็น
+ *      - ไม่มีตัวสะกด:
+ *          * สระเสียงสั้น (ะ, ิ, ึ, ุ, เ◌ะ, แ◌ะ, โ◌ะ, ฯลฯ) = คำตาย
+ *          * สระเสียงยาว (า, ี, ือ, ู, เ◌, แ◌, โ◌, ฯลฯ) = คำเป็น
+ *          │
+ *          ▼
+ *   4. ตรวจสอบพื้นเสียง (Base Tone):
+ *      - อักษรกลาง: คำเป็น = สามัญ, คำตาย = เอก
+ *      - อักษรสูง: คำเป็น = จัตวา, คำตาย = เอก
+ *      - อักษรต่ำ: คำเป็น = สามัญ, คำตายสระสั้น = ตรี, คำตายสระยาว = โท
+ *          │
+ *          ▼
+ *   5. calculateTones(): แมปคำและรูปวรรณยุกต์ลงในโครงสร้าง 5 ระดับเสียง (1=สามัญ, 2=เอก, 3=โท, 4=ตรี, 5=จัตวา)
+ *
+ * -----------------------------------------------------------------------------
+ * [D] โหมดการเรียนปกติ & โหมดฝึกออกเสียง (Normal & Practice Mode State Machine):
  *
  *  [ โหมดการเรียนปกติ (Normal Mode) ]
  *          │
@@ -184,7 +305,7 @@ import "@fontsource/sarabun/700.css";
  *                         [ รีเซ็ตกลับสู่หน้าจอการเรียนปกติ ]
  *
  * -----------------------------------------------------------------------------
- * [B] โหมดแบบฝึกหัดวางคำบนเส้นบรรทัด 5 เส้น (Drag-to-Staff Quiz Mode):
+ * [E] โหมดแบบฝึกหัดวางคำบนเส้นบรรทัด 5 เส้น (Drag-to-Staff Quiz Mode State Machine):
  *
  *  [ โหมดการเรียนปกติ ]
  *          │
@@ -247,1302 +368,6 @@ import "@fontsource/sarabun/700.css";
  * =============================================================================
  */
 
-const apiKey = "";
-const CHANNEL_NAME = "thai_tone_sync_channel";
-const STORAGE_KEY = "thai_tone_live_sync_data";
-const TTS_API_ENDPOINT = "/api/tts";
-const WORDS_API_ENDPOINT = "/api/words";
-const TTS_VOICE = "th-TH-PremwadeeNeural";
-
-const LOCAL_AUDIO_DB_NAME = "thai_tone_audio_cache";
-const LOCAL_AUDIO_STORE_NAME = "audio_blobs";
-
-const STRICT_THAI_SYLLABLE_PATTERN = /^[เแโใไ]?[ก-ฮ]{1,2}[ิีึืุูั็ํ]?[่้๊๋]?(?:[ายวอ]|ำ)?[ก-ฮ]?(?:ะ|์)?$/;
-
-const midConsonants = ["ก", "จ", "ด", "ต", "บ", "ป", "อ", "ฎ", "ฏ"];
-const highConsonants = ["ข", "ฃ", "ฉ", "ฐ", "ถ", "ผ", "ฝ", "ศ", "ษ", "ส", "ห"];
-const lowSingleConsonants = ["ง", "ญ", "ณ", "น", "ม", "ย", "ร", "ล", "ฬ", "ว"];
-
-const lowPairConsonants = [
-  "ค", "ฅ", "ฆ", "ช", "ฌ", "ซ", "ฑ", "ฒ",
-  "ท", "ธ", "พ", "ภ", "ฟ", "ฮ",
-];
-
-const lowConsonants = [
-  ...lowPairConsonants,
-  ...lowSingleConsonants,
-];
-
-const allThaiConsonants = [
-  ...midConsonants,
-  ...highConsonants,
-  ...lowConsonants,
-];
-
-const quickConsonants = [
-  "ก", "ข", "ฃ", "ค", "ฅ", "ฆ", "ง", "จ", "ฉ", "ช", "ซ",
-  "ฌ", "ญ", "ฎ", "ฏ", "ฐ", "ฑ", "ฒ", "ณ", "ด", "ต", "ถ",
-  "ท", "ธ", "น", "บ", "ป", "ผ", "ฝ", "พ", "ฟ", "ภ", "ม",
-  "ย", "ร", "ล", "ว", "ศ", "ษ", "ส", "ห", "ฬ", "อ", "ฮ",
-];
-
-const trueClusters = [
-  "กร", "กล", "กว", "ขร", "ขล", "ขว", "คร", "คล", "คว",
-  "ตร", "ปร", "ปล", "พร", "พล", "ฟร", "ฟล",
-];
-
-const leadingHoClusters = [
-  "หง", "หญ", "หน", "หม", "หย", "หร", "หล", "หว",
-];
-
-const leadingOClusters = ["อย"];
-const falseClusters = ["ทร", "ศร", "สร", "จร", "ซร"];
-
-const thaiClusters = [
-  ...trueClusters,
-  ...leadingHoClusters,
-  ...leadingOClusters,
-  ...falseClusters,
-];
-
-const longVowels = [
-  { label: "◌า", front: "", rear: "า" },
-  { label: "◌ี", front: "", rear: "ี" },
-  { label: "◌ือ", front: "", rear: "ือ" },
-  { label: "◌ู", front: "", rear: "ู" },
-  { label: "เ◌", front: "เ", rear: "" },
-  { label: "แ◌", front: "แ", rear: "" },
-  { label: "โ◌", front: "โ", rear: "" },
-  { label: "◌อ", front: "", rear: "อ" },
-  { label: "เ◌อ", front: "เ", rear: "อ" },
-  { label: "เ◌ีย", front: "เ", rear: "ีย" },
-  { label: "เ◌ือ", front: "เ", rear: "ือ" },
-  { label: "◌ัว", front: "", rear: "ัว" },
-  { label: "◌ำ", front: "", rear: "ำ" },
-  { label: "ใ◌", front: "ใ", rear: "" },
-  { label: "ไ◌", front: "ไ", rear: "" },
-  { label: "เ◌า", front: "เ", rear: "า" },
-];
-
-const shortVowels = [
-  { label: "◌ะ", front: "", rear: "ะ" },
-  { label: "◌ิ", front: "", rear: "ิ" },
-  { label: "◌ึ", front: "", rear: "ึ" },
-  { label: "◌ุ", front: "", rear: "ุ" },
-  { label: "เ◌ะ", front: "เ", rear: "ะ" },
-  { label: "แ◌ะ", front: "แ", rear: "ะ" },
-  { label: "โ◌ะ", front: "โ", rear: "ะ" },
-  { label: "เ◌าะ", front: "เ", rear: "าะ" },
-  { label: "เ◌อะ", front: "เ", rear: "อะ" },
-  { label: "เ◌ียะ", front: "เ", rear: "ียะ" },
-  { label: "เ◌ือะ", front: "เ", rear: "ือะ" },
-  { label: "◌ัวะ", front: "", rear: "ัวะ" },
-];
-
-const toneRows = [
-  { id: 5, tone: "เสียงจัตวา", mark: "◌๋", leftPos: "80%" },
-  { id: 4, tone: "เสียงตรี", mark: "◌๊", leftPos: "65%" },
-  { id: 3, tone: "เสียงโท", mark: "◌้", leftPos: "52%" },
-  { id: 2, tone: "เสียงเอก", mark: "◌่", leftPos: "40%" },
-  { id: 1, tone: "เสียงสามัญ", mark: "-", leftPos: "28%" },
-];
-
-function openAudioCacheDB() {
-  return new Promise((resolve, reject) => {
-    if (typeof indexedDB === "undefined") {
-      reject(new Error("IndexedDB not supported in this environment"));
-      return;
-    }
-    const request = indexedDB.open(LOCAL_AUDIO_DB_NAME, 1);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(LOCAL_AUDIO_STORE_NAME)) {
-        db.createObjectStore(LOCAL_AUDIO_STORE_NAME);
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-async function getLocalAudioBlob(key) {
-  try {
-    const db = await openAudioCacheDB();
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(LOCAL_AUDIO_STORE_NAME, "readonly");
-      const req = tx.objectStore(LOCAL_AUDIO_STORE_NAME).get(key);
-      req.onsuccess = () => resolve(req.result || null);
-      req.onerror = () => reject(req.error);
-    });
-  } catch (err) {
-    console.warn("getLocalAudioBlob error:", err);
-    return null;
-  }
-}
-
-async function setLocalAudioBlob(key, blob) {
-  try {
-    const db = await openAudioCacheDB();
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(LOCAL_AUDIO_STORE_NAME, "readwrite");
-      tx.objectStore(LOCAL_AUDIO_STORE_NAME).put(blob, key);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch (err) {
-    console.warn("setLocalAudioBlob error:", err);
-  }
-}
-
-async function deleteLocalAudioBlob(key) {
-  try {
-    const db = await openAudioCacheDB();
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(LOCAL_AUDIO_STORE_NAME, "readwrite");
-      tx.objectStore(LOCAL_AUDIO_STORE_NAME).delete(key);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch (err) {
-    console.warn("deleteLocalAudioBlob error:", err);
-  }
-}
-
-async function clearAllLocalAudioBlobs() {
-  try {
-    const db = await openAudioCacheDB();
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(LOCAL_AUDIO_STORE_NAME, "readwrite");
-      tx.objectStore(LOCAL_AUDIO_STORE_NAME).clear();
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch (err) {
-    console.warn("clearAllLocalAudioBlobs error:", err);
-  }
-}
-
-function ModeRadio({ value, checked, label, onChange }) {
-  return (
-    <label style={{ display: "flex", alignItems: "center", gap: "9px", cursor: "pointer" }}>
-      <input
-        type="radio"
-        name="mode"
-        checked={checked}
-        onChange={() => onChange(value)}
-        style={{
-          appearance: "none",
-          width: "18px",
-          height: "18px",
-          borderRadius: "50%",
-          border: "2px solid #475569",
-          backgroundColor: checked ? "#000000" : "#ffffff",
-          cursor: "pointer",
-          margin: 0,
-          flexShrink: 0,
-        }}
-      />
-      {label}
-    </label>
-  );
-}
-
-const TONE_RULE_TABLE = Object.freeze({
-  middle: {
-    live: Object.freeze({ 1: "", 2: "่", 3: "้", 4: "๊", 5: "๋" }),
-    dead: Object.freeze({ 2: "", 3: "้", 4: "๊", 5: "๋" }),
-  },
-  high: {
-    live: Object.freeze({ 2: "่", 3: "้", 5: "" }),
-    dead: Object.freeze({ 2: "", 3: "้" }),
-  },
-  low: {
-    live: Object.freeze({ 1: "", 3: "่", 4: "้" }),
-    deadShort: Object.freeze({ 3: "่", 4: "" }),
-    deadLong: Object.freeze({ 3: "่", 4: "้" }),
-  },
-});
-
-const lowToHighPair = Object.freeze({
-  ค: "ข", ฅ: "ฃ", ฆ: "ข",
-  ช: "ฉ", ฌ: "ฉ",
-  ซ: "ศ",
-  ฑ: "ฐ", ฒ: "ฐ", ท: "ถ", ธ: "ถ",
-  พ: "ผ", ภ: "ผ",
-  ฟ: "ฝ",
-  ฮ: "ห",
-});
-
-const highToLowPair = Object.freeze({
-  ข: "ค", ฃ: "ฅ",
-  ฉ: "ช",
-  ฐ: "ฑ", ถ: "ท",
-  ผ: "พ", ฝ: "ฟ",
-  ศ: "ซ", ษ: "ซ", ส: "ซ",
-  ห: "ฮ",
-});
-
-const DEAD_FINAL_CONSONANTS = new Set([
-  "ก", "ข", "ฃ", "ค", "ฅ", "ฆ",
-  "จ", "ช", "ซ", "ฎ", "ฏ", "ฐ", "ฑ", "ฒ",
-  "ด", "ต", "ถ", "ท", "ธ", "ศ", "ษ", "ส",
-  "บ", "ป", "พ", "ฟ", "ภ",
-]);
-
-function getConsonantClass(initial = "", initialKind = "single") {
-  if (!initial) return "unknown";
-  if (initialKind === "leadingHo") return "high";
-  if (initialKind === "leadingO") return "middle";
-  const first = initial[0];
-  if (midConsonants.includes(first)) return "middle";
-  if (highConsonants.includes(first)) return "high";
-  if (lowPairConsonants.includes(first)) return "low";
-  if (lowSingleConsonants.includes(first)) return "low";
-  return "unknown";
-}
-
-function getPairedInitial(initial = "", initialKind = "single", targetClass = "high") {
-  if (!initial) return "";
-  if (initialKind === "leadingHo") {
-    const base = initial[1] || "";
-    return targetClass === "high" ? initial : base;
-  }
-  if (initialKind === "leadingO") return initial;
-
-  const first = initial[0];
-  const rest = initial.slice(1);
-
-  if (targetClass === "high") {
-    const high = highConsonants.includes(first)
-      ? first
-      : lowSingleConsonants.includes(first)
-        ? `ห${first}`
-        : lowToHighPair[first] || `ห${first}`;
-    return `${high}${rest}`;
-  }
-
-  if (targetClass === "low") {
-    const low = lowSingleConsonants.includes(first)
-      ? first
-      : highToLowPair[first] || first;
-    return `${low}${rest}`;
-  }
-  return initial;
-}
-
-function isShortThaiVowel(frontVowel, aboveBelowVowel, rest) {
-  const vowelPart = `${frontVowel}${aboveBelowVowel}${rest}`;
-  return (
-    vowelPart.includes("ะ") ||
-    vowelPart.includes("ิ") ||
-    vowelPart.includes("ึ") ||
-    vowelPart.includes("ุ") ||
-    vowelPart.includes("ั") ||
-    vowelPart.includes("็") ||
-    /^เ.*อะ/.test(vowelPart) ||
-    /^เ.*ียะ/.test(vowelPart) ||
-    /^เ.*ือะ/.test(vowelPart) ||
-    /อะ$/.test(vowelPart) ||
-    /เอะ$/.test(vowelPart) ||
-    /แอะ$/.test(vowelPart) ||
-    /โอะ$/.test(vowelPart) ||
-    /เอาะ$/.test(vowelPart) ||
-    /อัวะ$/.test(vowelPart)
-  );
-}
-
-function isDeadFinalConsonant(consonant = "") {
-  return DEAD_FINAL_CONSONANTS.has(consonant);
-}
-
-function getFinalConsonant(rest = "", frontVowel = "", aboveBelowVowel = "") {
-  let finalPart = rest;
-  if (
-    frontVowel === "เ" &&
-    aboveBelowVowel.includes("ี") &&
-    finalPart.startsWith("ย")
-  ) {
-    finalPart = finalPart.slice(1);
-  }
-  if (aboveBelowVowel.includes("ั") && finalPart.startsWith("ว")) {
-    finalPart = finalPart.slice(1);
-  }
-  const consonants = [...finalPart].filter((char) => /[ก-ฮ]/.test(char));
-  return consonants[consonants.length - 1] || "";
-}
-
-function parseThaiWord(word = "") {
-  let workStr = word.trim();
-  let frontVowel = "";
-
-  if (["เ", "แ", "โ", "ใ", "ไ"].includes(workStr[0])) {
-    frontVowel = workStr[0];
-    workStr = workStr.slice(1);
-  }
-
-  let initial = "";
-  let initialKind = "single";
-  const firstTwo = workStr.slice(0, 2);
-
-  if (trueClusters.includes(firstTwo)) {
-    initial = firstTwo;
-    initialKind = "trueCluster";
-    workStr = workStr.slice(2);
-  } else if (leadingHoClusters.includes(firstTwo)) {
-    initial = firstTwo;
-    initialKind = "leadingHo";
-    workStr = workStr.slice(2);
-  } else if (leadingOClusters.includes(firstTwo)) {
-    initial = firstTwo;
-    initialKind = "leadingO";
-    workStr = workStr.slice(2);
-  } else if (falseClusters.includes(firstTwo)) {
-    initial = firstTwo;
-    initialKind = "falseCluster";
-    workStr = workStr.slice(2);
-  } else if (workStr.length) {
-    initial = workStr[0];
-    workStr = workStr.slice(1);
-  }
-
-  const aboveBelowVowelChars = ["ิ", "ี", "ึ", "ื", "ุ", "ู", "ั", "็", "ํ"];
-  const toneChars = ["่", "้", "๊", "๋"];
-
-  let aboveBelowVowel = "";
-  let toneMark = "";
-  let rest = "";
-
-  for (const char of workStr) {
-    if (toneChars.includes(char)) toneMark = char;
-    else if (aboveBelowVowelChars.includes(char)) aboveBelowVowel += char;
-    else rest += char;
-  }
-
-  return { initial, initialKind, frontVowel, aboveBelowVowel, toneMark, rest };
-}
-
-function buildWord(frontVowel, initial, aboveBelowVowel, tone, rest) {
-  const rawWord = `${frontVowel}${initial}${aboveBelowVowel}${tone}${rest}`;
-  return rawWord
-    .replace(/([่้๊๋])([ิีึืุูั็ํ])/g, "$2$1")
-    .normalize("NFC");
-}
-
-function analyzeSyllable(word, currentMode) {
-  const {
-    initial,
-    initialKind,
-    frontVowel,
-    aboveBelowVowel,
-    rest,
-    toneMark,
-  } = parseThaiWord(word);
-
-  const consonantClass = getConsonantClass(initial, initialKind);
-  const primaryConsonant =
-    initialKind === "leadingHo"
-      ? initial[1] || initial[0] || ""
-      : initial[0] || "";
-
-  const finalConsonant = getFinalConsonant(rest, frontVowel, aboveBelowVowel);
-  const isShort = isShortThaiVowel(frontVowel, aboveBelowVowel, rest);
-  const hasPronouncedFinal = Boolean(finalConsonant);
-  const isDead = hasPronouncedFinal ? isDeadFinalConsonant(finalConsonant) : isShort;
-
-  const type = isDead ? "คำตาย" : "คำเป็น";
-  const vowelLen = isShort ? "สระเสียงสั้น" : "สระเสียงยาว";
-  const isCluster = initialKind === "trueCluster";
-  const clusterLabel = isCluster ? ` (คำควบกล้ำแท้ "${initial}")` : "";
-
-  const leadingLabel =
-    initialKind === "leadingHo"
-      ? ` (ห นำ "${initial}")`
-      : initialKind === "leadingO"
-        ? ` (อ นำ "${initial}")`
-        : initialKind === "falseCluster"
-          ? ` (กลุ่มอักษรควบไม่แท้ "${initial}")`
-          : "";
-
-  let desc;
-  if (consonantClass === "middle") {
-    desc = isDead
-      ? `อักษรกลาง${clusterLabel}${leadingLabel} คำตาย (ผันได้ 4 เสียง: เอก, โท, ตรี, จัตวา; พื้นเสียงเอก)`
-      : `อักษรกลาง${clusterLabel}${leadingLabel} คำเป็น (ผันได้ครบ 5 เสียง; พื้นเสียงสามัญ)`;
-  } else if (consonantClass === "high") {
-    desc = isDead
-      ? `อักษรสูง${clusterLabel}${leadingLabel} คำตาย (ผันได้ 2 เสียง: เอก, โท; พื้นเสียงเอก)`
-      : `อักษรสูง${clusterLabel}${leadingLabel} คำเป็น (ผันได้ 3 เสียง: เอก, โท, จัตวา; พื้นเสียงจัตวา)`;
-  } else if (consonantClass === "low") {
-    const lowSubtype = lowSingleConsonants.includes(primaryConsonant)
-      ? "อักษรต่ำเดี่ยว"
-      : "อักษรต่ำคู่";
-
-    desc = isDead
-      ? isShort
-        ? `${lowSubtype}${clusterLabel}${leadingLabel} คำตายสระเสียงสั้น (ผันได้ 2 เสียง: โท, ตรี; พื้นเสียงตรี)`
-        : `${lowSubtype}${clusterLabel}${leadingLabel} คำตายสระเสียงยาว (ผันได้ 2 เสียง: โท, ตรี; พื้นเสียงโท)`
-      : `${lowSubtype}${clusterLabel}${leadingLabel} คำเป็น (ผันได้ 3 เสียง: สามัญ, โท, ตรี; พื้นเสียงสามัญ)`;
-  } else {
-    desc = "ยังจำแนกหมู่อักษรไม่ได้";
-  }
-
-  return {
-    type,
-    vowelLen,
-    desc,
-    isDead,
-    isShort,
-    initial,
-    initialKind,
-    frontVowel,
-    aboveBelowVowel,
-    rest,
-    toneMark,
-    primaryConsonant,
-    consonantClass,
-    finalConsonant,
-  };
-}
-
-function calculateTones(word, mode, colorMid, colorHigh, colorLow) {
-  const emptyRows = toneRows.map((row) => ({
-    ...row,
-    word: "",
-    color: "#94a3b8",
-    isMulti: false,
-    multi: [],
-    show: false,
-    isComparison: false,
-  }));
-
-  if (!word?.trim()) return emptyRows;
-
-  const info = analyzeSyllable(word, mode);
-  const {
-    initial,
-    initialKind,
-    frontVowel,
-    aboveBelowVowel,
-    rest,
-    isDead,
-    isShort,
-    consonantClass,
-  } = info;
-
-  const make = (consonant, mark = "") =>
-    buildWord(frontVowel, consonant, aboveBelowVowel, mark, rest);
-
-  const blankRow = (id, color) => ({
-    ...toneRows.find((item) => item.id === id),
-    word: "",
-    color,
-    isMulti: false,
-    multi: [],
-    show: false,
-    isComparison: false,
-  });
-
-  const singleRow = (id, consonant, mark, color, isComparison = false) => ({
-    ...toneRows.find((item) => item.id === id),
-    word: make(consonant, mark),
-    color,
-    isMulti: false,
-    multi: [],
-    show: true,
-    isComparison,
-  });
-
-  const multiToneRow = (id, entries) => ({
-    ...toneRows.find((item) => item.id === id),
-    word: "",
-    color: entries[0]?.color || "#94a3b8",
-    isMulti: true,
-    multi: entries.map((entry) => ({
-      text: make(entry.consonant, entry.mark),
-      color: entry.color,
-      isComparison: Boolean(entry.isComparison),
-    })),
-    show: entries.length > 0,
-    isComparison: entries.some((entry) => entry.isComparison),
-  });
-
-  const createRows = (ruleSet, consonant, color, isComparison = false) =>
-    toneRows.map((row) => {
-      const mark = ruleSet[row.id];
-      if (mark === undefined) return blankRow(row.id, color);
-      return singleRow(row.id, consonant, mark, color, isComparison);
-    });
-
-  const middleRules = isDead ? TONE_RULE_TABLE.middle.dead : TONE_RULE_TABLE.middle.live;
-
-  if (consonantClass === "middle") {
-    const fullRows = createRows(middleRules, initial, colorMid, false);
-    if (mode === "highOnly") return fullRows.map((row) => ({ ...row, show: [5, 3, 2].includes(row.id) }));
-    if (mode === "lowOnly") return fullRows.map((row) => ({ ...row, show: [4, 3, 1].includes(row.id) }));
-    if (mode === "pair") return fullRows.map((row) => ({ ...row, show: [5, 1].includes(row.id) }));
-    return fullRows;
-  }
-
-  const pairedHigh = consonantClass === "high" ? initial : getPairedInitial(initial, initialKind, "high");
-  const pairedLow = consonantClass === "low" ? initial : getPairedInitial(initial, initialKind, "low");
-
-  const highRules = isDead ? TONE_RULE_TABLE.high.dead : TONE_RULE_TABLE.high.live;
-  const lowRules = isDead
-    ? isShort ? TONE_RULE_TABLE.low.deadShort : TONE_RULE_TABLE.low.deadLong
-    : TONE_RULE_TABLE.low.live;
-
-  if (mode === "highOnly") return createRows(highRules, pairedHigh, colorHigh, consonantClass !== "high");
-  if (mode === "lowOnly") return createRows(lowRules, pairedLow, colorLow, consonantClass !== "low");
-
-  const combined = toneRows.map((toneRow) => {
-    const highMark = highRules[toneRow.id];
-    const lowMark = lowRules[toneRow.id];
-    const entries = [];
-
-    if (lowMark !== undefined) {
-      entries.push({
-        consonant: pairedLow,
-        mark: lowMark,
-        color: colorLow,
-        isComparison: consonantClass !== "low",
-      });
-    }
-
-    if (highMark !== undefined) {
-      entries.push({
-        consonant: pairedHigh,
-        mark: highMark,
-        color: colorHigh,
-        isComparison: consonantClass !== "high",
-      });
-    }
-
-    const uniqueEntries = entries.filter(
-      (entry, index, array) =>
-        array.findIndex(
-          (candidate) =>
-            candidate.consonant === entry.consonant &&
-            candidate.mark === entry.mark,
-        ) === index,
-    );
-
-    if (!uniqueEntries.length) return blankRow(toneRow.id, "#94a3b8");
-    if (uniqueEntries.length === 1) {
-      const entry = uniqueEntries[0];
-      return singleRow(toneRow.id, entry.consonant, entry.mark, entry.color, entry.isComparison);
-    }
-    return multiToneRow(toneRow.id, uniqueEntries);
-  });
-
-  if (mode === "pair") {
-    return combined.map((row) => ({ ...row, show: [5, 1].includes(row.id) }));
-  }
-
-  return combined;
-}
-
-const TONE_RULE_SELF_TESTS = Object.freeze([
-  { name: "ตรวจจำนวนพยัญชนะครบ 44 ตัว", type: "classification" },
-  { name: "อักษรกลางคำเป็น", word: "กาน", mode: "full5", expectedClass: "middle", expectedType: "คำเป็น", expectedVisibleToneIds: [5, 4, 3, 2, 1] },
-  { name: "อักษรกลางคำตาย", word: "กาด", mode: "full5", expectedClass: "middle", expectedType: "คำตาย", expectedVisibleToneIds: [5, 4, 3, 2] },
-  { name: "อักษรสูงคำเป็น", word: "ขาน", mode: "highOnly", expectedClass: "high", expectedType: "คำเป็น", expectedVisibleToneIds: [5, 3, 2] },
-  { name: "อักษรสูงคำตาย", word: "ขัด", mode: "highOnly", expectedClass: "high", expectedType: "คำตาย", expectedVisibleToneIds: [3, 2] },
-  { name: "อักษรต่ำคู่คำเป็น", word: "คาน", mode: "lowOnly", expectedClass: "low", expectedType: "คำเป็น", expectedVisibleToneIds: [4, 3, 1], expectedSubtype: "lowPair" },
-  { name: "อักษรต่ำคู่คำตายสระสั้น", word: "คะ", mode: "lowOnly", expectedClass: "low", expectedType: "คำตาย", expectedVisibleToneIds: [4, 3], expectedSubtype: "lowPair" },
-  { name: "อักษรต่ำคู่คำตายสระยาว", word: "คาด", mode: "lowOnly", expectedClass: "low", expectedType: "คำตาย", expectedVisibleToneIds: [4, 3], expectedSubtype: "lowPair" },
-  { name: "อักษรต่ำเดี่ยวคำเป็น", word: "นาน", mode: "lowOnly", expectedClass: "low", expectedType: "คำเป็น", expectedVisibleToneIds: [4, 3, 1], expectedSubtype: "lowSingle" },
-  { name: "อักษรต่ำเดี่ยวคำตายสระสั้น", word: "นะ", mode: "lowOnly", expectedClass: "low", expectedType: "คำตาย", expectedVisibleToneIds: [4, 3], expectedSubtype: "lowSingle" },
-  { name: "อักษรต่ำเดี่ยว full5 ใช้ ห นำ เทียบ", word: "นา", mode: "full5", expectedClass: "low", expectedType: "คำเป็น", expectedVisibleToneIds: [5, 4, 3, 2, 1], expectedSubtype: "lowSingle" },
-  { name: "ควบกล้ำแท้", word: "กรา", mode: "full5", expectedClass: "middle", expectedType: "คำเป็น", expectedVisibleToneIds: [5, 4, 3, 2, 1] },
-  { name: "ห นำ", word: "หนา", mode: "highOnly", expectedClass: "high", expectedType: "คำเป็น", expectedVisibleToneIds: [5, 3, 2] },
-  { name: "ตัวสะกดแม่กงเป็นคำเป็น", word: "กาง", mode: "full5", expectedClass: "middle", expectedType: "คำเป็น", expectedVisibleToneIds: [5, 4, 3, 2, 1] },
-  { name: "ตัวสะกดแม่กนเป็นคำเป็น", word: "กาน", mode: "full5", expectedClass: "middle", expectedType: "คำเป็น", expectedVisibleToneIds: [5, 4, 3, 2, 1] },
-  { name: "ตัวสะกดแม่กบเป็นคำตาย", word: "กาบ", mode: "full5", expectedClass: "middle", expectedType: "คำตาย", expectedVisibleToneIds: [5, 4, 3, 2] },
-]);
-
-function runToneRuleSelfTests() {
-  const failures = [];
-  const allUnique = new Set(allThaiConsonants);
-  const classificationCounts = {
-    middle: midConsonants.length,
-    high: highConsonants.length,
-    lowPair: lowPairConsonants.length,
-    lowSingle: lowSingleConsonants.length,
-  };
-
-  if (
-    allThaiConsonants.length !== 44 ||
-    allUnique.size !== 44 ||
-    classificationCounts.middle !== 9 ||
-    classificationCounts.high !== 11 ||
-    classificationCounts.lowPair !== 14 ||
-    classificationCounts.lowSingle !== 10 ||
-    lowConsonants.length !== 24
-  ) {
-    failures.push({
-      name: "ตรวจจำนวนพยัญชนะครบ 44 ตัว",
-      expected: { total: 44, middle: 9, high: 11, low: 24, lowPair: 14, lowSingle: 10 },
-      actual: {
-        total: allThaiConsonants.length,
-        unique: allUnique.size,
-        middle: classificationCounts.middle,
-        high: classificationCounts.high,
-        low: lowConsonants.length,
-        lowPair: classificationCounts.lowPair,
-        lowSingle: classificationCounts.lowSingle,
-      },
-    });
-  }
-
-  for (const testCase of TONE_RULE_SELF_TESTS) {
-    if (testCase.type === "classification") continue;
-    try {
-      const info = analyzeSyllable(testCase.word, testCase.mode);
-      const rows = calculateTones(testCase.word, testCase.mode, "#22c55e", "#ef4444", "#007bff");
-      const visibleToneIds = rows.filter((row) => row.show).map((row) => row.id);
-      const classOk = info.consonantClass === testCase.expectedClass;
-      const typeOk = info.type === testCase.expectedType;
-      const rowsOk = JSON.stringify(visibleToneIds) === JSON.stringify(testCase.expectedVisibleToneIds);
-      const primary = info.primaryConsonant || "";
-      const subtypeOk =
-        !testCase.expectedSubtype ||
-        (testCase.expectedSubtype === "lowPair" && lowPairConsonants.includes(primary)) ||
-        (testCase.expectedSubtype === "lowSingle" && lowSingleConsonants.includes(primary));
-
-      if (!classOk || !typeOk || !rowsOk || !subtypeOk) {
-        failures.push({
-          ...testCase,
-          actualClass: info.consonantClass,
-          actualType: info.type,
-          actualPrimary: primary,
-          actualVisibleToneIds: visibleToneIds,
-        });
-      }
-    } catch (error) {
-      failures.push({
-        ...testCase,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
-  if (failures.length > 0) {
-    console.error("[Thai Tone Rule Engine] Self-test FAILED:", failures);
-  } else if (typeof window !== "undefined" && window.location.hostname === "localhost") {
-    console.info(`[Thai Tone Rule Engine] ${TONE_RULE_SELF_TESTS.length + 1} regression checks passed.`);
-  }
-  return failures;
-}
-
-runToneRuleSelfTests();
-
-function validateEnteredToneMark(word = "") {
-  const value = word.trim();
-  if (!value) return { status: "idle", toneMark: "", message: "", detail: "" };
-
-  const parsed = parseThaiWord(value);
-  const analysis = analyzeSyllable(value, "full5");
-  const baseWord = buildWord(parsed.frontVowel, parsed.initial, parsed.aboveBelowVowel, "", parsed.rest);
-  const ruleMode =
-    analysis.consonantClass === "middle"
-      ? "full5"
-      : analysis.consonantClass === "high"
-        ? "highOnly"
-        : "lowOnly";
-
-  const candidates = calculateTones(baseWord, ruleMode, "#22c55e", "#ef4444", "#007bff");
-  const candidateMatches = [];
-
-  for (const row of candidates) {
-    const words = row.isMulti ? row.multi.map((item) => item.text) : row.word ? [row.word] : [];
-    if (words.includes(value)) candidateMatches.push(row);
-  }
-
-  if (parsed.toneMark) {
-    if (candidateMatches.length > 0) {
-      const toneNames = candidateMatches.map((row) => row.tone).join(" / ");
-      return {
-        status: "valid",
-        toneMark: parsed.toneMark,
-        message: `✅ รูปวรรณยุกต์ถูกต้อง: ${parsed.toneMark}`,
-        detail: `ตรงกับ${toneNames}`,
-      };
-    }
-    const available = candidates
-      .filter((row) => row.show)
-      .map((row) => `${row.tone} [${row.mark}]`)
-      .join(", ");
-
-    return {
-      status: "invalid",
-      toneMark: parsed.toneMark,
-      message: `❌ รูปวรรณยุกต์ไม่ถูกต้อง: ${parsed.toneMark}`,
-      detail: available ? `รูปที่ใช้ได้สำหรับคำนี้: ${available}` : "คำนี้ไม่มีกฎการผันที่ตรงกับรูปที่กรอก",
-    };
-  }
-
-  if (candidateMatches.length > 0) {
-    const toneNames = candidateMatches.map((row) => row.tone).join(" / ");
-    return {
-      status: "neutral",
-      toneMark: "",
-      message: "ℹ️ ไม่มีรูปวรรณยุกต์",
-      detail: `เป็นรูปพื้นเสียง/รูปไม่มีไม้ และตรงกับ${toneNames}`,
-    };
-  }
-
-  return {
-    status: "neutral",
-    toneMark: "",
-    message: "ℹ️ ไม่มีรูปวรรณยุกต์",
-    detail: "ยังไม่พบรูปพื้นเสียงที่ตรงกับกฎของคำนี้",
-  };
-}
-
-function escapeXmlText(text = "") {
-  return String(text)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
-function buildAzureTtsSsml(text = "", voice = TTS_VOICE, speechRate = 1) {
-  const safeText = escapeXmlText(
-    String(text).normalize("NFC").replace(/\s+/g, " ").trim(),
-  );
-  const rate = Math.max(0.5, Math.min(1.4, Number(speechRate) || 1));
-  const ratePercent = Math.round((rate - 1) * 100);
-  const rateValue = `${ratePercent >= 0 ? "+" : ""}${ratePercent}%`;
-
-  return [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis"',
-    ' xmlns:mstts="http://www.w3.org/2001/mstts" xml:lang="th-TH">',
-    `<voice name="${voice}">`,
-    `<prosody rate="${rateValue}" pitch="0%">${safeText}</prosody>`,
-    '</voice>',
-    '</speak>',
-  ].join("");
-}
-
-function getSpeechFallbackVoice(voices = [], selectedVoiceURI = "") {
-  return (
-    voices.find(
-      (item) =>
-        item.voiceURI === selectedVoiceURI &&
-        item.lang?.toLowerCase().startsWith("th"),
-    ) || voices.find((item) => item.lang?.toLowerCase().startsWith("th"))
-  );
-}
-
-function getSpeechText(item) {
-  if (!item?.show) return "";
-  if (item.isMulti) {
-    return item.multi[0]?.ttsText || item.multi[0]?.text || "";
-  }
-  return item.ttsText || item.word || "";
-}
-
-function normalizeThaiSpeechText(text = "") {
-  return String(text).normalize("NFC").replace(/\s+/g, " ").trim();
-}
-
-function Board({
-  linesData,
-  analysisInfo,
-  inputText,
-  activeRowId,
-  onRowClick,
-  circleTextColor,
-  mode,
-  isDisplay = false,
-  fontSize = 20,
-  staffBgColor = "#ffffff",
-  lang = "th",
-  onPlayAllTones,
-  isPlayingAll = false,
-  isPracticing = false,
-  practiceTargetWord = null,
-  mismatchWord = null,
-  onTogglePractice,
-  onSkip,
-  practiceTimer = 10,
-  practiceScore = 0,
-  practiceMsg = "",
-  practiceCompleted = false,
-  totalPossibleScore = 0,
-  isQuizMode = false,
-  onToggleQuiz,
-  speak,
-}) {
-  const t = (th, en) => (lang === "en" ? en : th);
-
-  // State สำหรับรับข้อมูลตัวโน้ตคำถามที่ตอบถูกหรือเฉลย เพื่อนำมาแสดงบนเส้นบรรทัด
-  const [resolvedQuizItem, setResolvedQuizItem] = useState(null);
-
-  useEffect(() => {
-    if (!isQuizMode) setResolvedQuizItem(null);
-  }, [isQuizMode]);
-
-  const fixedRightLabels = {
-    5: { text: t("เสียงสูง", "High Pitch"), color: "#ef4444" },
-    3: { text: t("เสียงกลาง", "Mid Pitch"), color: "#22c55e" },
-    1: { text: t("เสียงต่ำ", "Low Pitch"), color: "#007bff" },
-  };
-
-  const toneNames = {
-    5: { th: "เสียงจัตวา", en: "Rising (Chattawa)" },
-    4: { th: "เสียงตรี", en: "High (Tri)" },
-    3: { th: "เสียงโท", en: "Falling (Tho)" },
-    2: { th: "เสียงเอก", en: "Low (Ek)" },
-    1: { th: "เสียงสามัญ", en: "Mid (Saman)" },
-  };
-
-  const ratio = Math.max(0.8, fontSize / 20);
-  const circleSize = isDisplay ? `clamp(42px, ${4.2 * ratio}vw, 70px)` : "48px";
-  const textSize = isDisplay ? `clamp(15px, ${1.5 * ratio}vw, 25px)` : "17px";
-  const circleFontSize = isDisplay ? `clamp(16px, ${1.8 * ratio}vw, 27px)` : "18px";
-
-  const getCircleStyle = (color) => ({
-    backgroundColor: color,
-    color: circleTextColor,
-    "--note-color": color,
-    width: circleSize,
-    minWidth: circleSize,
-    maxWidth: circleSize,
-    height: circleSize,
-    padding: 0,
-    fontSize: circleFontSize,
-    lineHeight: 1,
-    flex: `0 0 ${circleSize}`,
-  });
-
-  return (
-    <div
-      className={`tone-board ${isDisplay ? "display-board" : ""}`}
-      style={{
-        ...(isDisplay ? { backgroundColor: staffBgColor } : {}),
-        scrollbarWidth: "none",
-        msOverflowStyle: "none",
-      }}
-    >
-      <div className="board-title" style={{ color: "#4A148C" }}>
-        <h2 style={{ color: "#4A148C" }}>{t("ไตรยางศ์ หรือ อักษร 3 หมู่", "Three Consonant Classes (Triyang)")}</h2>
-        <div style={{ color: "#4A148C" }}>{t("และการผันวรรณยุกต์", "Tone Rules & Musical Staves")}</div>
-      </div>
-
-      {/* กล่องวิเคราะห์หลักภาษา: ไม่แสดงเมื่อไม่มีคำ และในโหมด Quiz จะแสดงเฉพาะเมื่อตอบถูก/เฉลยแล้ว */}
-      {(!isQuizMode || (isQuizMode && resolvedQuizItem)) && Boolean(inputText.trim() || resolvedQuizItem) && (() => {
-        const visibleItems = linesData.filter((item) => item.show);
-        const topItem = visibleItems[0];
-        const bottomItem = visibleItems[visibleItems.length - 1];
-        const isMid = midConsonants.includes(analysisInfo?.primaryConsonant);
-
-        const getTargetWord = (item) => getSpeechText(item);
-        const analyses = [];
-
-        if (mode === "pair") {
-          const topWord = getTargetWord(topItem);
-          const bottomWord = getTargetWord(bottomItem);
-          const pConsonant = analysisInfo?.primaryConsonant || "";
-          const isSingle = lowSingleConsonants.includes(pConsonant);
-
-          let pairTitle;
-          let pairDesc;
-
-          if (isMid) {
-            pairTitle = t("อักษรกลาง (Soloist / ศิลปินเดี่ยว)", "Mid Class (Soloist)");
-            pairDesc = t(
-              `มีเอกลักษณ์เฉพาะตัว สามารถผันได้ครบทั้ง 5 เสียงด้วยตัวเองโดยไม่ต้องจับคู่กับพยัญชนะอื่น (พื้นเสียงสามัญ "${bottomWord}" ➔ เสียงจัตวา "${topWord}")`,
-              `Self-sufficient — inflects all 5 tones on its own without needing a partner (Base mid tone "${bottomWord}" ➔ Rising tone "${topWord}")`
-            );
-          } else if (isSingle) {
-            pairTitle = t("อักษรต่ำเดี่ยว (Solo with Leading ห- / ยืม ห-นำ)", "Single Low Class (With Leading ห-)");
-            pairDesc = t(
-              `"${bottomWord}" (อักษรต่ำเดี่ยว) ไม่มีคู่เสียงสูงในตัวเอง จึงผันเสียงจัตวาโดย "ยืม ห-นำ" มาเป็น "${topWord}" เพื่อให้ผันครบ 5 เสียง (เสียงจัตวา "${topWord}" ➔ เสียงสามัญ "${bottomWord}")`,
-              `"${bottomWord}" has no natural high partner, so it borrows "Leading ห-" ("${topWord}") to produce the rising tone and achieve all 5 tones (Rising "${topWord}" ➔ Mid "${bottomWord}")`
-            );
-          } else {
-            pairTitle = t("คู่เสียงสูง-ต่ำคู่ (Duo / คู่หู)", "High & Paired Low Duo");
-            pairDesc = t(
-              `"${topWord}" (อักษรสูง) จับคู่กับ "${bottomWord}" (อักษรต่ำคู่) ช่วยกันผันให้ครบ 5 เสียง โดยทั้งคู่มีเสียงโทตรงกัน (เสียงจัตวา "${topWord}" ➔ เสียงสามัญ "${bottomWord}")`,
-              `"${topWord}" (High Class) pairs with "${bottomWord}" (Paired Low Class) to complement all 5 tones together, sharing the falling tone (Rising "${topWord}" ➔ Mid "${bottomWord}")`
-            );
-          }
-
-          if (!topWord && !bottomWord) return null;
-
-          return (
-            <div className="analysis-box">
-              <div className="analysis-item">
-                📌 <strong>{pairTitle}</strong>: {pairDesc}
-              </div>
-            </div>
-          );
-        }
-
-        if (isMid) {
-          const word = isQuizMode && resolvedQuizItem ? resolvedQuizItem.word : inputText.trim();
-          if (word) {
-            analyses.push({
-              label: "อักษรกลาง",
-              word,
-              info: analyzeSyllable(word, mode),
-            });
-          }
-        } else if (mode === "full5") {
-          const topWord = getTargetWord(topItem);
-          const bottomWord = getTargetWord(bottomItem);
-
-          if (topWord) {
-            analyses.push({
-              label: "เสียงสูง",
-              word: topWord,
-              info: analyzeSyllable(topWord, "highOnly"),
-            });
-          }
-
-          if (bottomWord && bottomItem?.id !== topItem?.id) {
-            analyses.push({
-              label: "เสียงต่ำ",
-              word: bottomWord,
-              info: analyzeSyllable(bottomWord, "lowOnly"),
-            });
-          }
-        } else if (mode === "highOnly") {
-          const word = getTargetWord(topItem);
-          if (word) {
-            analyses.push({
-              label: "เสียงสูง",
-              word,
-              info: analyzeSyllable(word, "highOnly"),
-            });
-          }
-        } else if (mode === "lowOnly") {
-          const word = getTargetWord(bottomItem);
-          if (word) {
-            analyses.push({
-              label: "เสียงต่ำ",
-              word,
-              info: analyzeSyllable(word, "lowOnly"),
-            });
-          }
-        }
-
-        if (!analyses.length) return null;
-
-        const getLabelText = (lbl) => {
-          if (lbl === "อักษรกลาง") return t("อักษรกลาง", "Mid Class");
-          if (lbl === "เสียงสูง") return t("เสียงสูง", "High Tone");
-          if (lbl === "เสียงต่ำ") return t("เสียงต่ำ", "Low Tone");
-          return lbl;
-        };
-
-        const translateType = (type) => {
-          if (type === "คำเป็น") return t("คำเป็น", "Live Syllable");
-          if (type === "คำตาย") return t("คำตาย", "Dead Syllable");
-          return type;
-        };
-
-        const translateVowel = (v) => {
-          if (v === "สระเสียงยาว") return t("สระเสียงยาว", "Long Vowel");
-          if (v === "สระเสียงสั้น") return t("สระเสียงสั้น", "Short Vowel");
-          return v;
-        };
-
-        const getAnalysisDesc = (inf) => {
-          if (lang !== "en") return inf.desc;
-
-          const cClass = inf.consonantClass;
-          const pConsonant = inf.primaryConsonant || "";
-          const init = inf.initial || "";
-          const initKind = inf.initialKind || "single";
-          const dead = inf.isDead;
-          const short = inf.isShort;
-
-          let cLabel = "";
-          if (initKind === "trueCluster") cLabel = ` (True Cluster "${init}")`;
-          else if (initKind === "leadingHo") cLabel = ` (Leading ห- "${init}")`;
-          else if (initKind === "leadingO") cLabel = ` (Leading อ- "${init}")`;
-          else if (initKind === "falseCluster") cLabel = ` (False Cluster "${init}")`;
-
-          if (cClass === "middle") {
-            return dead
-              ? `Mid Class${cLabel} Dead Syllable (Inflects 4 tones: Low, Falling, High, Rising; Natural pitch: Low)`
-              : `Mid Class${cLabel} Live Syllable (Inflects all 5 tones; Natural pitch: Mid)`;
-          }
-
-          if (cClass === "high") {
-            return dead
-              ? `High Class${cLabel} Dead Syllable (Inflects 2 tones: Low, Falling; Natural pitch: Low)`
-              : `High Class${cLabel} Live Syllable (Inflects 3 tones: Low, Falling, Rising; Natural pitch: Rising)`;
-          }
-
-          if (cClass === "low") {
-            const subtype = lowSingleConsonants.includes(pConsonant)
-              ? "Single Low Class"
-              : "Paired Low Class";
-
-            return dead
-              ? short
-                ? `${subtype}${cLabel} Dead Syllable (Short Vowel) (Inflects 2 tones: Falling, High; Natural pitch: High)`
-                : `${subtype}${cLabel} Dead Syllable (Long Vowel) (Inflects 2 tones: Falling, High; Natural pitch: Falling)`
-              : `${subtype}${cLabel} Live Syllable (Inflects 3 tones: Mid, Falling, High; Natural pitch: Mid)`;
-          }
-
-          return inf.desc;
-        };
-
-        return (
-          <div className="analysis-box">
-            {analyses.map(({ label, word, info }, index) => (
-              <div className="analysis-item" key={`${label}-${word}-${index}`}>
-                📌 {t("ผลวิเคราะห์หลักภาษา", "Linguistic Analysis")} ({getLabelText(label)}): <strong>"{word}"</strong> {t("เป็น", "is")}{" "}
-                <span className="analysis-tag">
-                  {translateType(info.type)} ({translateVowel(info.vowelLen)})
-                </span>{" "}
-                — {getAnalysisDesc(info)}
-              </div>
-            ))}
-          </div>
-        );
-      })()}
-
-      {/* เส้นบรรทัด 5 เส้น */}
-      <div className="tone-rows" style={{ paddingTop: "10px" }}>
-        {linesData.map((item) => {
-          const isActive = !isPracticing && !isQuizMode && activeRowId === item.id;
-          const fixedRight = fixedRightLabels[item.id];
-          
-          // ในโหมดแบบฝึกหัด ให้สีเส้นและตัวเลขเป็นสีเทากลาง (#94a3b8) เพื่อไม่ให้คาดเดาหมู่อักษร
-          const lineThemeColor = isQuizMode ? "#94a3b8" : (item.show ? (item.isMulti ? item.multi[0]?.color : item.color) : "#94a3b8");
-          const isQuizResolvedHere = isQuizMode && resolvedQuizItem && resolvedQuizItem.placedLine === item.id;
-
-          return (
-            <button
-              type="button"
-              data-tone-line-id={item.id}
-              className={`tone-row ${isActive ? "active" : ""} ${!item.show && !isQuizMode ? "disabled-tone-row" : ""} ${isPracticing ? "practice-locked" : ""}`}
-              key={item.id}
-              onClick={() => {
-                if (!isPracticing && !isQuizMode) onRowClick(item);
-              }}
-              style={isPracticing || isQuizMode ? { cursor: 'default' } : {}}
-              title={item.show && !isPracticing && !isQuizMode ? `${t("คลิกเพื่อขยายและอ่านคำ", "Click to zoom and speak")} ${getSpeechText(item)}` : ""}
-            >
-              {/* ข้อความชื่อเสียง: สีดำเข้มสม่ำเสมอ (#1e293b) ทุกอุปกรณ์ และขยายเมื่อคลิก */}
-              <div
-                className="tone-name clickable-tone-text"
-                style={{
-                  color: "#1e293b",
-                  fontSize: textSize,
-                  transform: isActive ? "scale(1.08)" : "none",
-                  transition: "transform .18s ease, color .18s ease",
-                }}
-              >
-                {t(item.tone, toneNames[item.id]?.en || item.tone)} <span style={{ color: "#475569" }}>[ {item.mark} ]</span>
-              </div>
-
-              <div className="tone-line-wrap">
-                <div className="tone-line" style={{ backgroundColor: isQuizMode ? "#cbd5e1" : (isActive ? "#475569" : "#94a3b8") }} />
-
-                {/* โหมดปกติ: แสดงคำบนเส้นตามปกติ (ถ้ามีคำ) */}
-                {!isQuizMode && item.show && !item.isMulti && item.word && (
-                  <div
-                    className={`tone-circle ${practiceTargetWord === item.word ? "target-test-active" : ""} ${mismatchWord === item.word ? "target-test-mismatch" : ""}`}
-                    style={{
-                      ...getCircleStyle(item.color),
-                      left: item.leftPos,
-                    }}
-                  >
-                    {item.word}
-                  </div>
-                )}
-
-                {!isQuizMode && item.show && item.isMulti && (
-                  <div className="multi-circles" style={{ left: item.leftPos }}>
-                    {item.multi.map((circle, index) => (
-                      <React.Fragment key={`${circle.text}-${index}`}>
-                        {index > 0 && <span className="slash">/</span>}
-                        <div
-                          className={`tone-circle ${practiceTargetWord === circle.text ? "target-test-active" : ""} ${mismatchWord === circle.text ? "target-test-mismatch" : ""}`}
-                          style={{
-                            ...getCircleStyle(circle.color),
-                            position: "relative",
-                            left: "auto",
-                            transform: "none",
-                          }}
-                        >
-                          {circle.text}
-                        </div>
-                      </React.Fragment>
-                    ))}
-                  </div>
-                )}
-
-                {/* โหมดแบบฝึกหัด: บรรทัดว่างเปล่า และปรากฏเฉพาะตัวโน้ตที่ตอบถูกหรือเฉลยแล้วเท่านั้น */}
-                {isQuizMode && isQuizResolvedHere && (
-                  <div
-                    className={`tone-circle ${resolvedQuizItem.isRevealed ? "quiz-revealing-node" : "quiz-snap-node"}`}
-                    style={{
-                      ...getCircleStyle(resolvedQuizItem.originalColor), // คืนสีประจำหมู่อักษรเดิม
-                      left: resolvedQuizItem.leftPos || item.leftPos,
-                    }}
-                  >
-                    {resolvedQuizItem.word}
-                  </div>
-                )}
-              </div>
-
-              {/* ตัวเลขระดับเสียง */}
-              <div
-                className="tone-line-number"
-                style={{ color: lineThemeColor }}
-              >
-                {item.id}
-              </div>
-
-              <div
-                className="fixed-tone-label"
-                style={{ color: fixedRight?.color || "#94a3b8" }}
-              >
-                {fixedRight?.text || ""}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ส่วนคอมโพเนนต์แบบฝึกหัดลากวางคำ */}
-      {isQuizMode && (
-        <StaffQuizMode
-          linesData={linesData}
-          lang={lang}
-          circleTextColor={circleTextColor}
-          fontSize={fontSize}
-          isDisplay={isDisplay}
-          speak={speak}
-          onResolveQuestion={(item) => setResolvedQuizItem(item)}
-          onExit={() => onToggleQuiz(false)}
-        />
-      )}
-
-      {/* แถบปุ่มควบคุมด้านล่างกระดาน */}
-      <div className="board-footer-actions">
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* ปุ่มผันเสียง 1-5 */}
-          <button
-            type="button"
-            className={`auto-play-tones-btn ${isPlayingAll ? "playing" : ""}`}
-            onClick={onPlayAllTones}
-            disabled={isPracticing || isQuizMode || !linesData.some((item) => item.show && (item.word || (item.isMulti && item.multi.length > 0)))}
-            style={isPracticing || isQuizMode ? { opacity: 0.45, cursor: "not-allowed" } : {}}
-            title={
-              mode === "pair"
-                ? t("ออกเสียงผันวรรณยุกต์คู่เสียงสูง-ต่ำ (5 ➔ 1)", "Auto-play paired tones (5 ➔ 1)")
-                : mode === "highOnly"
-                  ? t("ออกเสียงผันวรรณยุกต์เฉพาะเสียงสูง (5 ➔ 2 ➔ 3)", "Auto-play high tones (5 ➔ 2 ➔ 3)")
-                  : mode === "lowOnly"
-                    ? t("ออกเสียงผันวรรณยุกต์เฉพาะเสียงต่ำ (1 ➔ 3 ➔ 4)", "Auto-play low tones (1 ➔ 3 ➔ 4)")
-                    : t("ออกเสียงผันวรรณยุกต์อัตโนมัติ 5 เสียง (1 ➔ 5)", "Auto-play 5 tones ascending (1 ➔ 5)")
-            }
-            aria-label="Auto play tones"
-          >
-            {mode === "pair" || mode === "highOnly" ? (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="10 5 5 9 2 9 2 15 5 15 10 19 10 5" fill="currentColor" stroke="none" />
-                <path d="M15 9l6 6" stroke="currentColor" strokeWidth="2.2" />
-                <path d="M16 15h5v-5" stroke="currentColor" strokeWidth="2.2" />
-              </svg>
-            ) : (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="10 5 5 9 2 9 2 15 5 15 10 19 10 5" fill="currentColor" stroke="none" />
-                <path d="M15 15l6-6" stroke="currentColor" strokeWidth="2.2" />
-                <path d="M16 9h5v5" stroke="currentColor" strokeWidth="2.2" />
-              </svg>
-            )}
-            <span className="auto-play-label">
-              {isPlayingAll
-                ? t("กำลังออกเสียง...", "Playing...")
-                : mode === "pair"
-                  ? t("ผันเสียง 5+1", "Play 5+1")
-                  : mode === "highOnly"
-                    ? t("ผันเสียง 5-2-3", "Play 5-2-3")
-                    : mode === "lowOnly"
-                      ? t("ผันเสียง 1-3-4", "Play 1-3-4")
-                      : t("ผันเสียง 1-5", "Play 1-5")}
-            </span>
-          </button>
-
-          {/* ปุ่มสลับโหมดฝึกออกเสียง */}
-          <button
-            type="button"
-            className={`practice-toggle-btn ${isPracticing ? "cancel" : ""}`}
-            onClick={onTogglePractice}
-            disabled={isQuizMode}
-            style={isQuizMode ? { opacity: 0.45, cursor: "not-allowed", filter: "grayscale(0.6)" } : {}}
-          >
-            {isPracticing ? t("❌ ยกเลิก", "❌ Cancel") : t("🎙️ ฝึกออกเสียง", "🎙️ Practice")}
-          </button>
-
-          {/* ปุ่มสลับโหมดแบบฝึกหัดวางคำ */}
-          <button
-            type="button"
-            className={`quiz-toggle-btn ${isQuizMode ? "cancel" : ""}`}
-            onClick={() => onToggleQuiz(!isQuizMode)}
-            disabled={isPracticing}
-            style={isPracticing ? { opacity: 0.45, cursor: "not-allowed", filter: "grayscale(0.6)" } : {}}
-          >
-            {isQuizMode ? t("❌ ยกเลิกแบบฝึกหัด", "❌ Cancel Quiz") : t("🎯 วางคำบนเส้นบรรทัด", "🎯 Staff Drop Quiz")}
-          </button>
-
-          {/* ปุ่มข้ามคำ */}
-          {isPracticing && !practiceCompleted && (
-            <button
-              type="button"
-              className="practice-skip-btn"
-              onClick={onSkip}
-              title={t("ข้ามคำนี้ (ไม่ได้คะแนน)", "Skip this word (no score)")}
-            >
-              ⏭️ {t("ข้าม", "Skip")}
-            </button>
-          )}
-        </div>
-
-        {/* แถบแสดงสถานะขณะกำลังทดสอบออกเสียง */}
-        {isPracticing && !practiceCompleted && (
-          <div className="practice-status-banner">
-            <span className="practice-msg-text">{practiceMsg}</span>
-            <span className="practice-timer-text">⏱️ {practiceTimer}s</span>
-            <span className="practice-score-text">🏆 {t("คะแนน", "Score")}: {practiceScore}</span>
-          </div>
-        )}
-
-        {/* แถบสรุปคะแนนเมื่อจบการทดสอบออกเสียง */}
-        {practiceCompleted && (
-          <div className="practice-summary-banner">
-            <span style={{ fontSize: "16px" }}>🎉</span>
-            <span>
-              {t(`การทดสอบเสร็จสมบูรณ์! คะแนนรวมของคุณ: ${practiceScore} / ${totalPossibleScore} คะแนน`,
-                 `Practice completed! Total score: ${practiceScore} / ${totalPossibleScore}`)}
-            </span>
-            <button
-              type="button"
-              onClick={onTogglePractice}
-              className="practice-summary-close-btn"
-              title={t("ปิดสรุปคะแนน", "Close summary")}
-            >
-              ✕
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export default function App() {
   const [isDisplayWindow, setIsDisplayWindow] = useState(false);
   const [lang, setLang] = useState(() => {
@@ -1564,7 +389,7 @@ export default function App() {
   const [viewLayout, setViewLayout] = useState("split");
   const [previousLayout, setPreviousLayout] = useState("split");
 
-  // เริ่มต้นโปรแกรมด้วยค่าว่าง
+  // เริ่มต้นโปรแกรมด้วยค่าว่าง เพื่อให้บรรทัด 5 เส้นว่างเปล่าและไม่มีคำ
   const [inputText, setInputText] = useState("");
   const [lastValidInput, setLastValidInput] = useState("");
   const [inputError, setInputError] = useState("");
@@ -1599,7 +424,7 @@ export default function App() {
   const [practiceTargetWord, setPracticeTargetWord] = useState(null);
   const [mismatchWord, setMismatchWord] = useState(null);
 
-  // สถานะสำหรับโหมดแบบฝึกหัดวางคำบนเส้นบรรทัด 5 เส้น
+  // สถานะสำหรับโหมดแบบฝึกหัดวางคำบนเส้นบรรทัด 5 เส้น (Drag-to-Staff Quiz)
   const [isQuizMode, setIsQuizMode] = useState(false);
 
   const micStreamRef = useRef(null);
@@ -1639,15 +464,9 @@ export default function App() {
   const [apiSaveStatus, setApiSaveStatus] = useState("");
   const speechRef = useRef(null);
 
-  const [analysisInfo, setAnalysisInfo] = useState(() =>
-    analyzeSyllable("", "full5"),
-  );
-  const [linesData, setLinesData] = useState(() =>
-    calculateTones("", "full5", "#22c55e", "#ef4444", "#007bff"),
-  );
-  const [toneValidation, setToneValidation] = useState(() =>
-    validateEnteredToneMark(""),
-  );
+  const [analysisInfo, setAnalysisInfo] = useState(() => analyzeSyllable("", "full5"));
+  const [linesData, setLinesData] = useState(() => calculateTones("", "full5", "#22c55e", "#ef4444", "#007bff"));
+  const [toneValidation, setToneValidation] = useState(() => validateEnteredToneMark(""));
 
   const containerBackground = useMemo(() => {
     if (bgType === "image" && bgImage) {
@@ -1661,35 +480,23 @@ export default function App() {
   }, [bgType, bgColor, bgImage]);
 
   const speak = async (text, force = false) => {
-    if (
-      typeof window === "undefined" ||
-      (!speechEnabled && !force) ||
-      !text
-    ) {
-      return;
-    }
-
+    if (typeof window === "undefined" || (!speechEnabled && !force) || !text) return;
     const normalizedText = normalizeThaiSpeechText(text);
     const cacheKey = normalizedText;
 
     const playAudioBlob = async (blob) => {
       const audioUrl = URL.createObjectURL(blob);
       const audio = new Audio(audioUrl);
-
       const previousAudio = speechRef.current;
       if (previousAudio instanceof HTMLAudioElement) {
         previousAudio.pause();
         previousAudio.currentTime = 0;
       }
-
       speechRef.current = audio;
-
       await new Promise((resolve) => {
         audio.onended = () => {
           URL.revokeObjectURL(audioUrl);
-          if (speechRef.current === audio) {
-            speechRef.current = null;
-          }
+          if (speechRef.current === audio) speechRef.current = null;
           resolve();
         };
         audio.onerror = () => {
@@ -1720,11 +527,7 @@ export default function App() {
           rate: Number(speechRate),
         }),
       });
-
-      if (!response.ok) {
-        throw new Error(`Azure TTS HTTP ${response.status}`);
-      }
-
+      if (!response.ok) throw new Error(`Azure TTS HTTP ${response.status}`);
       const audioBlob = await response.blob();
       setLocalAudioBlob(cacheKey, audioBlob);
       await playAudioBlob(audioBlob);
@@ -1735,14 +538,9 @@ export default function App() {
 
     const availableVoices = window.speechSynthesis.getVoices();
     const thaiVoice = getSpeechFallbackVoice(availableVoices, selectedVoiceURI);
-
-    if (!thaiVoice) {
-      console.warn("ไม่พบเสียงภาษาไทย (th-TH/th-*). กรุณาเลือก/ติดตั้ง Thai TTS voice ในระบบ");
-      return;
-    }
+    if (!thaiVoice) return;
 
     window.speechSynthesis.cancel();
-
     const utterance = new SpeechSynthesisUtterance(normalizedText);
     utterance.lang = "th-TH";
     utterance.voice = thaiVoice;
@@ -1779,9 +577,7 @@ export default function App() {
 
     if (currentIdxRef.current < practiceQueueRef.current.length) {
       setPracticeMsg(t("กำลังเปลี่ยนคำ...", "Changing word..."));
-      setTimeout(() => {
-        loadNextPracticeWord();
-      }, 700);
+      setTimeout(() => loadNextPracticeWord(), 700);
     } else {
       finishPractice();
     }
@@ -1873,9 +669,7 @@ export default function App() {
   const finishPractice = () => {
     clearInterval(timerRef.current);
     if (micStreamRef.current) micStreamRef.current.getTracks().forEach((track) => track.stop());
-    if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
-      audioCtxRef.current.close();
-    }
+    if (audioCtxRef.current && audioCtxRef.current.state !== "closed") audioCtxRef.current.close();
     setPracticeTargetWord(null);
     setMismatchWord(null);
     setPracticeMsg("");
@@ -1889,7 +683,6 @@ export default function App() {
 
     const detect = () => {
       if (!audioCtxRef.current || audioCtxRef.current.state === "closed") return;
-
       if (isTransitioningRef.current) {
         animFrameRef.current = requestAnimationFrame(detect);
         return;
@@ -1913,10 +706,7 @@ export default function App() {
                 clearInterval(timerRef.current);
                 isTransitioningRef.current = true;
 
-                if (!isWaitingCorrectionRef.current) {
-                  setPracticeScore((prev) => prev + 10);
-                }
-
+                if (!isWaitingCorrectionRef.current) setPracticeScore((prev) => prev + 10);
                 setPracticeTargetWord(null);
                 setPracticeMsg(t("✅ ถูกต้อง!", "✅ Correct!"));
                 currentIdxRef.current += 1;
@@ -1967,9 +757,7 @@ export default function App() {
     clearInterval(timerRef.current);
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     if (micStreamRef.current) micStreamRef.current.getTracks().forEach((track) => track.stop());
-    if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
-      audioCtxRef.current.close();
-    }
+    if (audioCtxRef.current && audioCtxRef.current.state !== "closed") audioCtxRef.current.close();
 
     setIsPracticing(false);
     setPracticeTargetWord(null);
@@ -1986,9 +774,7 @@ export default function App() {
       clearInterval(timerRef.current);
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
       if (micStreamRef.current) micStreamRef.current.getTracks().forEach((track) => track.stop());
-      if (audioCtxRef.current && audioCtxRef.current.state !== "closed") {
-        audioCtxRef.current.close();
-      }
+      if (audioCtxRef.current && audioCtxRef.current.state !== "closed") audioCtxRef.current.close();
     };
   }, []);
 
@@ -2005,9 +791,7 @@ export default function App() {
         speechRef.current.pause();
         speechRef.current.currentTime = 0;
       }
-      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-        window.speechSynthesis.cancel();
-      }
+      if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
       setActiveRowId(null);
       setIsPlayingAll(false);
       return;
@@ -2031,9 +815,7 @@ export default function App() {
       if (isCancelingAutoPlayRef.current) break;
       setActiveRowId(item.id);
       const textToSpeak = getSpeechText(item);
-      if (textToSpeak) {
-        await speak(textToSpeak, true);
-      }
+      if (textToSpeak) await speak(textToSpeak, true);
       if (isCancelingAutoPlayRef.current) break;
       await new Promise((resolve) => setTimeout(resolve, 320));
     }
@@ -2047,9 +829,7 @@ export default function App() {
     if (!item.show || isPracticing || isQuizMode) return;
     const isExpanding = activeRowId !== item.id;
     setActiveRowId(isExpanding ? item.id : null);
-    if (isExpanding) {
-      speak(getSpeechText(item));
-    }
+    if (isExpanding) speak(getSpeechText(item));
   };
 
   const validateInput = (word) => {
@@ -2101,7 +881,6 @@ export default function App() {
     }
 
     setLoading(true);
-
     try {
       const prompt = `วิเคราะห์การผันวรรณยุกต์ภาษาไทยของคำว่า "${word}" ส่งคืนเฉพาะ JSON array 5 รายการ เรียง จัตวา ตรี โท เอก สามัญ รูปแบบ [{"word":"...","type":"high"},{"word":"...","type":"low"},{"words":["...","..."],"type":"pair"},{"word":"...","type":"high"},{"word":"...","type":"low"}]`;
       const response = await fetch(
@@ -2122,13 +901,7 @@ export default function App() {
 
       const formatted = parsed.map((item, index) => {
         const base = toneRows[index];
-        const color =
-          item.type === "high"
-            ? colorHigh
-            : item.type === "low"
-              ? colorLow
-              : colorMid;
-
+        const color = item.type === "high" ? colorHigh : item.type === "low" ? colorLow : colorMid;
         if (Array.isArray(item.words)) {
           return {
             ...base,
@@ -2142,7 +915,6 @@ export default function App() {
             show: item.words.length > 0,
           };
         }
-
         return {
           ...base,
           word: item.word || "",
@@ -2183,16 +955,16 @@ export default function App() {
       validateInput(newWord);
       return;
     }
-    const { frontVowel, aboveBelowVowel, rest } = parseThaiWord(inputText);
-    const newWord = buildWord(frontVowel || "", consonant, aboveBelowVowel || "", "", rest || "อ");
+    const info = analyzeSyllable(inputText, mode);
+    const newWord = `${info.frontVowel || ""}${consonant}${info.aboveBelowVowel || ""}${info.rest || "อ"}`;
     setInputText(newWord);
     validateInput(newWord);
   };
 
   const handleQuickVowelClick = (vowel) => {
     if (mode === "pair") return;
-    const { initial } = parseThaiWord(inputText);
-    const newWord = `${vowel.front}${initial || "ก"}${vowel.rear}`;
+    const info = analyzeSyllable(inputText, mode);
+    const newWord = `${vowel.front}${info.initial || "ก"}${vowel.rear}`;
     setInputText(newWord);
     validateInput(newWord);
   };
@@ -2200,7 +972,6 @@ export default function App() {
   const handleImageUpload = (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onloadend = () => {
       setBgImage(reader.result);
@@ -2211,9 +982,7 @@ export default function App() {
 
   const handleSaveApiKey = () => {
     const key = tempApiKey.trim();
-    if (typeof window !== "undefined") {
-      localStorage.setItem("gemini_api_key", key);
-    }
+    if (typeof window !== "undefined") localStorage.setItem("gemini_api_key", key);
     setCustomApiKey(key);
     setApiSaveStatus("บันทึก API Key เรียบร้อยแล้ว!");
     window.setTimeout(() => setApiSaveStatus(""), 3000);
@@ -2266,10 +1035,7 @@ export default function App() {
     setSoundLoading(true);
     setSoundError("");
     try {
-      const response = await fetch(
-        `${WORDS_API_ENDPOINT}?word=${encodeURIComponent(word)}`,
-        { method: "DELETE" },
-      );
+      const response = await fetch(`${WORDS_API_ENDPOINT}?word=${encodeURIComponent(word)}`, { method: "DELETE" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       await deleteLocalAudioBlob(normalizeThaiSpeechText(word));
       await fetchSoundWords();
@@ -2289,10 +1055,7 @@ export default function App() {
       const formData = new FormData();
       formData.append("word", word);
       formData.append("audio", file);
-      const response = await fetch(WORDS_API_ENDPOINT, {
-        method: "PUT",
-        body: formData,
-      });
+      const response = await fetch(WORDS_API_ENDPOINT, { method: "PUT", body: formData });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       await deleteLocalAudioBlob(normalizeThaiSpeechText(word));
       await fetchSoundWords();
@@ -2313,31 +1076,23 @@ export default function App() {
   const filteredSoundWords = useMemo(() => {
     const query = soundSearch.trim().toLowerCase();
     if (!query) return soundWords;
-    return soundWords.filter((item) =>
-      (item.word || "").toLowerCase().includes(query),
-    );
+    return soundWords.filter((item) => (item.word || "").toLowerCase().includes(query));
   }, [soundWords, soundSearch]);
 
   const toggleFullscreen = useCallback(() => {
     if (typeof document === "undefined") return;
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen?.().catch((err) => {
-        console.warn("Fullscreen error:", err);
-      });
+      document.documentElement.requestFullscreen?.().catch((err) => console.warn("Fullscreen error:", err));
     } else {
-      document.exitFullscreen?.().catch((err) => {
-        console.warn("Exit fullscreen error:", err);
-      });
+      document.exitFullscreen?.().catch((err) => console.warn("Exit fullscreen error:", err));
     }
   }, []);
 
   const handleOpenDualMonitor = () => {
     if (typeof window === "undefined") return;
-
     const currentUrl = window.location.href.split("?")[0];
     const screenWidth = window.screen?.availWidth || 1440;
     const screenHeight = window.screen?.availHeight || 900;
-
     const popupWidth = Math.max(960, Math.min(1600, Math.floor(screenWidth * 0.86)));
     const popupHeight = Math.max(640, Math.min(900, Math.floor(screenHeight * 0.82)));
     const popupLeft = Math.max(0, Math.floor((screenWidth - popupWidth) / 2));
@@ -2407,12 +1162,8 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     const displayMode = params.get("view") === "display";
     setIsDisplayWindow(displayMode);
-
     const initialLang = params.get("lang");
-    if (initialLang === "en" || initialLang === "th") {
-      setLang(initialLang);
-    }
-
+    if (initialLang === "en" || initialLang === "th") setLang(initialLang);
     if (displayMode) {
       document.body.style.margin = "0";
       document.body.style.overflow = "hidden";
@@ -2421,22 +1172,17 @@ export default function App() {
 
   useEffect(() => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-
     const updateVoices = () => {
       const availableVoices = window.speechSynthesis.getVoices();
       const thaiFirst = [...availableVoices].sort(
-        (a, b) =>
-          Number(b.lang?.toLowerCase().startsWith("th")) -
-          Number(a.lang?.toLowerCase().startsWith("th")),
+        (a, b) => Number(b.lang?.toLowerCase().startsWith("th")) - Number(a.lang?.toLowerCase().startsWith("th")),
       );
       setVoices(thaiFirst);
       const thaiVoice = thaiFirst.find((voice) => voice.lang?.toLowerCase().startsWith("th"));
       setSelectedVoiceURI((previous) => previous || thaiVoice?.voiceURI || "");
     };
-
     updateVoices();
     window.speechSynthesis.addEventListener("voiceschanged", updateVoices);
-
     return () => {
       window.speechSynthesis.removeEventListener("voiceschanged", updateVoices);
       window.speechSynthesis.cancel();
@@ -2451,7 +1197,6 @@ export default function App() {
 
   useEffect(() => {
     if (isDisplayWindow || typeof window === "undefined" || !("BroadcastChannel" in window)) return;
-
     const channel = new BroadcastChannel(CHANNEL_NAME);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(syncData));
@@ -2474,7 +1219,6 @@ export default function App() {
 
   useEffect(() => {
     if (!isDisplayWindow || typeof window === "undefined") return;
-
     const apply = (data) => {
       if (!data) return;
       if (Array.isArray(data.linesData)) setLinesData(data.linesData);
@@ -2510,7 +1254,6 @@ export default function App() {
       if (event.data?.type === "SYNC_STATE") apply(event.data);
       if (event.data?.type === "TOGGLE_FULLSCREEN") toggleFullscreen();
     };
-
     channel.addEventListener("message", listener);
     channel.postMessage({ type: "REQUEST_SYNC" });
 
@@ -2540,9 +1283,7 @@ export default function App() {
             key={value}
             className={viewLayout === value ? "selected-btn" : "soft-btn"}
             onClick={() => {
-              if (value === "present") {
-                setPreviousLayout(viewLayout !== "present" ? viewLayout : "split");
-              }
+              if (value === "present") setPreviousLayout(viewLayout !== "present" ? viewLayout : "split");
               setViewLayout(value);
             }}
           >
@@ -2589,1705 +1330,182 @@ export default function App() {
 
   if (isDisplayWindow) {
     return (
-      <>
-        <style>{styles}</style>
-        <main
-          className="display-page"
-          style={containerBackground}
-          onDoubleClick={toggleFullscreen}
-        >
-          <Board
-            linesData={linesData}
-            analysisInfo={analysisInfo}
-            inputText={inputText}
-            activeRowId={activeRowId}
-            onRowClick={handleRowClick}
-            circleTextColor={circleTextColor}
-            mode={mode}
-            isDisplay
-            fontSize={labelFontSize}
-            staffBgColor={staffBgColor}
-            lang={lang}
-            onPlayAllTones={handlePlayAllTones}
-            isPlayingAll={isPlayingAll}
-            isPracticing={isPracticing}
-            practiceTargetWord={practiceTargetWord}
-            mismatchWord={mismatchWord}
-            onTogglePractice={handleTogglePractice}
-            onSkip={handleSkipWord}
-            practiceTimer={practiceTimer}
-            practiceScore={practiceScore}
-            practiceMsg={practiceMsg}
-            practiceCompleted={practiceCompleted}
-            totalPossibleScore={totalPossibleScore}
-            isQuizMode={isQuizMode}
-            onToggleQuiz={setIsQuizMode}
-            speak={speak}
-          />
-        </main>
-      </>
+      <main className="display-page" style={containerBackground} onDoubleClick={toggleFullscreen}>
+        <ToneBoard
+          linesData={linesData}
+          analysisInfo={analysisInfo}
+          inputText={inputText}
+          activeRowId={activeRowId}
+          onRowClick={handleRowClick}
+          circleTextColor={circleTextColor}
+          mode={mode}
+          isDisplay
+          fontSize={labelFontSize}
+          staffBgColor={staffBgColor}
+          lang={lang}
+          onPlayAllTones={handlePlayAllTones}
+          isPlayingAll={isPlayingAll}
+          isPracticing={isPracticing}
+          practiceTargetWord={practiceTargetWord}
+          mismatchWord={mismatchWord}
+          onTogglePractice={handleTogglePractice}
+          onSkip={handleSkipWord}
+          practiceTimer={practiceTimer}
+          practiceScore={practiceScore}
+          practiceMsg={practiceMsg}
+          practiceCompleted={practiceCompleted}
+          totalPossibleScore={totalPossibleScore}
+          isQuizMode={isQuizMode}
+          onToggleQuiz={setIsQuizMode}
+          speak={speak}
+        />
+      </main>
     );
   }
 
   return (
-    <>
-      <style>{styles}</style>
+    <main className="app-page" style={containerBackground}>
+      <div className="app-shell">
+        {viewLayout === "present" && (
+          <button
+            type="button"
+            className="preview-switch-btn"
+            onClick={() => setViewLayout(previousLayout || "split")}
+            title={t(
+              `สลับกลับไปมุมมองก่อนหน้า (${previousLayout === "standard" ? "1 คอลัมน์" : "2 คอลัมน์"})`,
+              `Switch back to previous view (${previousLayout === "standard" ? "1 Column" : "2 Columns"})`
+            )}
+            aria-label="Switch back view"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M16 3l4 4-4 4M20 7H4M8 21l-4-4 4-4M4 17h16" />
+            </svg>
+          </button>
+        )}
 
-      <main className="app-page" style={containerBackground}>
-        <div className="app-shell">
-          {viewLayout === "present" && (
-            <button
-              type="button"
-              className="preview-switch-btn"
-              onClick={() => setViewLayout(previousLayout || "split")}
-              title={t(
-                `สลับกลับไปมุมมองก่อนหน้า (${previousLayout === "standard" ? "1 คอลัมน์" : "2 คอลัมน์"})`,
-                `Switch back to previous view (${previousLayout === "standard" ? "1 Column" : "2 Columns"})`
-              )}
-              aria-label="Switch back view"
-            >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M16 3l4 4-4 4M20 7H4M8 21l-4-4 4-4M4 17h16" />
-              </svg>
-            </button>
-          )}
+        <div className={`main-grid ${viewLayout === "split" ? "split-layout" : ""}`}>
+          <section
+            className="panel staff-board-section"
+            style={{
+              backgroundColor: staffBgColor,
+              borderRadius: "16px",
+              padding: viewLayout === "present" ? "40px 50px" : "35px 25px",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+              backdropFilter: "blur(6px)",
+              scrollbarWidth: "none",
+              msOverflowStyle: "none",
+            }}
+          >
+            <ToneBoard
+              linesData={linesData}
+              analysisInfo={analysisInfo}
+              inputText={inputText}
+              activeRowId={activeRowId}
+              onRowClick={handleRowClick}
+              circleTextColor={circleTextColor}
+              mode={mode}
+              fontSize={labelFontSize}
+              staffBgColor={staffBgColor}
+              lang={lang}
+              onPlayAllTones={handlePlayAllTones}
+              isPlayingAll={isPlayingAll}
+              isPracticing={isPracticing}
+              practiceTargetWord={practiceTargetWord}
+              mismatchWord={mismatchWord}
+              onTogglePractice={handleTogglePractice}
+              onSkip={handleSkipWord}
+              practiceTimer={practiceTimer}
+              practiceScore={practiceScore}
+              practiceMsg={practiceMsg}
+              practiceCompleted={practiceCompleted}
+              totalPossibleScore={totalPossibleScore}
+              isQuizMode={isQuizMode}
+              onToggleQuiz={setIsQuizMode}
+              speak={speak}
+            />
+          </section>
 
-          <div className={`main-grid ${viewLayout === "split" ? "split-layout" : ""}`}>
-            <section
-              className="panel staff-board-section"
+          {viewLayout !== "present" && (
+            <div
+              className="right-panel-wrapper"
               style={{
-                backgroundColor: staffBgColor,
-                borderRadius: "16px",
-                padding: viewLayout === "present" ? "40px 50px" : "35px 25px",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
-                backdropFilter: "blur(6px)",
-                scrollbarWidth: "none",
-                msOverflowStyle: "none",
+                display: "flex",
+                flexDirection: "column",
+                gap: "20px",
+                maxHeight: "calc(100vh - 42px)",
+                position: "sticky",
+                top: "20px",
               }}
             >
-              <Board
-                linesData={linesData}
-                analysisInfo={analysisInfo}
-                inputText={inputText}
-                activeRowId={activeRowId}
-                onRowClick={handleRowClick}
-                circleTextColor={circleTextColor}
+              {renderTopBar({ marginBottom: 0 })}
+              <ControlPanel
                 mode={mode}
-                fontSize={labelFontSize}
+                handleModeChange={handleModeChange}
+                inputText={inputText}
+                setInputText={setInputText}
+                validateInput={validateInput}
+                inputError={inputError}
+                loading={loading}
+                handleGenerate={handleGenerate}
+                handleQuickConsonantClick={handleQuickConsonantClick}
+                handleQuickVowelClick={handleQuickVowelClick}
+                colorMid={colorMid}
+                setColorMid={setColorMid}
+                colorHigh={colorHigh}
+                setColorHigh={setColorHigh}
+                colorLow={colorLow}
+                setColorLow={setColorLow}
+                circleTextColor={circleTextColor}
+                setCircleTextColor={setCircleTextColor}
                 staffBgColor={staffBgColor}
-                lang={lang}
-                onPlayAllTones={handlePlayAllTones}
-                isPlayingAll={isPlayingAll}
-                isPracticing={isPracticing}
-                practiceTargetWord={practiceTargetWord}
-                mismatchWord={mismatchWord}
-                onTogglePractice={handleTogglePractice}
-                onSkip={handleSkipWord}
-                practiceTimer={practiceTimer}
-                practiceScore={practiceScore}
-                practiceMsg={practiceMsg}
-                practiceCompleted={practiceCompleted}
-                totalPossibleScore={totalPossibleScore}
-                isQuizMode={isQuizMode}
-                onToggleQuiz={setIsQuizMode}
-                speak={speak}
-              />
-            </section>
-
-            {viewLayout !== "present" && (
-              <div
-                className="right-panel-wrapper"
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "20px",
-                  maxHeight: "calc(100vh - 42px)",
-                  position: "sticky",
-                  top: "20px"
+                setStaffBgColor={setStaffBgColor}
+                bgColor={bgColor}
+                setBgColor={setBgColor}
+                bgType={bgType}
+                setBgType={setBgType}
+                setBgImage={setBgImage}
+                handleImageUpload={handleImageUpload}
+                labelFontSize={labelFontSize}
+                setLabelFontSize={setLabelFontSize}
+                speechEnabled={speechEnabled}
+                setSpeechEnabled={setSpeechEnabled}
+                selectedVoiceURI={selectedVoiceURI}
+                setSelectedVoiceURI={setSelectedVoiceURI}
+                voices={voices}
+                speechRate={speechRate}
+                setSpeechRate={setSpeechRate}
+                onTestVoice={() => {
+                  const item = linesData.find((line) => line.show);
+                  speak(item ? getSpeechText(item) : inputText);
                 }}
-              >
-                {renderTopBar({ marginBottom: 0 })}
-
-                <aside
-                  className="control-panel panel"
-                  style={{ flex: 1, overflowY: "auto", position: "static", maxHeight: "none", margin: 0 }}
-                >
-                  <h3>{t("⚙️ แผงควบคุม", "⚙️ Control Panel")}</h3>
-
-                  <section className="control-group">
-                    <strong>{t("✨ ผู้ช่วย AI ผันวรรณยุกต์อัตโนมัติ", "✨ AI Tone Inflection Assistant")}</strong>
-
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "6px",
-                        marginBottom: "12px",
-                        fontSize: "13px",
-                        color: "#334155",
-                      }}
-                    >
-                      <ModeRadio value="full5" checked={mode === "full5"} label={t("แสดงชุดผัน 5 เสียงเมื่อมีกฎเทียบ (อักษรคู่ / ห นำ)", "Show 5 tones with paired / leading rules")} onChange={handleModeChange} />
-                      <ModeRadio value="highOnly" checked={mode === "highOnly"} label={t("เฉพาะเสียงสูง (เอก, โท, จัตวา)", "High tone set only (Low, Falling, Rising)")} onChange={handleModeChange} />
-                      <ModeRadio value="lowOnly" checked={mode === "lowOnly"} label={t("เฉพาะเสียงต่ำ (สามัญ, โท, ตรี)", "Low tone set only (Mid, Falling, High)")} onChange={handleModeChange} />
-                      <ModeRadio value="pair" checked={mode === "pair"} label={t("จับคู่อักษร(เสียง)สูงและต่ำ เพื่อระบุกลุ่มอักษร", "Pair High & Low Class Consonants")} onChange={handleModeChange} />
-                    </div>
-
-                    <div className="input-row">
-                      <input
-                        value={inputText}
-                        placeholder={t("พิมพ์ 1 คำ เช่น กอ, เมา, กวาง", "Type 1 word, e.g. กอ, เมา, กวาง")}
-                        onChange={(event) => {
-                          let val = event.target.value;
-                          if (mode === "pair") {
-                            const match = val.match(/([ก-ฮ])/);
-                            val = match ? `${match[1]}อ` : "ขอ";
-                          }
-                          setInputText(val);
-                          validateInput(val);
-                          if (!val.trim() && mode !== "pair") {
-                            setMode("full5");
-                          }
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") handleGenerate();
-                        }}
-                        className={inputError ? "input-error" : ""}
-                      />
-                      <button className="blue-btn" disabled={loading} onClick={handleGenerate}>
-                        {loading ? "..." : t("ผันคำ", "Analyze")}
-                      </button>
-                    </div>
-
-                    {inputError && <div className="error-text">{inputError}</div>}
-                  </section>
-
-                  <section>
-                    <div className="section-label">{t("⌨️ เลือกพยัญชนะด่วน (๔๔ ตัว):", "⌨️ Quick Consonants (44 Letters):")}</div>
-                    <div className="consonant-grid">
-                      {quickConsonants.map((consonant) => (
-                        <button
-                          key={consonant}
-                          type="button"
-                          className="consonant-btn"
-                          onClick={() => handleQuickConsonantClick(consonant)}
-                          style={{
-                            color: midConsonants.includes(consonant)
-                              ? colorMid
-                              : highConsonants.includes(consonant)
-                                ? colorHigh
-                                : colorLow,
-                          }}
-                        >
-                          {consonant}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="low-class-groups">
-                      <div className="low-class-group">
-                        <div className="section-label low-pair-label">
-                          {t("🟣 อักษรต่ำคู่ (๑๔ ตัว)", "🟣 Paired Low Consonants (14 Letters)")}
-                        </div>
-                        <div className="low-consonant-grid">
-                          {lowPairConsonants.map((consonant) => (
-                            <button
-                              key={`low-pair-${consonant}`}
-                              type="button"
-                              className="consonant-btn low-pair-btn"
-                              onClick={() => handleQuickConsonantClick(consonant)}
-                            >
-                              {consonant}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="low-class-group">
-                        <div className="section-label low-single-label">
-                          {t("🔵 อักษรต่ำเดี่ยว (๑๐ ตัว)", "🔵 Single Low Consonants (10 Letters)")}
-                        </div>
-                        <div className="low-consonant-grid">
-                          {lowSingleConsonants.map((consonant) => (
-                            <button
-                              key={`low-single-${consonant}`}
-                              type="button"
-                              className="consonant-btn low-single-btn"
-                              onClick={() => handleQuickConsonantClick(consonant)}
-                            >
-                              {consonant}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="cluster-groups">
-                      <div>
-                        <div className="section-label cluster-label">
-                          {t("🔗 ควบกล้ำแท้", "🔗 True Clusters")}
-                        </div>
-                        <div className="cluster-grid">
-                          {trueClusters.map((cluster) => (
-                            <button
-                              key={cluster}
-                              type="button"
-                              className="cluster-btn true-cluster"
-                              onClick={() => handleQuickConsonantClick(cluster)}
-                            >
-                              {cluster}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="section-label cluster-label">
-                          {t("🟣 อักษรนำ ห-นำ", "🟣 Leading ห- Clusters")}
-                        </div>
-                        <div className="cluster-grid">
-                          {leadingHoClusters.map((cluster) => (
-                            <button
-                              key={cluster}
-                              type="button"
-                              className="cluster-btn leading-ho-cluster"
-                              onClick={() => handleQuickConsonantClick(cluster)}
-                            >
-                              {cluster}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="section-label cluster-label">
-                          {t("🟠 ควบกล้ำไม่แท้", "🟠 False Clusters")}
-                        </div>
-                        <div className="cluster-grid">
-                          {falseClusters.map((cluster) => (
-                            <button
-                              key={cluster}
-                              type="button"
-                              className="cluster-btn false-cluster"
-                              onClick={() => handleQuickConsonantClick(cluster)}
-                            >
-                              {cluster}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </section>
-
-                  <section>
-                    <div className="section-label green-label">{t("🟢 สระเสียงยาว (คำเป็น):", "🟢 Long Vowels (Live Syllables):")}</div>
-                    <div className="vowel-list">
-                      {longVowels.map((vowel) => (
-                        <button
-                          key={vowel.label}
-                          className="vowel-btn long-vowel"
-                          onClick={() => handleQuickVowelClick(vowel)}
-                        >
-                          {vowel.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="section-label red-label">{t("🔴 สระเสียงสั้น (คำตาย):", "🔴 Short Vowels (Dead Syllables):")}</div>
-                    <div className="vowel-list">
-                      {shortVowels.map((vowel) => (
-                        <button
-                          key={vowel.label}
-                          className="vowel-btn short-vowel"
-                          onClick={() => handleQuickVowelClick(vowel)}
-                        >
-                          {vowel.label}
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="control-group">
-                    <strong>{t("🔊 การอ่านออกเสียง", "🔊 Speech & Voice")}</strong>
-
-                    <label className="toggle-label">
-                      <input
-                        type="checkbox"
-                        checked={speechEnabled}
-                        onChange={(event) => setSpeechEnabled(event.target.checked)}
-                      />
-                      {t("เปิดเสียงเมื่อคลิกบรรทัด", "Enable voice on row click")}
-                    </label>
-
-                    <label className="select-label">
-                      {t("เสียงอ่าน", "Voice")}
-                      <select
-                        value={selectedVoiceURI}
-                        onChange={(event) => setSelectedVoiceURI(event.target.value)}
-                      >
-                        <option value="">{t("เลือกอัตโนมัติ", "Auto Select")}</option>
-                        {voices
-                          .filter((voice) => voice.lang?.toLowerCase().startsWith("th"))
-                          .map((voice) => (
-                            <option key={voice.voiceURI} value={voice.voiceURI}>
-                              {voice.name} ({voice.lang})
-                            </option>
-                          ))}
-                      </select>
-                    </label>
-
-                    {voices.every((voice) => !voice.lang?.toLowerCase().startsWith("th")) && (
-                      <div className="error-text">
-                        ⚠️ เครื่อง/เบราว์เซอร์นี้ยังไม่มี Thai TTS voice —
-                        ติดตั้งเสียงภาษาไทยก่อนจึงจะอ่านเป็นคำได้
-                      </div>
-                    )}
-
-                    <label className="select-label">
-                      {t("ความเร็วอ่าน:", "Speech Rate:")} {speechRate}x
-                      <input
-                        type="range"
-                        min="0.5"
-                        max="1.4"
-                        step="0.05"
-                        value={speechRate}
-                        onChange={(event) => setSpeechRate(Number(event.target.value))}
-                      />
-                    </label>
-
-                    <button
-                      className="soft-btn"
-                      onClick={() => {
-                        const item = linesData.find((line) => line.show);
-                        speak(item ? getSpeechText(item) : inputText);
-                      }}
-                    >
-                      ▶ {t("ทดลองอ่านคำ", "Test Voice")}
-                    </button>
-                  </section>
-
-                  <section className="control-group sound-manager-section">
-                    <button
-                      className="soft-btn"
-                      onClick={() => setSoundManagerOpen((value) => !value)}
-                    >
-                      📚 {soundManagerOpen
-                        ? t("ปิดคลังเสียง", "Close Sound Library")
-                        : t("จัดการคลังเสียง (เรียกดู/เพิ่ม/แก้ไข/ลบ)", "Manage Sound Library (Browse/Add/Edit/Delete)")}
-                    </button>
-
-                    {soundManagerOpen && (
-                      <div className="sound-manager-box">
-                        <div className="input-row">
-                          <input
-                            type="text"
-                            value={newSoundWord}
-                            placeholder={t("พิมพ์คำใหม่ที่จะเพิ่ม...", "Type a new word to add...")}
-                            onChange={(event) => setNewSoundWord(event.target.value)}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") handleAddSoundWord();
-                            }}
-                          />
-                          <button
-                            className="green-btn"
-                            onClick={handleAddSoundWord}
-                            disabled={soundLoading || !newSoundWord.trim()}
-                          >
-                            ➕ {t("เพิ่ม", "Add")}
-                          </button>
-                        </div>
-
-                        <input
-                          type="text"
-                          value={soundSearch}
-                          placeholder={t("🔍 ค้นหาคำในคลังเสียง...", "🔍 Search sound library...")}
-                          onChange={(event) => setSoundSearch(event.target.value)}
-                        />
-
-                        {soundLoading && (
-                          <div className="section-label">{t("กำลังโหลด...", "Loading...")}</div>
-                        )}
-                        {soundError && <div className="error-text">{soundError}</div>}
-
-                        <div className="sound-word-list">
-                          {filteredSoundWords.length === 0 && !soundLoading && (
-                            <div className="section-label">
-                              {t("ยังไม่มีคำในคลังเสียง", "No words in the sound library yet")}
-                            </div>
-                          )}
-                          {filteredSoundWords.map((item) => (
-                            <div key={item.word} className="sound-word-row">
-                              <span className="sound-word-text">{item.word}</span>
-                              <div className="sound-word-actions">
-                                <button
-                                  className="soft-btn"
-                                  title={t("ฟังเสียง", "Play")}
-                                  onClick={() => speak(item.word, true)}
-                                >
-                                  ▶
-                                </button>
-                                <label
-                                  className="soft-btn sound-edit-btn"
-                                  title={t("แทนที่ไฟล์เสียง (อัปโหลดเอง)", "Replace audio (upload your own)")}
-                                >
-                                  ✏️
-                                  <input
-                                    type="file"
-                                    accept="audio/*"
-                                    onChange={(event) => {
-                                      const file = event.target.files?.[0];
-                                      handleReplaceSoundAudio(item.word, file);
-                                      event.target.value = "";
-                                    }}
-                                  />
-                                </label>
-                                <button
-                                  className="danger-btn"
-                                  title={t("ลบคำนี้", "Delete this word")}
-                                  onClick={() => handleDeleteSoundWord(item.word)}
-                                >
-                                  🗑
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-
-                        <button className="soft-btn" onClick={fetchSoundWords} disabled={soundLoading}>
-                          🔄 {t("รีเฟรชรายการ", "Refresh List")}
-                        </button>
-
-                        <button className="danger-btn" onClick={handleClearAllLocalCache}>
-                          🧹 {t("ล้างแคชเสียงในเครื่องทั้งหมด", "Clear all local audio cache")}
-                        </button>
-                      </div>
-                    )}
-                  </section>
-
-                  <section className="control-group">
-                    <div
-                      style={{
-                        fontSize: "13px",
-                        fontWeight: "bold",
-                        color: "#4b5563",
-                        marginBottom: "8px",
-                      }}
-                    >
-                      {t("🎼 สีพื้นหลังกระดานบรรทัด 5 เส้น", "🎼 5-Line Staff Background")}
-                    </div>
-
-                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                      {[
-                        { label: t("ขาว", "White"), value: "#ffffff" },
-                        { label: t("ครีม", "Cream"), value: "#fffbeb" },
-                        { label: t("ฟ้าอ่อน", "Soft Blue"), value: "#f0f9ff" },
-                        { label: t("เขียวอ่อน", "Soft Green"), value: "#f0fdf4" },
-                        { label: t("เทาอ่อน", "Soft Gray"), value: "#f8fafc" },
-                      ].map((item) => (
-                        <button
-                          key={item.value}
-                          onClick={() => setStaffBgColor(item.value)}
-                          style={{
-                            backgroundColor: item.value,
-                            border:
-                              staffBgColor === item.value
-                                ? "2px solid #0284c7"
-                                : "1px solid #cbd5e1",
-                            padding: "6px 10px",
-                            borderRadius: "6px",
-                            fontSize: "11px",
-                            fontWeight: "bold",
-                            cursor: "pointer",
-                            color: "#1e293b",
-                          }}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-
-                      <input
-                        type="color"
-                        value={staffBgColor}
-                        onChange={(e) => setStaffBgColor(e.target.value)}
-                        title="เลือกสีเอง"
-                        style={{
-                          width: "34px",
-                          height: "30px",
-                          padding: 0,
-                          cursor: "pointer",
-                          border: "1px solid #cbd5e1",
-                          borderRadius: "6px",
-                        }}
-                      />
-                    </div>
-                  </section>
-
-                  <section>
-                    <div className="section-label">{t("🎨 ตั้งค่าสีประจำหมู่ และสีตัวอักษร", "🎨 Consonant Class & Text Colors")}</div>
-                    <div className="color-grid">
-                      {[
-                        [t("อักษรกลาง", "Mid Class"), colorMid, setColorMid],
-                        [t("อักษรสูง", "High Class"), colorHigh, setColorHigh],
-                        [t("อักษรต่ำ", "Low Class"), colorLow, setColorLow],
-                        [t("สีตัวอักษร", "Text Color"), circleTextColor, setCircleTextColor],
-                      ].map(([label, value, setter]) => (
-                        <label
-                          key={label}
-                          className="color-picker"
-                          style={{
-                            backgroundColor: label === "สีตัวอักษร" ? "#334155" : value,
-                            color: label === "สีตัวอักษร" ? value : "#fff",
-                          }}
-                        >
-                          {label}
-                          <input
-                            type="color"
-                            value={value}
-                            onChange={(event) => setter(event.target.value)}
-                          />
-                        </label>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="control-group">
-                    <strong>{t("🖼️ เลือกสีหรือรูปภาพพื้นหลังจอภาพรวม", "🖼️ Overall Screen Background")}</strong>
-                    <div className="background-colors">
-                      {[
-                        [t("เทา", "Gray"), "#e2e8f0"],
-                        [t("สว่าง", "Light"), "#f1f5f9"],
-                        [t("ฟ้าอ่อน", "Soft Blue"), "#e0f2fe"],
-                        [t("มินต์", "Mint"), "#dcfce7"],
-                        [t("ส้มอ่อน", "Soft Orange"), "#fef3c7"],
-                        [t("เข้ม", "Dark"), "#334155"],
-                      ].map(([label, color]) => (
-                        <button
-                          key={color}
-                          onClick={() => {
-                            setBgColor(color);
-                            setBgType("color");
-                          }}
-                          className={bgColor === color && bgType === "color" ? "background-selected" : ""}
-                          style={{
-                            backgroundColor: color,
-                            color: color === "#334155" ? "#fff" : "#1e293b",
-                          }}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-
-                    <label className="upload-btn">
-                      {t("📁 อัปโหลดรูปภาพพื้นหลัง", "📁 Upload Background Image")}
-                      <input type="file" accept="image/*" onChange={handleImageUpload} />
-                    </label>
-
-                    {bgType === "image" && (
-                      <button
-                        className="danger-btn"
-                        onClick={() => {
-                          setBgType("color");
-                          setBgImage("");
-                        }}
-                      >
-                        {t("ยกเลิกรูปภาพ", "Remove Image")}
-                      </button>
-                    )}
-                  </section>
-
-                  <section className="control-group">
-                    <label className="select-label">
-                      {t("📐 ขนาดตัวหนังสือและวงกลม (จอที่ 2):", "📐 Font & Circle Size (Screen 2):")} {labelFontSize}px
-                      <input
-                        type="range"
-                        min="16"
-                        max="32"
-                        value={labelFontSize}
-                        onChange={(event) => setLabelFontSize(Number(event.target.value))}
-                      />
-                    </label>
-                  </section>
-
-                  <section className="api-section">
-                    <button
-                      className="api-toggle"
-                      onClick={() => setShowApiInput((value) => !value)}
-                    >
-                      🔑 {customApiKey ? t("เปลี่ยน Gemini API Key", "Change Gemini API Key") : t("เชื่อมต่อ AI (API Key)", "Connect AI (API Key)")}
-                    </button>
-
-                    {showApiInput && (
-                      <div className="api-input-box">
-                        <strong>{t("🔑 เชื่อมต่อ Gemini API Key ส่วนตัว:", "🔑 Connect Personal Gemini API Key:")}</strong>
-                        <div className="input-row">
-                          <input
-                            type="password"
-                            value={tempApiKey}
-                            placeholder={t("วาง Gemini API Key...", "Paste Gemini API Key...")}
-                            onChange={(event) => setTempApiKey(event.target.value)}
-                            onKeyDown={(event) => {
-                              if (event.key === "Enter") handleSaveApiKey();
-                            }}
-                          />
-                          <button className="green-btn" onClick={handleSaveApiKey}>
-                            {t("บันทึก", "Save")}
-                          </button>
-                        </div>
-                        {apiSaveStatus && <div className="success-text">✓ {apiSaveStatus}</div>}
-                      </div>
-                    )}
-                  </section>
-                </aside>
-              </div>
-            )}
-          </div>
+                soundManagerOpen={soundManagerOpen}
+                setSoundManagerOpen={setSoundManagerOpen}
+                newSoundWord={newSoundWord}
+                setNewSoundWord={setNewSoundWord}
+                handleAddSoundWord={handleAddSoundWord}
+                soundLoading={soundLoading}
+                soundSearch={soundSearch}
+                setSoundSearch={setSoundSearch}
+                soundError={soundError}
+                filteredSoundWords={filteredSoundWords}
+                onPlaySoundWord={(w) => speak(w, true)}
+                handleReplaceSoundAudio={handleReplaceSoundAudio}
+                handleDeleteSoundWord={handleDeleteSoundWord}
+                fetchSoundWords={fetchSoundWords}
+                handleClearAllLocalCache={handleClearAllLocalCache}
+                customApiKey={customApiKey}
+                showApiInput={showApiInput}
+                setShowApiInput={setShowApiInput}
+                tempApiKey={tempApiKey}
+                setTempApiKey={setTempApiKey}
+                handleSaveApiKey={handleSaveApiKey}
+                apiSaveStatus={apiSaveStatus}
+                lang={lang}
+              />
+            </div>
+          )}
         </div>
-      </main>
-    </>
+      </div>
+    </main>
   );
 }
-
-const styles = `
-  * { box-sizing: border-box; }
-  html, body, #root { width: 100%; height: 100%; }
-  body {
-    margin: 0;
-    font-family: "Sarabun", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    overflow: hidden;
-  }
-  button, input, select { font-family: inherit; }
-  button { border: 0; cursor: pointer; }
-
-  .app-page {
-    width: 100%;
-    height: 100dvh;
-    min-height: 100dvh;
-    padding: 22px 14px;
-    background-size: cover;
-    background-position: center;
-    overflow: hidden;
-  }
-
-  .app-shell {
-    width: min(1280px, 100%);
-    height: 100%;
-    margin: 0 auto;
-    min-height: 0;
-  }
-
-  .panel {
-    background: rgba(255,255,255,.96);
-    border: 1px solid #dbe4ee;
-    box-shadow: 0 5px 20px rgba(15,23,42,.09);
-    border-radius: 16px;
-  }
-
-  .preview-switch-btn {
-    position: fixed;
-    top: 18px;
-    right: 22px;
-    z-index: 1000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.95);
-    border: 1.5px solid #0284c7;
-    color: #0284c7;
-    box-shadow: 0 4px 14px rgba(2, 132, 199, 0.25);
-    cursor: pointer;
-    transition: transform .18s ease, background .18s ease, color .18s ease, box-shadow .18s ease;
-  }
-
-  .preview-switch-btn:hover {
-    background: #0284c7;
-    color: #ffffff;
-    transform: scale(1.08);
-    box-shadow: 0 6px 18px rgba(2, 132, 199, 0.35);
-  }
-
-  .top-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 14px 18px;
-    flex-wrap: wrap;
-  }
-
-  .view-buttons, .monitor-buttons, .input-row, .vowel-list, .background-colors {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    flex-wrap: wrap;
-  }
-
-  .view-buttons strong { color: #1e293b; font-size: 15px; }
-
-  .soft-btn, .selected-btn, .blue-btn, .green-btn, .danger-btn {
-    padding: 8px 12px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 700;
-  }
-
-  .soft-btn { background: #f1f5f9; color: #475569; }
-  .selected-btn, .blue-btn { background: #0284c7; color: white; }
-  .green-btn { background: #16a34a; color: white; }
-  .danger-btn { background: #ef4444; color: white; }
-  .blue-btn:disabled { opacity: .6; cursor: wait; }
-
-  .main-grid {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 20px;
-    align-items: stretch;
-    height: calc(100dvh - 44px);
-    min-height: 0;
-  }
-
-  .main-grid.split-layout {
-    grid-template-columns: minmax(0, 1fr) 410px;
-  }
-
-  .main-grid > section {
-    min-width: 0;
-    min-height: 0;
-    overflow-y: auto;
-    overflow-x: hidden;
-  }
-
-  .staff-board-section,
-  .main-grid > section:first-of-type,
-  .display-board,
-  .tone-board {
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-  }
-
-  .staff-board-section::-webkit-scrollbar,
-  .main-grid > section:first-of-type::-webkit-scrollbar,
-  .display-board::-webkit-scrollbar,
-  .tone-board::-webkit-scrollbar {
-    display: none !important;
-    width: 0 !important;
-    height: 0 !important;
-  }
-
-  .board-panel { padding: 30px 22px; min-width: 0; }
-  .presentation-panel { padding: 45px 50px; }
-
-  .tone-board { width: 100%; }
-
-  .board-footer-actions {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 8px;
-    margin-top: 14px;
-    padding-right: 6px;
-  }
-
-  .auto-play-tones-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    padding: 7px 15px;
-    border-radius: 999px;
-    background: #f0fdf4;
-    border: 1.5px solid #22c55e;
-    color: #15803d;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(34, 197, 94, 0.18);
-    transition: all .18s ease;
-  }
-
-  .auto-play-tones-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .auto-play-tones-btn:hover:not(:disabled) {
-    background: #16a34a;
-    color: #ffffff;
-    border-color: #16a34a;
-    transform: scale(1.04);
-    box-shadow: 0 4px 12px rgba(22, 163, 74, 0.28);
-  }
-
-  .auto-play-tones-btn.playing {
-    background: #15803d;
-    color: #ffffff;
-    border-color: #15803d;
-    animation: tonePulse 1.4s infinite;
-  }
-
-  @keyframes tonePulse {
-    0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6); }
-    70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
-  }
-
-  .board-title { text-align: center; color: #4A148C !important; margin-bottom: 18px; }
-  .board-title h2 { margin: 0; font-size: clamp(23px, 2.3vw, 30px); color: #4A148C !important; }
-  .board-title div { font-size: clamp(16px, 1.5vw, 19px); font-weight: 600; color: #4A148C !important; }
-
-  .analysis-box {
-    margin: 0 auto 22px;
-    padding: 10px 14px;
-    max-width: 900px;
-    text-align: center;
-    border-radius: 10px;
-    background: #f0f9ff;
-    border: 1px solid #bae6fd;
-    color: #0369a1;
-    font-size: 14px;
-    font-weight: 600;
-  }
-
-  .analysis-box strong { color: #0284c7; }
-  .analysis-item + .analysis-item { margin-top: 6px; }
-  .analysis-tag {
-    padding: 2px 7px;
-    border-radius: 5px;
-    background: #e0f2fe;
-    color: #075985;
-  }
-
-  .tone-row {
-    display: grid;
-    grid-template-columns: 215px minmax(180px, 1fr) 32px 100px;
-    align-items: center;
-    width: 100%;
-    padding: 7px 0;
-    background: transparent;
-    text-align: inherit;
-    border-radius: 12px;
-    overflow: visible;
-    transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
-  }
-
-  .tone-line-number {
-    text-align: center;
-    font-size: 16px;
-    font-weight: 800;
-    line-height: 1;
-    user-select: none;
-    transition: transform .18s ease, color .18s ease;
-  }
-
-  .tone-row.active .tone-line-number { transform: scale(1.18); }
-
-  .tone-rows {
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-    padding-top: 14px;
-    overflow: visible;
-    min-height: min-content;
-  }
-
-  .tone-row:not(.disabled-tone-row):not(.practice-locked):hover { background: rgba(224,242,254,.45); }
-  .tone-row.active {
-    background: rgba(224,242,254,.78);
-    box-shadow: 0 4px 14px rgba(2,132,199,.13);
-    transform: scale(1.025);
-  }
-
-  .disabled-tone-row { cursor: default; opacity: .72; }
-  .tone-row.practice-locked { cursor: default !important; }
-
-  .tone-name {
-    text-align: right;
-    padding-right: 20px;
-    font-weight: 700;
-    white-space: nowrap;
-    transition: transform .18s ease;
-  }
-
-  .clickable-tone-text {
-    cursor: pointer;
-    user-select: none;
-  }
-
-  .clickable-tone-text:hover {
-    transform: scale(1.05);
-  }
-
-  .tone-name span { font-size: .92em; margin-left: 4px; }
-
-  .tone-line-wrap {
-    height: 34px;
-    display: flex;
-    align-items: center;
-    position: relative;
-    overflow: visible;
-    transition: none;
-    transform: none;
-  }
-
-  .tone-line {
-    width: 100%;
-    height: 2px;
-    background: #94a3b8;
-    transition: height .18s ease, background .18s ease;
-  }
-
-  .tone-row.active .tone-line {
-    height: 4px;
-    background: #475569;
-  }
-
-  .tone-circle {
-    position: absolute;
-    transform: translate3d(-50%, -50%, 0);
-    aspect-ratio: 1 / 1;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    white-space: nowrap;
-    font-weight: 700;
-    overflow: visible;
-    isolation: isolate;
-    box-sizing: border-box;
-    box-shadow: 0 4px 11px rgba(0,0,0,.24);
-    transition: transform .25s cubic-bezier(0.175, 0.885, 0.32, 1.275), background-color .25s ease, box-shadow .25s ease, filter .18s ease;
-  }
-
-  .tone-line-wrap > .tone-circle { top: 50%; }
-
-  .tone-row.active .tone-circle {
-    transform: translate3d(-50%, -50%, 0) scale(1.23);
-    box-shadow: 0 8px 20px rgba(0,0,0,.34);
-    filter: brightness(1.12);
-  }
-
-  .multi-circles {
-    position: absolute;
-    top: 50%;
-    transform: translate3d(-50%, -50%, 0);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    transition: transform .18s ease;
-  }
-
-  .tone-row.active .multi-circles {
-    transform: translate3d(-50%, -50%, 0) scale(1.16);
-  }
-
-  .tone-row.active .multi-circles .tone-circle { transform: none; }
-  .slash { color: #64748b; font-size: 21px; font-weight: 700; }
-  .fixed-tone-label { text-align: center; font-size: 16px; font-weight: 700; }
-
-  .right-panel-wrapper {
-    min-height: 0;
-    height: 100%;
-  }
-
-  .control-panel {
-    padding: 18px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-    min-height: 0;
-  }
-
-  .control-panel h3 { margin: 0; color: #1e293b; font-size: 19px; }
-  .control-group {
-    border: 1px solid #e2e8f0;
-    background: #f8fafc;
-    border-radius: 10px;
-    padding: 13px;
-    display: flex;
-    flex-direction: column;
-    gap: 9px;
-    color: #1e293b;
-    font-size: 13px;
-  }
-
-  .radio-label, .toggle-label {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    color: #334155;
-    cursor: pointer;
-  }
-
-  .input-row { flex-wrap: nowrap; }
-  .input-row input {
-    min-width: 0;
-    flex: 1;
-    width: 100%;
-    padding: 8px 10px;
-    background: #fff;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    font-size: 14px;
-  }
-
-  .input-row .input-error { border: 2px solid #ef4444; }
-  .error-text { color: #dc2626; font-size: 12px; font-weight: 700; }
-  .success-text { color: #059669; font-size: 12px; font-weight: 700; }
-
-  .section-label {
-    margin-bottom: 6px;
-    color: #64748b;
-    font-size: 12px;
-    font-weight: 700;
-  }
-
-  .green-label { color: #166534; }
-  .red-label { color: #991b1b; margin-top: 10px; }
-
-  .consonant-grid {
-    display: grid;
-    grid-template-columns: repeat(11, minmax(0, 1fr));
-    gap: 5px;
-  }
-
-  .consonant-btn {
-    height: 34px;
-    border: 1px solid #cbd5e1;
-    background: white;
-    border-radius: 6px;
-    font-weight: 700;
-    font-size: 15px;
-  }
-
-  .low-class-groups {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: 12px;
-  }
-
-  .low-class-group {
-    padding: 8px;
-    border-radius: 8px;
-    border: 1px solid #e2e8f0;
-    background: #f8fafc;
-  }
-
-  .low-pair-label { color: #7c3aed; }
-  .low-single-label { color: #2563eb; }
-
-  .low-consonant-grid {
-    display: grid;
-    grid-template-columns: repeat(10, minmax(0, 1fr));
-    gap: 5px;
-  }
-
-  .low-pair-btn {
-    color: #7c3aed !important;
-    border-color: #ddd6fe;
-    background: #faf5ff;
-  }
-
-  .low-single-btn {
-    color: #2563eb !important;
-    border-color: #bfdbfe;
-    background: #eff6ff;
-  }
-
-  .cluster-groups {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: 12px;
-  }
-
-  .cluster-label { margin-bottom: 5px; }
-
-  .cluster-grid {
-    display: grid;
-    grid-template-columns: repeat(9, minmax(0, 1fr));
-    gap: 5px;
-  }
-
-  .cluster-btn {
-    min-height: 34px;
-    padding: 6px 7px;
-    border-radius: 7px;
-    background: #fff;
-    font-weight: 700;
-    font-size: 14px;
-    border: 1px solid #cbd5e1;
-  }
-
-  .true-cluster {
-    color: #0369a1;
-    border-color: #bae6fd;
-    background: #f0f9ff;
-  }
-
-  .leading-ho-cluster {
-    color: #7c3aed;
-    border-color: #ddd6fe;
-    background: #f5f3ff;
-  }
-
-  .false-cluster {
-    color: #c2410c;
-    border-color: #fed7aa;
-    background: #fff7ed;
-  }
-
-  .vowel-list { gap: 5px; }
-  .vowel-btn {
-    padding: 7px 9px;
-    border-radius: 6px;
-    font-weight: 700;
-    font-size: 14px;
-  }
-
-  .long-vowel { background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d; }
-  .short-vowel { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; }
-
-  .select-label {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    color: #475569;
-    font-size: 12px;
-    font-weight: 700;
-  }
-
-  .select-label select, .select-label input[type="range"] { width: 100%; }
-  .select-label select {
-    padding: 7px;
-    background: white;
-    border: 1px solid #cbd5e1;
-    border-radius: 7px;
-  }
-
-  .color-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-  .color-picker {
-    min-height: 35px;
-    border-radius: 8px;
-    padding: 7px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    font-weight: 700;
-    cursor: pointer;
-  }
-
-  .color-picker input { position: absolute; opacity: 0; width: 0; height: 0; }
-
-  .background-colors button {
-    padding: 5px 8px;
-    border-radius: 6px;
-    border: 1px solid #cbd5e1;
-    font-size: 11px;
-    font-weight: 700;
-  }
-
-  .background-colors .background-selected { outline: 2px solid #0284c7; }
-
-  .upload-btn {
-    display: inline-flex;
-    width: fit-content;
-    padding: 7px 9px;
-    color: white;
-    background: #0284c7;
-    border-radius: 7px;
-    font-size: 12px;
-    font-weight: 700;
-    cursor: pointer;
-  }
-
-  .upload-btn input { display: none; }
-
-  .sound-manager-box {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-top: 8px;
-    padding-top: 10px;
-    border-top: 1px dashed #cbd5e1;
-  }
-
-  .sound-manager-box > input[type="text"] {
-    padding: 8px 10px;
-    background: #fff;
-    border: 1px solid #cbd5e1;
-    border-radius: 8px;
-    font-size: 13px;
-  }
-
-  .sound-word-list {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    max-height: 220px;
-    overflow-y: auto;
-  }
-
-  .sound-word-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 6px 9px;
-    background: #fff;
-    border: 1px solid #e2e8f0;
-    border-radius: 7px;
-  }
-
-  .sound-word-text {
-    font-weight: 700;
-    font-size: 14px;
-    color: #1e293b;
-    overflow-wrap: anywhere;
-  }
-
-  .sound-word-actions {
-    display: flex;
-    gap: 5px;
-    flex-shrink: 0;
-  }
-
-  .sound-word-actions button,
-  .sound-word-actions .sound-edit-btn {
-    min-width: 30px;
-    padding: 5px 7px;
-    font-size: 13px;
-  }
-
-  .sound-edit-btn {
-    position: relative;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .sound-edit-btn input { display: none; }
-
-  .api-section { border-top: 1px solid #e2e8f0; padding-top: 12px; }
-  .api-toggle {
-    width: 100%;
-    padding: 9px;
-    border-radius: 8px;
-    background: #fef3c7;
-    color: #92400e;
-    border: 1px solid #fde68a;
-    font-weight: 700;
-  }
-
-  .api-input-box {
-    margin-top: 8px;
-    padding: 10px;
-    border: 1px dashed #94a3b8;
-    border-radius: 8px;
-    background: #f8fafc;
-    font-size: 12px;
-    color: #475569;
-  }
-
-  .api-input-box strong { display: block; margin-bottom: 7px; }
-
-  .display-page {
-    width: 100%;
-    height: 100dvh;
-    min-height: 100dvh;
-    padding: clamp(10px, 2vh, 24px) clamp(10px, 2vw, 24px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-size: cover;
-    background-position: center;
-    overflow: hidden;
-    box-sizing: border-box;
-  }
-
-  .display-board {
-    width: min(1200px, 96vw);
-    height: min(94dvh, calc(100dvh - 24px));
-    max-width: 1200px;
-    max-height: calc(100dvh - 24px);
-    min-height: 0;
-    padding: clamp(12px, 3vh, 44px);
-    border-radius: clamp(16px, 2vw, 28px);
-    background: rgba(255,255,255,.96);
-    border: 1px solid #cbd5e1;
-    box-shadow: 0 16px 42px rgba(0,0,0,.18);
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-    overflow-x: hidden;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-  }
-
-  .display-board .tone-rows {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-evenly;
-    gap: 0;
-    margin-top: 2vh;
-    padding-top: 24px;
-    overflow: visible;
-  }
-
-  .display-tip {
-    position: fixed;
-    bottom: 13px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 7px 13px;
-    border-radius: 999px;
-    color: white;
-    background: rgba(15,23,42,.72);
-    font-size: 12px;
-    white-space: nowrap;
-  }
-
-  @media (max-width: 980px) {
-    .app-page { overflow: hidden; }
-    .main-grid { height: calc(100dvh - 44px); }
-    .main-grid.split-layout { grid-template-columns: 1fr; }
-    .control-panel { position: static; min-height: 0; }
-  }
-
-  @media (max-width: 640px) {
-    .app-page { padding: 10px; }
-    .top-bar { padding: 12px; }
-    .board-panel, .presentation-panel { padding: 22px 10px; }
-    .tone-row { grid-template-columns: 112px minmax(115px, 1fr) 22px 52px; }
-    .tone-line-number { font-size: 13px; }
-    .tone-name { font-size: 13px !important; white-space: normal; padding-right: 8px; }
-    .fixed-tone-label { font-size: 12px; }
-    .tone-rows { gap: 20px; }
-    .tone-circle {
-      width: 39px !important;
-      min-width: 39px !important;
-      max-width: 39px !important;
-      height: 39px !important;
-      padding: 0 !important;
-      font-size: 15px !important;
-    }
-    .multi-circles { gap: 4px; }
-    .slash { font-size: 16px; }
-    .consonant-grid { gap: 3px; }
-    .consonant-btn { height: 31px; font-size: 13px; }
-    .low-consonant-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; }
-
-    .cluster-grid {
-      grid-template-columns: repeat(6, minmax(0, 1fr));
-      gap: 4px;
-    }
-
-    .cluster-btn {
-      min-height: 31px;
-      font-size: 13px;
-      padding: 5px 4px;
-    }
-
-    .display-board {
-      width: 96vw;
-      height: calc(100dvh - 20px);
-      max-height: calc(100dvh - 20px);
-      padding: 14px 8px;
-    }
-    .display-board .analysis-box { font-size: 11px; margin-bottom: 12px; }
-    .display-board .tone-row { grid-template-columns: 104px minmax(100px, 1fr) 22px 48px; }
-    .display-tip { font-size: 10px; max-width: 92vw; white-space: normal; text-align: center; }
-  }
-
-  .tone-circle::before {
-    content: "";
-    position: absolute;
-    right: 0px;
-    bottom: 50%;
-    width: 4px;
-    height: 42px;
-    background-color: var(--note-color, transparent);
-    z-index: -1;
-  }
-
-  .tone-circle::after {
-    content: "";
-    position: absolute;
-    right: -12px;
-    bottom: calc(50% + 18px);
-    width: 12px;
-    height: 20px;
-    border-right: 4px solid var(--note-color, transparent);
-    border-top: 6px solid var(--note-color, transparent);
-    border-top-right-radius: 20px 22px;
-    border-bottom-right-radius: 4px;
-    z-index: -1;
-  }
-
-  /* สไตล์โหมดฝึกออกเสียง (Practice Mode) */
-  .tone-circle.target-test-active {
-    transform: translate3d(-50%, -50%, 0) scale(1.48) !important;
-    background-color: #ff6b35 !important;
-    --note-color: #ff6b35 !important;
-    border: 2.5px solid #ffffff !important;
-    box-shadow: 0 0 22px rgba(255, 107, 53, 0.95) !important;
-    z-index: 100 !important;
-  }
-
-  .multi-circles .tone-circle.target-test-active {
-    transform: scale(1.48) !important;
-  }
-
-  .tone-circle.target-test-mismatch {
-    animation: mismatchBounce 0.38s ease !important;
-  }
-
-  @keyframes mismatchBounce {
-    0% { transform: translate3d(-50%, -50%, 0) scale(1); }
-    50% { transform: translate3d(-50%, -50%, 0) scale(1.25); filter: brightness(1.25); }
-    100% { transform: translate3d(-50%, -50%, 0) scale(1); }
-  }
-
-  .multi-circles .tone-circle.target-test-mismatch {
-    animation: mismatchBounceMulti 0.4s ease !important;
-  }
-
-  @keyframes mismatchBounceMulti {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.25); filter: brightness(1.25); }
-    100% { transform: scale(1); }
-  }
-
-  .practice-toggle-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    padding: 7px 15px;
-    border-radius: 999px;
-    background: #0284c7;
-    border: 1.5px solid #0284c7;
-    color: #ffffff;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(2, 132, 199, 0.25);
-    transition: all .18s ease;
-  }
-
-  .practice-toggle-btn:hover {
-    background: #0369a1;
-    border-color: #0369a1;
-    transform: scale(1.04);
-    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
-  }
-
-  .practice-toggle-btn.cancel {
-    background: #ef4444 !important;
-    border-color: #ef4444 !important;
-    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25) !important;
-  }
-
-  .practice-toggle-btn.cancel:hover {
-    background: #dc2626 !important;
-    border-color: #dc2626 !important;
-  }
-
-  .practice-skip-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 7px 14px;
-    border-radius: 999px;
-    background: #f1f5f9;
-    border: 1.5px solid #cbd5e1;
-    color: #475569;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-    transition: all .18s ease;
-  }
-
-  .practice-skip-btn:hover {
-    background: #e2e8f0;
-    color: #1e293b;
-    transform: scale(1.04);
-  }
-
-  .practice-status-banner {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 6px 14px;
-    border-radius: 8px;
-    background: #fff7ed;
-    border: 1.5px solid #fdba74;
-    font-size: 13px;
-    font-weight: 700;
-    animation: fadeInBanner .25s ease;
-  }
-
-  .practice-summary-banner {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 8px 16px;
-    border-radius: 8px;
-    background: #ecfdf5;
-    border: 1.5px solid #6ee7b7;
-    color: #065f46;
-    font-size: 14px;
-    font-weight: 700;
-    animation: fadeInBanner .25s ease;
-  }
-
-  .practice-summary-close-btn {
-    margin-left: auto;
-    background: none;
-    border: none;
-    color: #059669;
-    font-size: 16px;
-    font-weight: bold;
-    cursor: pointer;
-    padding: 2px 6px;
-    border-radius: 4px;
-    transition: background .15s ease;
-  }
-
-  .practice-summary-close-btn:hover {
-    background: rgba(5, 150, 105, 0.15);
-  }
-
-  @keyframes fadeInBanner {
-    from { opacity: 0; transform: translateY(-4px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  .practice-msg-text { color: #c2410c; }
-  .practice-timer-text { color: #dc2626; }
-  .practice-score-text { color: #16a34a; }
-
-  /* สไตล์โหมดฝึกวางคำบนเส้นบรรทัด 5 เส้น (Drag-to-Staff Quiz Mode) */
-  .quiz-toggle-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    padding: 7px 15px;
-    border-radius: 999px;
-    background: #f97316;
-    border: 1.5px solid #ea580c;
-    color: #ffffff;
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(249, 115, 22, 0.28);
-    transition: all .18s ease;
-  }
-
-  .quiz-toggle-btn:hover {
-    background: #ea580c;
-    border-color: #ea580c;
-    transform: scale(1.04);
-    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.38);
-  }
-
-  .quiz-toggle-btn.cancel {
-    background: #ef4444 !important;
-    border-color: #ef4444 !important;
-    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25) !important;
-  }
-
-  .quiz-toggle-btn.cancel:hover {
-    background: #dc2626 !important;
-    border-color: #dc2626 !important;
-  }
-
-  .quiz-drag-station {
-    margin-top: 18px;
-    padding: 14px;
-    background: #fff7ed;
-    border: 1.5px dashed #fdba74;
-    border-radius: 12px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    min-height: 85px;
-    position: relative;
-  }
-
-  .quiz-instruction-text {
-    font-size: 13px;
-    font-weight: 700;
-    color: #c2410c;
-  }
-
-  .quiz-draggable-node {
-    position: relative !important;
-    left: auto !important;
-    top: auto !important;
-    box-shadow: 0 6px 16px rgba(249, 115, 22, 0.38) !important;
-  }
-
-  .shake-error {
-    animation: shakeNode .38s cubic-bezier(.36,.07,.19,.97) both;
-  }
-
-  @keyframes shakeNode {
-    10%, 90% { transform: translate3d(-3px, 0, 0); }
-    20%, 80% { transform: translate3d(5px, 0, 0); }
-    30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
-    40%, 60% { transform: translate3d(6px, 0, 0); }
-  }
-
-  .quiz-next-btn {
-    padding: 7px 16px !important;
-    border-radius: 999px !important;
-    box-shadow: 0 2px 8px rgba(22, 163, 74, 0.28);
-    animation: pulseNext 1.5s infinite;
-  }
-
-  @keyframes pulseNext {
-    0% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5); }
-    70% { box-shadow: 0 0 0 8px rgba(22, 163, 74, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
-  }
-
-  .quiz-revealing-node {
-    animation: quizRevealPulse 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards !important;
-  }
-
-  @keyframes quizRevealPulse {
-    0% {
-      transform: translate3d(-50%, -50%, 0) scale(0.9);
-      background-color: #f97316 !important;
-      --note-color: #f97316 !important;
-    }
-    50% {
-      transform: translate3d(-50%, -50%, 0) scale(1.45);
-      background-color: #f97316 !important;
-      --note-color: #f97316 !important;
-      box-shadow: 0 0 25px rgba(249, 115, 22, 0.85);
-    }
-    100% {
-      transform: translate3d(-50%, -50%, 0) scale(1);
-    }
-  }
-
-  .quiz-snap-node {
-    animation: quizSnapPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-  }
-
-  @keyframes quizSnapPop {
-    0% { transform: translate3d(-50%, -50%, 0) scale(0.85); }
-    50% { transform: translate3d(-50%, -50%, 0) scale(1.2); }
-    100% { transform: translate3d(-50%, -50%, 0) scale(1); }
-  }
-`;
