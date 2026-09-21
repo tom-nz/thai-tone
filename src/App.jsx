@@ -106,7 +106,7 @@ import StaffQuizMode from "./components/StaffQuizMode";
  *  - src/components/StaffQuizMode.jsx:
  *      คอมโพเนนต์แบบฝึกหัดลากวางคำบนเส้นบรรทัด 5 เส้น (Component-Driven Isolation)
  *      จัดการ State การลากวาง, การตรวจจับพิกัด Drop, การนับคะแนน (2, 1, 0),
- *      และ Sequence แอนิเมชันเฉลยสีส้มขยายใหญ่แล้วหดคืนสีกลุ่มอักษร
+ *      และการส่ง Event กลับมา Snap ตัวโน้ตลงบนเส้นบรรทัดของกระดานหลัก
  *
  *  - src/utils/pitchDetector.js:
  *      โมดูลวิเคราะห์สัญญาณเสียงไมโครโฟน ประกอบด้วย:
@@ -136,7 +136,7 @@ import StaffQuizMode from "./components/StaffQuizMode";
  *          ├──► คลิกที่แถวคำ ──► ขยายขนาด + เล่นเสียงอ่านคำนั้น (IndexedDB -> R2 -> Azure)
  *          ├──► คลิกปุ่ม "ผันเสียง 1-5" ──► เล่นเสียงไล่ระดับอัตโนมัติ (1 -> 5 หรือตามโหมด)
  *          │
- *          ▼ ผู้ใช้คลิกปุ่ม "🎙️ ฝึกออกเสียง"
+ *          ▼ ผู้ใช้คลิกปุ่ม "🎙️ ฝึกออกเสียง" (ปุ่มแบบฝึกหัดวางคำจะถูก Disabled และเป็นสีจาง)
  *  ┌────────────────────────────────────────────────────────────────────────┐
  *  │ [ เริ่มต้นโหมดฝึกออกเสียง (Practice Mode) ]                             │
  *  │ 1. ดึงคำศัพท์ที่กำลังแสดงอยู่บนหน้าจอปัจจุบันเข้าคิว (Queue)              │
@@ -181,14 +181,14 @@ import StaffQuizMode from "./components/StaffQuizMode";
  *
  *  [ โหมดการเรียนปกติ ]
  *          │
- *          ▼ ผู้ใช้คลิกปุ่ม "🎯 วางคำบนเส้นบรรทัด" (Toggle Staff Quiz Mode)
+ *          ▼ ผู้ใช้คลิกปุ่ม "🎯 วางคำบนเส้นบรรทัด" (ปุ่มฝึกออกเสียงจะถูก Disabled และเป็นสีจาง)
  *  ┌────────────────────────────────────────────────────────────────────────┐
  *  │ [ เริ่มต้นโหมดแบบฝึกหัดวางคำบนเส้น (Staff Quiz Init) ]                  │
  *  │ 1. ดึงคำศัพท์จาก linesData เข้าสู่ Quiz Queue                           │
- *  │ 2. ซ่อนกล่องวิเคราะห์หลักภาษาเดิมชั่วคราว เพื่อให้ผู้เรียนวิเคราะห์เอง    │
- *  │ 3. แสดงคำถามข้อแรกที่แท่นวางด้านล่าง: attempts = 0                     │
- *  │ 4. ตัวโน้ตคำถามเริ่มต้นด้วย "สีส้มปริศนา (#f97316)"                     │
- *  │    เพื่อไม่ให้ทราบหมู่อักษรล่วงหน้า โดยยังคงรูปทรงตัวโน้ตและก้านโน้ตปกติ │
+ *  │ 2. เส้นบรรทัด 5 เส้นจะ "ว่างเปล่าทันที" (ซ่อนตัวโน้ตเดิมทั้งหมด)          │
+ *  │ 3. ซ่อนกล่องวิเคราะห์หลักภาษาเดิมชั่วคราว เพื่อให้ผู้เรียนวิเคราะห์เอง    │
+ *  │ 4. ตัวโน้ตคำถามด้านล่างมีขนาดใหญ่เท่าตัวโน้ตปกติ (48px)                 │
+ *  │    และเริ่มต้นด้วย "สีส้มปริศนา (#f97316)" เพื่อไม่ให้ทราบหมู่อักษร     │
  *  └───────────────────────────────────┬────────────────────────────────────┘
  *                                      │
  *                                      ▼
@@ -225,12 +225,13 @@ import StaffQuizMode from "./components/StaffQuizMode";
  *                                      │
  *                    ┌─────────────────┴─────────────────┐
  *                    ▼                                   ▼
- *           คลิกปุ่ม "ข้อต่อไป ❯"                 คลิกปุ่ม "❌ ยกเลิก"
+ *           คลิกปุ่ม "ข้อต่อไป ❯"                 คลิกปุ่ม "❌ ยกเลิกแบบฝึกหัด"
  *                    │                                   │
  *           [ มีข้อถัดไปในคิว ]                           ▼
  *           ├── โหลดข้อถัดไป (attempts = 0)        [ ออกจากแบบฝึกหัดทันที ]
- *           │   ซ่อนกล่องวิเคราะห์ภาษา             - เคลียร์ State ของ Quiz
- *           │   ตัวโน้ตล่างจอกลับเป็นสีส้ม         - คืนสู่หน้าจอการเรียนปกติ
+ *           │   เส้นบรรทัดกลับมาว่างเปล่า          - เคลียร์ State ของ Quiz
+ *           │   ซ่อนกล่องวิเคราะห์ภาษา             - คืนสู่หน้าจอการเรียนปกติ
+ *           │   ตัวโน้ตล่างจอกลับเป็นสีส้ม
  *           │
  *           [ ครบทุกข้อในชุดแบบฝึกหัด ]
  *           └──► แสดง Banner สรุปคะแนนรวมที่ทำได้ / คะแนนเต็ม
@@ -1069,6 +1070,13 @@ function Board({
 }) {
   const t = (th, en) => (lang === "en" ? en : th);
 
+  // State สำหรับรับข้อมูลตัวโน้ตคำถามที่ตอบถูกหรือเฉลย เพื่อนำมาแสดงบนเส้นบรรทัด
+  const [resolvedQuizItem, setResolvedQuizItem] = useState(null);
+
+  useEffect(() => {
+    if (!isQuizMode) setResolvedQuizItem(null);
+  }, [isQuizMode]);
+
   const fixedRightLabels = {
     5: { text: t("เสียงสูง", "High Pitch"), color: "#ef4444" },
     3: { text: t("เสียงกลาง", "Mid Pitch"), color: "#22c55e" },
@@ -1116,7 +1124,8 @@ function Board({
         <div style={{ color: "#4A148C" }}>{t("และการผันวรรณยุกต์", "Tone Rules & Musical Staves")}</div>
       </div>
 
-      {(() => {
+      {/* กล่องวิเคราะห์หลักภาษา: ในโหมด Quiz จะซ่อนไว้ก่อน และจะแสดงเมื่อตอบถูกหรือเฉลยแล้วเท่านั้น */}
+      {(!isQuizMode || (isQuizMode && resolvedQuizItem)) && (() => {
         const visibleItems = linesData.filter((item) => item.show);
         const topItem = visibleItems[0];
         const bottomItem = visibleItems[visibleItems.length - 1];
@@ -1166,7 +1175,7 @@ function Board({
         }
 
         if (isMid) {
-          const word = inputText.trim();
+          const word = isQuizMode && resolvedQuizItem ? resolvedQuizItem.word : inputText.trim();
           if (word) {
             analyses.push({
               label: "อักษรกลาง",
@@ -1306,11 +1315,14 @@ function Board({
               : item.color
             : "#94a3b8";
 
+          // เช็กว่าข้อนี้ในโหมด Quiz วางถูกต้องหรือเฉลยลงที่เส้นนี้หรือไม่
+          const isQuizResolvedHere = isQuizMode && resolvedQuizItem && resolvedQuizItem.placedLine === item.id;
+
           return (
             <button
               type="button"
               data-tone-line-id={item.id}
-              className={`tone-row ${isActive ? "active" : ""} ${!item.show ? "disabled-tone-row" : ""} ${isPracticing ? "practice-locked" : ""}`}
+              className={`tone-row ${isActive ? "active" : ""} ${!item.show && !isQuizMode ? "disabled-tone-row" : ""} ${isPracticing ? "practice-locked" : ""}`}
               key={item.id}
               onClick={() => {
                 if (!isPracticing && !isQuizMode) onRowClick(item);
@@ -1330,7 +1342,9 @@ function Board({
 
               <div className="tone-line-wrap">
                 <div className="tone-line" />
-                {item.show && !item.isMulti && item.word && (
+
+                {/* 1. โหมดปกติ: แสดงคำบนเส้นตามปกติ */}
+                {!isQuizMode && item.show && !item.isMulti && item.word && (
                   <div
                     className={`tone-circle ${practiceTargetWord === item.word ? "target-test-active" : ""} ${mismatchWord === item.word ? "target-test-mismatch" : ""}`}
                     style={{
@@ -1342,7 +1356,7 @@ function Board({
                   </div>
                 )}
 
-                {item.show && item.isMulti && (
+                {!isQuizMode && item.show && item.isMulti && (
                   <div className="multi-circles" style={{ left: item.leftPos }}>
                     {item.multi.map((circle, index) => (
                       <React.Fragment key={`${circle.text}-${index}`}>
@@ -1362,11 +1376,24 @@ function Board({
                     ))}
                   </div>
                 )}
+
+                {/* 2. โหมด Quiz: เส้นบรรทัด 5 เส้นจะว่างเปล่า และปรากฏเฉพาะตัวโน้ตที่ตอบถูกหรือเฉลยแล้วเท่านั้น */}
+                {isQuizMode && isQuizResolvedHere && (
+                  <div
+                    className={`tone-circle ${resolvedQuizItem.isRevealed ? "quiz-revealing-node" : "quiz-snap-node"}`}
+                    style={{
+                      ...getCircleStyle(resolvedQuizItem.originalColor), // คืนสีประจำหมู่อักษรเดิม
+                      left: resolvedQuizItem.leftPos || item.leftPos,
+                    }}
+                  >
+                    {resolvedQuizItem.word}
+                  </div>
+                )}
               </div>
 
               <div
                 className="tone-line-number"
-                style={{ color: item.show ? (item.isMulti ? item.multi[0]?.color : item.color) : "#94a3b8" }}
+                style={{ color: item.show || isQuizMode ? (item.isMulti ? item.multi[0]?.color : item.color) : "#94a3b8" }}
               >
                 {item.id}
               </div>
@@ -1386,10 +1413,12 @@ function Board({
       {isQuizMode && (
         <StaffQuizMode
           linesData={linesData}
-          inputText={inputText}
           lang={lang}
           circleTextColor={circleTextColor}
+          fontSize={fontSize}
+          isDisplay={isDisplay}
           speak={speak}
+          onResolveQuestion={(item) => setResolvedQuizItem(item)}
           onExit={() => onToggleQuiz(false)}
         />
       )}
@@ -1397,11 +1426,13 @@ function Board({
       {/* แถบปุ่มด้านล่างกระดาน */}
       <div className="board-footer-actions">
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* ปุ่มผันเสียง 1-5 (จะปิดการทำงานและจางเมื่ออยู่ในโหมดฝึกใดๆ) */}
           <button
             type="button"
             className={`auto-play-tones-btn ${isPlayingAll ? "playing" : ""}`}
             onClick={onPlayAllTones}
             disabled={isPracticing || isQuizMode || !linesData.some((item) => item.show && (item.word || (item.isMulti && item.multi.length > 0)))}
+            style={isPracticing || isQuizMode ? { opacity: 0.45, cursor: "not-allowed" } : {}}
             title={
               mode === "pair"
                 ? t("ออกเสียงผันวรรณยุกต์คู่เสียงสูง-ต่ำ (5 ➔ 1)", "Auto-play paired tones (5 ➔ 1)")
@@ -1439,27 +1470,29 @@ function Board({
             </span>
           </button>
 
-          {/* ปุ่มสลับโหมดฝึกออกเสียง / ยกเลิก */}
+          {/* ปุ่มสลับโหมดฝึกออกเสียง: ถ้าอยู่ในโหมด Quiz จะเป็นสีจางและกดไม่ได้ */}
           <button
             type="button"
             className={`practice-toggle-btn ${isPracticing ? "cancel" : ""}`}
             onClick={onTogglePractice}
             disabled={isQuizMode}
+            style={isQuizMode ? { opacity: 0.45, cursor: "not-allowed", filter: "grayscale(0.6)" } : {}}
           >
             {isPracticing ? t("❌ ยกเลิก", "❌ Cancel") : t("🎙️ ฝึกออกเสียง", "🎙️ Practice")}
           </button>
 
-          {/* ปุ่มสลับโหมดแบบฝึกหัดวางคำบนเส้นบรรทัด 5 เส้น */}
+          {/* ปุ่มสลับโหมดแบบฝึกหัดวางคำ: ถ้าอยู่ในโหมดฝึกออกเสียง จะเป็นสีจางและกดไม่ได้ */}
           <button
             type="button"
             className={`quiz-toggle-btn ${isQuizMode ? "cancel" : ""}`}
             onClick={() => onToggleQuiz(!isQuizMode)}
             disabled={isPracticing}
+            style={isPracticing ? { opacity: 0.45, cursor: "not-allowed", filter: "grayscale(0.6)" } : {}}
           >
             {isQuizMode ? t("❌ ยกเลิกแบบฝึกหัด", "❌ Cancel Quiz") : t("🎯 วางคำบนเส้นบรรทัด", "🎯 Staff Drop Quiz")}
           </button>
 
-          {/* ปุ่มข้ามคำ (จะแสดงเฉพาะในโหมดฝึก และไม่คิดคะแนน) */}
+          {/* ปุ่มข้ามคำ (จะแสดงเฉพาะในโหมดฝึกออกเสียง และไม่คิดคะแนน) */}
           {isPracticing && !practiceCompleted && (
             <button
               type="button"
@@ -1472,7 +1505,7 @@ function Board({
           )}
         </div>
 
-        {/* แถบแสดงสถานะขณะกำลังทดสอบ */}
+        {/* แถบแสดงสถานะขณะกำลังทดสอบออกเสียง */}
         {isPracticing && !practiceCompleted && (
           <div className="practice-status-banner">
             <span className="practice-msg-text">{practiceMsg}</span>
@@ -1481,7 +1514,7 @@ function Board({
           </div>
         )}
 
-        {/* แถบสรุปคะแนนเมื่อจบการทดสอบ (แสดงผลบนหน้าจอแทน alert) */}
+        {/* แถบสรุปคะแนนเมื่อจบการทดสอบออกเสียง */}
         {practiceCompleted && (
           <div className="practice-summary-banner">
             <span style={{ fontSize: "16px" }}>🎉</span>
@@ -4228,5 +4261,37 @@ const styles = `
     0% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5); }
     70% { box-shadow: 0 0 0 8px rgba(22, 163, 74, 0); }
     100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
+  }
+
+  /* แอนิเมชันเฉลย: ขยายใหญ่ 1.45x ด้วยสีส้ม -> หดกลับขนาดปกติเป็นสีประจำหมู่อักษร */
+  .quiz-revealing-node {
+    animation: quizRevealPulse 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards !important;
+  }
+
+  @keyframes quizRevealPulse {
+    0% {
+      transform: translate3d(-50%, -50%, 0) scale(0.9);
+      background-color: #f97316 !important;
+      --note-color: #f97316 !important;
+    }
+    50% {
+      transform: translate3d(-50%, -50%, 0) scale(1.45);
+      background-color: #f97316 !important;
+      --note-color: #f97316 !important;
+      box-shadow: 0 0 25px rgba(249, 115, 22, 0.85);
+    }
+    100% {
+      transform: translate3d(-50%, -50%, 0) scale(1);
+    }
+  }
+
+  .quiz-snap-node {
+    animation: quizSnapPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  }
+
+  @keyframes quizSnapPop {
+    0% { transform: translate3d(-50%, -50%, 0) scale(0.85); }
+    50% { transform: translate3d(-50%, -50%, 0) scale(1.2); }
+    100% { transform: translate3d(-50%, -50%, 0) scale(1); }
   }
 `;
