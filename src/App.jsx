@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { autoCorrelate, classifyToneContour, TONE_TARGET_FREQS } from './utils/pitchDetector';
+import StaffQuizMode from "./components/StaffQuizMode";
 
 /**
  * =============================================================================
@@ -7,90 +8,90 @@ import { autoCorrelate, classifyToneContour, TONE_TARGET_FREQS } from './utils/p
  * =============================================================================
  *
  * จุดประสงค์:
- *   ส่วนนี้เป็น "single source of truth" สำหรับ AI และผู้พัฒนาโปรแกรม
- *   เพื่อป้องกันการแก้ logic การผันวรรณยุกต์โดยอาศัยการคาดเดาเฉพาะกรณี
+ *    ส่วนนี้เป็น "single source of truth" สำหรับ AI และผู้พัฒนาโปรแกรม
+ *    เพื่อป้องกันการแก้ logic การผันวรรณยุกต์โดยอาศัยการคาดเดาเฉพาะกรณี
  *
  * 1) ไตรยางศ์ = การแบ่งพยัญชนะไทยตามหลักการผันวรรณยุกต์เป็น 3 หมู่
  *
- *    อักษรกลาง 9 ตัว:
- *      ก จ ฎ ฏ ด ต บ ป อ
+ *     อักษรกลาง 9 ตัว:
+ *       ก จ ฎ ฏ ด ต บ ป อ
  *
- *    อักษรสูง 11 ตัว:
- *      ข ฃ ฉ ฐ ถ ผ ฝ ศ ษ ส ห
+ *     อักษรสูง 11 ตัว:
+ *       ข ฃ ฉ ฐ ถ ผ ฝ ศ ษ ส ห
  *
- *    อักษรต่ำ 24 ตัว แบ่งเป็น:
- *      อักษรต่ำคู่ 14 ตัว:
- *        ค ฅ ฆ ช ฌ ซ ฑ ฒ ท ธ พ ภ ฟ ฮ
- *      อักษรต่ำเดี่ยว 10 ตัว:
- *        ง ญ ณ น ม ย ร ล ว ฬ
+ *     อักษรต่ำ 24 ตัว แบ่งเป็น:
+ *       อักษรต่ำคู่ 14 ตัว:
+ *         ค ฅ ฆ ช ฌ ซ ฑ ฒ ท ธ พ ภ ฟ ฮ
+ *       อักษรต่ำเดี่ยว 10 ตัว:
+ *         ง ญ ณ น ม ย ร ล ว ฬ
  *
- *    รวมทั้งหมด 44 ตัวพอดี (9 + 11 + 14 + 10 = 44)
+ *     รวมทั้งหมด 44 ตัวพอดี (9 + 11 + 14 + 10 = 44)
  *
  * 2) "พื้นเสียง" คือเสียงของพยางค์เมื่อไม่มีรูปวรรณยุกต์กำกับ
- *    อักษรสูง:
- *      - คำเป็น  -> จัตวา
- *      - คำตาย  -> เอก
- *    อักษรกลาง:
- *      - คำเป็น  -> สามัญ
- *      - คำตาย  -> เอก
- *    อักษรต่ำ:
- *      - คำเป็น          -> สามัญ
- *      - คำตายสระสั้น    -> ตรี
- *      - คำตายสระยาว     -> โท
+ *     อักษรสูง:
+ *       - คำเป็น  -> จัตวา
+ *       - คำตาย  -> เอก
+ *     อักษรกลาง:
+ *       - คำเป็น  -> สามัญ
+ *       - คำตาย  -> เอก
+ *     อักษรต่ำ:
+ *       - คำเป็น          -> สามัญ
+ *       - คำตายสระสั้น    -> ตรี
+ *       - คำตายสระยาว     -> โท
  *
  * 3) จำนวน "เสียง" ที่ผันได้ไม่เท่ากับจำนวนรูปวรรณยุกต์
- *    มีรูปวรรณยุกต์ 4 รูป: ่ ้ ๊ ๋
- *    แต่การผันจริงขึ้นกับ:
- *      - หมู่อักษร (กลาง, สูง, ต่ำคู่, ต่ำเดี่ยว)
- *      - คำเป็น / คำตาย
- *      - สระสั้น / สระยาว (โดยเฉพาะคำตายอักษรต่ำ)
- *      - การมีตัวสะกด (มาตราตัวสะกด กบด = คำตาย, นมยวง = คำเป็น)
- *      - อักษรคู่ / อักษรเดี่ยว
+ *     มีรูปวรรณยุกต์ 4 รูป: ่ ้ ๊ ๋
+ *     แต่การผันจริงขึ้นกับ:
+ *       - หมู่อักษร (กลาง, สูง, ต่ำคู่, ต่ำเดี่ยว)
+ *       - คำเป็น / คำตาย
+ *       - สระสั้น / สระยาว (โดยเฉพาะคำตายอักษรต่ำ)
+ *       - การมีตัวสะกด (มาตราตัวสะกด กบด = คำตาย, นมยวง = คำเป็น)
+ *       - อักษรคู่ / อักษรเดี่ยว
  *
  * 4) ตารางแกนหลักที่ใช้ใน Rule Engine
- *    อักษรกลาง:
- *      - คำเป็น:  5 เสียง (สามัญ = ไม่มีรูป, เอก = ่, โท = ้, ตรี = ๊, จัตวา = ๋)
- *      - คำตาย:  4 เสียง (เอก = ไม่มีรูป, โท = ้, ตรี = ๊, จัตวา = ๋)
- *    อักษรสูง:
- *      - คำเป็น:  3 เสียง (เอก = ่, โท = ้, จัตวา = ไม่มีรูป)
- *      - คำตาย:  2 เสียง (เอก = ไม่มีรูป, โท = ้)
- *    อักษรต่ำ:
- *      - คำเป็น:  3 เสียง (สามัญ = ไม่มีรูป, โท = ่, ตรี = ้)
- *      - คำตายสระสั้น: 2 เสียง (โท = ่, ตรี = ไม่มีรูป)
- *      - คำตายสระยาว:  2 เสียง (โท = ไม่มีรูป, ตรี = ้)
+ *     อักษรกลาง:
+ *       - คำเป็น:  5 เสียง (สามัญ = ไม่มีรูป, เอก = ่, โท = ้, ตรี = ๊, จัตวา = ๋)
+ *       - คำตาย:  4 เสียง (เอก = ไม่มีรูป, โท = ้, ตรี = ๊, จัตวา = ๋)
+ *     อักษรสูง:
+ *       - คำเป็น:  3 เสียง (เอก = ่, โท = ้, จัตวา = ไม่มีรูป)
+ *       - คำตาย:  2 เสียง (เอก = ไม่มีรูป, โท = ้)
+ *     อักษรต่ำ:
+ *       - คำเป็น:  3 เสียง (สามัญ = ไม่มีรูป, โท = ่, ตรี = ้)
+ *       - คำตายสระสั้น: 2 เสียง (โท = ่, ตรี = ไม่มีรูป)
+ *       - คำตายสระยาว:  2 เสียง (โท = ไม่มีรูป, ตรี = ้)
  *
  * 5) คำเป็น / คำตาย
- *    คำตายหลัก:
- *      - สระเสียงสั้น ไม่มีตัวสะกด
- *      - มีตัวสะกดในแม่กก แม่กด แม่กบ (มาตรา กบด)
- *    คำเป็นหลัก:
- *      - สระเสียงยาว ไม่มีตัวสะกด
- *      - มีตัวสะกดในแม่กง แม่กน แม่กม แม่เกย แม่เกอว (มาตรา นมยวง)
- *    ข้อควรระวัง:
- *      การตรวจจาก "อักขระตัวสุดท้าย" อย่างเดียวไม่เพียงพอ เพราะ ย/ว
- *      อาจเป็นส่วนของรูปสระ เช่น เ◌ีย / ◌ียะ / ◌ัว / ◌ัวะ
+ *     คำตายหลัก:
+ *       - สระเสียงสั้น ไม่มีตัวสะกด
+ *       - มีตัวสะกดในแม่กก แม่กด แม่กบ (มาตรา กบด)
+ *     คำเป็นหลัก:
+ *       - สระเสียงยาว ไม่มีตัวสะกด
+ *       - มีตัวสะกดในแม่กง แม่กน แม่กม แม่เกย แม่เกอว (มาตรา นมยวง)
+ *     ข้อควรระวัง:
+ *       การตรวจจาก "อักขระตัวสุดท้าย" อย่างเดียวไม่เพียงพอ เพราะ ย/ว
+ *       อาจเป็นส่วนของรูปสระ เช่น เ◌ีย / ◌ียะ / ◌ัว / ◌ัวะ
  *
  * 6) อักษรต่ำคู่ / ต่ำเดี่ยว
- *    ต่ำคู่: มีอักษรสูงเป็นคู่เสียง ช่วยเทียบผันให้ครบ 5 เสียง
- *    ต่ำเดี่ยว: ไม่มีคู่เสียงสูงโดยตรง การผันครบ 5 เสียงต้องใช้ "ห นำ"
+ *     ต่ำคู่: มีอักษรสูงเป็นคู่เสียง ช่วยเทียบผันให้ครบ 5 เสียง
+ *     ต่ำเดี่ยว: ไม่มีคู่เสียงสูงโดยตรง การผันครบ 5 เสียงต้องใช้ "ห นำ"
  *
  * 7) ห นำ / อ นำ / ควบกล้ำ
- *    - ห นำ: ห ทำหน้าที่นำระดับเสียงให้พยัญชนะต่ำเดี่ยว เช่น หง หน หม หร
- *    - อ นำ: ใช้เฉพาะกรณีคำยกเว้น เช่น อย่า อยู่ อย่าง อยาก
- *    - ควบกล้ำแท้: ตัวพยัญชนะต้น 2 ตัวออกเสียงควบกันจริง เช่น กร กล กว
- *    - ควบกล้ำไม่แท้: ถือเป็นข้อมูลเฉพาะคำ เช่น ทร ออกเสียง ซ
+ *     - ห นำ: ห ทำหน้าที่นำระดับเสียงให้พยัญชนะต่ำเดี่ยว เช่น หง หน หม หร
+ *     - อ นำ: ใช้เฉพาะกรณีคำยกเว้น เช่น อย่า อยู่ อย่าง อยาก
+ *     - ควบกล้ำแท้: ตัวพยัญชนะต้น 2 ตัวออกเสียงควบกันจริง เช่น กร กล กว
+ *     - ควบกล้ำไม่แท้: ถือเป็นข้อมูลเฉพาะคำ เช่น ทร ออกเสียง ซ
  *
  * 8) Rule Engine ต้องเป็นแหล่งความจริงหลัก
- *    calculateTones() / analyzeSyllable() เป็นแหล่งตัดสินผลการผัน
- *    AI ห้าม overwrite ผลการผันที่ Rule Engine คำนวณแล้ว
+ *     calculateTones() / analyzeSyllable() เป็นแหล่งตัดสินผลการผัน
+ *     AI ห้าม overwrite ผลการผันที่ Rule Engine คำนวณแล้ว
  *
  * 9) รูป "เทียบการผัน" ไม่เท่ากับ "คำศัพท์ไทยที่ยืนยันความหมาย"
  * 10) ตัวตรวจรูปวรรณยุกต์ validateEnteredToneMark() ต้องเรียก Rule Engine ชุดเดียวกัน
  * 11) TONE_RULE_SELF_TESTS เป็น regression tests เพื่อป้องกันการแก้กฎเดิมเสีย
  *
  * แหล่งอ้างอิง:
- *    - DLTV: ไตรยางศ์ / อักษรสูง กลาง ต่ำ / อักษรต่ำคู่ / ต่ำเดี่ยว
- *    - DLTV: ใบความรู้การผันวรรณยุกต์ และตารางคำเป็น/คำตาย
+ *     - DLTV: ไตรยางศ์ / อักษรสูง กลาง ต่ำ / อักษรต่ำคู่ / ต่ำเดี่ยว
+ *     - DLTV: ใบความรู้การผันวรรณยุกต์ และตารางคำเป็น/คำตาย
  *
  * =============================================================================
  * 2. SYSTEM ARCHITECTURE & RELATED FILES MAPPING
@@ -99,7 +100,13 @@ import { autoCorrelate, classifyToneContour, TONE_TARGET_FREQS } from './utils/p
  *  - src/App.jsx:
  *      หัวใจหลักของแอปพลิเคชัน รวบรวม Rule Engine, State Management,
  *      คอมโพเนนต์ ToneBoard, ControlPanel, ระบบ Multi-tier Caching (IndexedDB),
- *      ระบบ BroadcastChannel ซิงค์จอที่ 2 และ Logic โหมดฝึกออกเสียง
+ *      ระบบ BroadcastChannel ซิงค์จอที่ 2, โหมดฝึกออกเสียง (Practice Mode)
+ *      และโหมดแบบฝึกหัดวางคำบนเส้นบรรทัด 5 เส้น (Drag-to-Staff Quiz Mode)
+ *
+ *  - src/components/StaffQuizMode.jsx:
+ *      คอมโพเนนต์แบบฝึกหัดลากวางคำบนเส้นบรรทัด 5 เส้น (Component-Driven Isolation)
+ *      จัดการ State การลากวาง, การตรวจจับพิกัด Drop, การนับคะแนน (2, 1, 0),
+ *      และ Sequence แอนิเมชันเฉลยสีส้มขยายใหญ่แล้วหดคืนสีกลุ่มอักษร
  *
  *  - src/utils/pitchDetector.js:
  *      โมดูลวิเคราะห์สัญญาณเสียงไมโครโฟน ประกอบด้วย:
@@ -118,8 +125,10 @@ import { autoCorrelate, classifyToneContour, TONE_TARGET_FREQS } from './utils/p
  *        - Azure Cognitive Services Speech API (สังเคราะห์เสียงภาษาไทย th-TH)
  *
  * =============================================================================
- * 3. PROGRAM FLOWCHART & PRACTICE MODE STATE MACHINE
+ * 3. PROGRAM FLOWCHART & STATE MACHINES
  * =============================================================================
+ *
+ * [A] โหมดการเรียนปกติ & โหมดฝึกออกเสียง (Normal & Practice Mode):
  *
  *  [ โหมดการเรียนปกติ (Normal Mode) ]
  *          │
@@ -130,8 +139,8 @@ import { autoCorrelate, classifyToneContour, TONE_TARGET_FREQS } from './utils/p
  *          ▼ ผู้ใช้คลิกปุ่ม "🎙️ ฝึกออกเสียง"
  *  ┌────────────────────────────────────────────────────────────────────────┐
  *  │ [ เริ่มต้นโหมดฝึกออกเสียง (Practice Mode) ]                             │
- *  │ 1. ดึงคำศัพท์ที่กำลังแสดงอยู่บนหน้าจอปัจจุบันเข้าคิว (Queue)             │
- *  │ 2. ล็อกปุ่มคลิกคำอื่นบนกระดาน (practice-locked) ป้องกันการขยายทับซ้อน      │
+ *  │ 1. ดึงคำศัพท์ที่กำลังแสดงอยู่บนหน้าจอปัจจุบันเข้าคิว (Queue)              │
+ *  │ 2. ล็อกปุ่มคลิกคำอื่นบนกระดาน (practice-locked) ป้องกันการขยายทับซ้อน       │
  *  │ 3. รีเซ็ตคะแนน Score = 0, ซ่อนปุ่มผันเสียง, เปิดไมโครโฟน Web Audio     │
  *  └───────────────────────────────────┬────────────────────────────────────┘
  *                                      │
@@ -139,19 +148,19 @@ import { autoCorrelate, classifyToneContour, TONE_TARGET_FREQS } from './utils/p
  *  ┌──────────────────────────────────────────────────────────────────┐     │
  *  │ [ คำเป้าหมายปัจจุบัน (Target Word) ]                              │     │
  *  │ - ขยายใหญ่ 1.48x + เปลี่ยนเป็นสีส้มสด (#ff6b35) ทั้งลูกกลมและก้านโน้ต│     │
- *  │ - เริ่มนับถอยหลัง Timer 10 วินาที                                │     │
+ *  │ - เริ่มนับถอยหลัง Timer 10 วินาที                                 │     │
  *  │ - เริ่มต้นลูปตรวจจับเสียงไมค์ (Contour Slope Analysis)           │     │
  *  └───────────────────────────────────┬──────────────────────────────┘     │
  *                                      │                                    │
- *           ┌──────────────────────────┼──────────────────────────┐         │
- *           ▼                          ▼                          ▼         │
+ *            ┌──────────────────────────┼──────────────────────────┐         │
+ *            ▼                          ▼                          ▼         │
  *   [ ผู้เรียนเปล่งเสียงตรง ]      [ เสียงไปโดนคำอื่น ]       [ หมดเวลา 10 วินาที ]│
  *   - ต้องตรงต่อเนื่อง ~120ms    - กรอง Debounce 5 เฟรม    - เล่นเสียงเฉลยต้นแบบ   │
  *   - ได้คะแนน (+10 แต้ม)       - เด้งเตือนชั่วขณะ           - ขึ้นข้อความให้พูดตาม   │
  *   - หดกลับขนาด & สีเดิม        - ไม่คิดคะแนน             - รอจนกว่าจะออกเสียงถูก  │
  *   - เข้าสู่ Cooldown 800ms      - เวลาเดินต่อปกติ                                │
- *           │                                                     │         │
- *           └──────────────────────────┬──────────────────────────┘         │
+ *            │                                                     │         │
+ *            └──────────────────────────┬──────────────────────────┘         │
  *                                      │                                    │
  *                         [ ตรวจสอบว่ายังมีคำถัดไป? ]                         │
  *                         ├── [ มีคำถัดไป ] ────────────────────────────────┘
@@ -159,13 +168,72 @@ import { autoCorrelate, classifyToneContour, TONE_TARGET_FREQS } from './utils/p
  *                         ▼ [ ครบทุกคำ หรือกดปุ่ม ⏭️ ข้าม จนจบ ]
  *  ┌────────────────────────────────────────────────────────────────────────┐
  *  │ [ จบการทดสอบ (Finish Practice) ]                                       │
- *  │ - ปิดไมโครโฟน คืนขนาดและสีวงกลมทุกตัวกลับสู่สภาวะปกติ                    │
+ *  │ - ปิดไมโครโฟน คืนขนาดและสีวงกลมทุกตัวกลับสู่สภาวะปกติ                     │
  *  │ - แสดงแบนเนอร์สรุปคะแนนรวมบนหน้าจอ (บรรทัดถัดจากปุ่มทดสอบ) ไม่ใช้ Alert   │
- *  │ - ปลดล็อกปุ่มคลิกคำบนกระดานกลับสู่สภาวะปกติ                              │
+ *  │ - ปลดล็อกปุ่มคลิกคำบนกระดานกลับสู่สภาวะปกติ                               │
  *  └───────────────────────────────────┬────────────────────────────────────┘
  *                                      │
  *                                      ▼ เมื่อคลิก "❌ ยกเลิก" หรือปิดสรุปคะแนน
  *                         [ รีเซ็ตกลับสู่หน้าจอการเรียนปกติ ]
+ *
+ * -----------------------------------------------------------------------------
+ * [B] โหมดแบบฝึกหัดวางคำบนเส้นบรรทัด 5 เส้น (Drag-to-Staff Quiz Mode):
+ *
+ *  [ โหมดการเรียนปกติ ]
+ *          │
+ *          ▼ ผู้ใช้คลิกปุ่ม "🎯 วางคำบนเส้นบรรทัด" (Toggle Staff Quiz Mode)
+ *  ┌────────────────────────────────────────────────────────────────────────┐
+ *  │ [ เริ่มต้นโหมดแบบฝึกหัดวางคำบนเส้น (Staff Quiz Init) ]                  │
+ *  │ 1. ดึงคำศัพท์จาก linesData เข้าสู่ Quiz Queue                           │
+ *  │ 2. ซ่อนกล่องวิเคราะห์หลักภาษาเดิมชั่วคราว เพื่อให้ผู้เรียนวิเคราะห์เอง    │
+ *  │ 3. แสดงคำถามข้อแรกที่แท่นวางด้านล่าง: attempts = 0                     │
+ *  │ 4. ตัวโน้ตคำถามเริ่มต้นด้วย "สีส้มปริศนา (#f97316)"                     │
+ *  │    เพื่อไม่ให้ทราบหมู่อักษรล่วงหน้า โดยยังคงรูปทรงตัวโน้ตและก้านโน้ตปกติ │
+ *  └───────────────────────────────────┬────────────────────────────────────┘
+ *                                      │
+ *                                      ▼
+ *  ┌────────────────────────────────────────────────────────────────────────┐
+ *  │ [ ผู้เรียนลากคำ (Pointer Down & Drag) ไปวางบนเส้นบรรทัด 1 - 5 ]         │
+ *  │ ตรวจจับ Hitbox ด้วย data-tone-line-id (1=สามัญ, 2=เอก, 3=โท, 4=ตรี, 5=จัตวา) │
+ *  └───────────────────────────────────┬────────────────────────────────────┘
+ *                                      │
+ *                    ┌─────────────────┴─────────────────┐
+ *                    ▼                                   ▼
+ *          [ วางตรงกับระดับเสียงจริง ]         [ วางผิดระดับเสียง ]
+ *                    │                                   │
+ *         ┌──────────┴──────────┐               attempts = attempts + 1
+ *    attempts == 0         attempts == 1                 │
+ *         │                     │                        ▼
+ *     +2 คะแนน              +1 คะแนน             ┌──────────┴──────────┐
+ *         │                     │                ▼                     ▼
+ *         └──────────┬──────────┘          attempts < 3          attempts == 3
+ *                    │                     สั่นเตือน (Shake)       [ เฉลยคำตอบ ]
+ *                    │                     เด้งกลับแท่นวางล่าง     - attempts ไม่ได้คะแนน
+ *                    │                     ให้ผู้เรียนลองวางใหม่  - วิ่งไปเส้นที่ถูก
+ *                    │                                           - ขยายใหญ่ 1.45x สีส้ม
+ *                    │                                           - หดกลับขนาดปกติ
+ *                    │                                                 │
+ *                    ▼ ◄───────────────────────────────────────────────┘
+ *  ┌────────────────────────────────────────────────────────────────────────┐
+ *  │ [ สถานะสำเร็จประจำข้อ (Question Resolved) ]                             │
+ *  │ 1. Snap ตัวโน้ตลงประจำเส้นเสียงที่ถูกต้อง (1 - 5)                        │
+ *  │ 2. เปลี่ยนสีตัวโน้ตจากสีส้มเป็น "สีประจำหมู่อักษรเดิม" (เขียว/แดง/น้ำเงิน) │
+ *  │ 3. กล่อง "📌 ผลวิเคราะห์หลักภาษา" ปรากฏขึ้นมาด้านบนเส้นบรรทัด             │
+ *  │ 4. เล่นเสียงอ่านออกเสียงคำนั้นอัตโนมัติ (Web Audio / TTS API)           │
+ *  │ 5. ปรากฏปุ่ม "ข้อต่อไป ❯ (Next)"                                       │
+ *  └───────────────────────────────────┬────────────────────────────────────┘
+ *                                      │
+ *                    ┌─────────────────┴─────────────────┐
+ *                    ▼                                   ▼
+ *           คลิกปุ่ม "ข้อต่อไป ❯"                 คลิกปุ่ม "❌ ยกเลิก"
+ *                    │                                   │
+ *           [ มีข้อถัดไปในคิว ]                           ▼
+ *           ├── โหลดข้อถัดไป (attempts = 0)        [ ออกจากแบบฝึกหัดทันที ]
+ *           │   ซ่อนกล่องวิเคราะห์ภาษา             - เคลียร์ State ของ Quiz
+ *           │   ตัวโน้ตล่างจอกลับเป็นสีส้ม         - คืนสู่หน้าจอการเรียนปกติ
+ *           │
+ *           [ ครบทุกข้อในชุดแบบฝึกหัด ]
+ *           └──► แสดง Banner สรุปคะแนนรวมที่ทำได้ / คะแนนเต็ม
  * =============================================================================
  */
 
@@ -995,6 +1063,9 @@ function Board({
   practiceMsg = "",
   practiceCompleted = false,
   totalPossibleScore = 0,
+  isQuizMode = false,
+  onToggleQuiz,
+  speak,
 }) {
   const t = (th, en) => (lang === "en" ? en : th);
 
@@ -1227,7 +1298,7 @@ function Board({
 
       <div className="tone-rows">
         {linesData.map((item) => {
-          const isActive = !isPracticing && activeRowId === item.id;
+          const isActive = !isPracticing && !isQuizMode && activeRowId === item.id;
           const fixedRight = fixedRightLabels[item.id];
           const rowColor = item.show
             ? item.isMulti
@@ -1238,13 +1309,14 @@ function Board({
           return (
             <button
               type="button"
+              data-tone-line-id={item.id}
               className={`tone-row ${isActive ? "active" : ""} ${!item.show ? "disabled-tone-row" : ""} ${isPracticing ? "practice-locked" : ""}`}
               key={item.id}
               onClick={() => {
-                if (!isPracticing) onRowClick(item);
+                if (!isPracticing && !isQuizMode) onRowClick(item);
               }}
-              style={isPracticing ? { cursor: 'default' } : {}}
-              title={item.show && !isPracticing ? `${t("คลิกเพื่อขยายและอ่านคำ", "Click to zoom and speak")} ${getSpeechText(item)}` : ""}
+              style={isPracticing || isQuizMode ? { cursor: 'default' } : {}}
+              title={item.show && !isPracticing && !isQuizMode ? `${t("คลิกเพื่อขยายและอ่านคำ", "Click to zoom and speak")} ${getSpeechText(item)}` : ""}
             >
               <div
                 className="tone-name"
@@ -1310,6 +1382,18 @@ function Board({
         })}
       </div>
 
+      {/* แบบฝึกหัดวางคำบนเส้นบรรทัด 5 เส้น */}
+      {isQuizMode && (
+        <StaffQuizMode
+          linesData={linesData}
+          inputText={inputText}
+          lang={lang}
+          circleTextColor={circleTextColor}
+          speak={speak}
+          onExit={() => onToggleQuiz(false)}
+        />
+      )}
+
       {/* แถบปุ่มด้านล่างกระดาน */}
       <div className="board-footer-actions">
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -1317,7 +1401,7 @@ function Board({
             type="button"
             className={`auto-play-tones-btn ${isPlayingAll ? "playing" : ""}`}
             onClick={onPlayAllTones}
-            disabled={isPracticing || !linesData.some((item) => item.show && (item.word || (item.isMulti && item.multi.length > 0)))}
+            disabled={isPracticing || isQuizMode || !linesData.some((item) => item.show && (item.word || (item.isMulti && item.multi.length > 0)))}
             title={
               mode === "pair"
                 ? t("ออกเสียงผันวรรณยุกต์คู่เสียงสูง-ต่ำ (5 ➔ 1)", "Auto-play paired tones (5 ➔ 1)")
@@ -1360,8 +1444,19 @@ function Board({
             type="button"
             className={`practice-toggle-btn ${isPracticing ? "cancel" : ""}`}
             onClick={onTogglePractice}
+            disabled={isQuizMode}
           >
             {isPracticing ? t("❌ ยกเลิก", "❌ Cancel") : t("🎙️ ฝึกออกเสียง", "🎙️ Practice")}
+          </button>
+
+          {/* ปุ่มสลับโหมดแบบฝึกหัดวางคำบนเส้นบรรทัด 5 เส้น */}
+          <button
+            type="button"
+            className={`quiz-toggle-btn ${isQuizMode ? "cancel" : ""}`}
+            onClick={() => onToggleQuiz(!isQuizMode)}
+            disabled={isPracticing}
+          >
+            {isQuizMode ? t("❌ ยกเลิกแบบฝึกหัด", "❌ Cancel Quiz") : t("🎯 วางคำบนเส้นบรรทัด", "🎯 Staff Drop Quiz")}
           </button>
 
           {/* ปุ่มข้ามคำ (จะแสดงเฉพาะในโหมดฝึก และไม่คิดคะแนน) */}
@@ -1463,6 +1558,9 @@ export default function App() {
   const [practiceMsg, setPracticeMsg] = useState("");
   const [practiceTargetWord, setPracticeTargetWord] = useState(null);
   const [mismatchWord, setMismatchWord] = useState(null);
+
+  // สถานะสำหรับโหมดแบบฝึกหัดวางคำบนเส้นบรรทัด 5 เส้น (Drag-to-Staff Quiz)
+  const [isQuizMode, setIsQuizMode] = useState(false);
 
   const micStreamRef = useRef(null);
   const audioCtxRef = useRef(null);
@@ -1625,6 +1723,7 @@ export default function App() {
     if (isPracticing) {
       cancelPractice();
     } else {
+      if (isQuizMode) setIsQuizMode(false);
       startPractice();
     }
   };
@@ -1906,7 +2005,7 @@ export default function App() {
   };
 
   const handleRowClick = (item) => {
-    if (!item.show || isPracticing) return;
+    if (!item.show || isPracticing || isQuizMode) return;
     const isExpanding = activeRowId !== item.id;
     setActiveRowId(isExpanding ? item.id : null);
     if (isExpanding) {
@@ -2482,6 +2581,9 @@ export default function App() {
             practiceMsg={practiceMsg}
             practiceCompleted={practiceCompleted}
             totalPossibleScore={totalPossibleScore}
+            isQuizMode={isQuizMode}
+            onToggleQuiz={setIsQuizMode}
+            speak={speak}
           />
         </main>
       </>
@@ -2547,6 +2649,9 @@ export default function App() {
                 practiceMsg={practiceMsg}
                 practiceCompleted={practiceCompleted}
                 totalPossibleScore={totalPossibleScore}
+                isQuizMode={isQuizMode}
+                onToggleQuiz={setIsQuizMode}
+                speak={speak}
               />
             </section>
 
@@ -4035,4 +4140,93 @@ const styles = `
   .practice-msg-text { color: #c2410c; }
   .practice-timer-text { color: #dc2626; }
   .practice-score-text { color: #16a34a; }
+
+  /* ========================================================================= */
+  /* สไตล์โหมดฝึกวางคำบนเส้นบรรทัด 5 เส้น (Drag-to-Staff Quiz Mode)            */
+  /* ========================================================================= */
+  .quiz-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 15px;
+    border-radius: 999px;
+    background: #f97316;
+    border: 1.5px solid #ea580c;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(249, 115, 22, 0.28);
+    transition: all .18s ease;
+  }
+
+  .quiz-toggle-btn:hover {
+    background: #ea580c;
+    border-color: #ea580c;
+    transform: scale(1.04);
+    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.38);
+  }
+
+  .quiz-toggle-btn.cancel {
+    background: #ef4444 !important;
+    border-color: #ef4444 !important;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25) !important;
+  }
+
+  .quiz-toggle-btn.cancel:hover {
+    background: #dc2626 !important;
+    border-color: #dc2626 !important;
+  }
+
+  .quiz-drag-station {
+    margin-top: 18px;
+    padding: 14px;
+    background: #fff7ed;
+    border: 1.5px dashed #fdba74;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    min-height: 85px;
+    position: relative;
+  }
+
+  .quiz-instruction-text {
+    font-size: 13px;
+    font-weight: 700;
+    color: #c2410c;
+  }
+
+  .quiz-draggable-node {
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
+    box-shadow: 0 6px 16px rgba(249, 115, 22, 0.38) !important;
+  }
+
+  .shake-error {
+    animation: shakeNode .38s cubic-bezier(.36,.07,.19,.97) both;
+  }
+
+  @keyframes shakeNode {
+    10%, 90% { transform: translate3d(-3px, 0, 0); }
+    20%, 80% { transform: translate3d(5px, 0, 0); }
+    30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
+    40%, 60% { transform: translate3d(6px, 0, 0); }
+  }
+
+  .quiz-next-btn {
+    padding: 7px 16px !important;
+    border-radius: 999px !important;
+    box-shadow: 0 2px 8px rgba(22, 163, 74, 0.28);
+    animation: pulseNext 1.5s infinite;
+  }
+
+  @keyframes pulseNext {
+    0% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5); }
+    70% { box-shadow: 0 0 0 8px rgba(22, 163, 74, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
+  }
 `;
