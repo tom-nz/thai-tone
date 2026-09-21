@@ -3,6 +3,7 @@ import StaffQuizMode from "./StaffQuizMode";
 import { midConsonants, lowSingleConsonants, analyzeSyllable } from "../utils/toneRules";
 
 export default function ToneBoard({
+  channelName = "thai_tone_sync_channel",
   linesData,
   analysisInfo,
   inputText,
@@ -75,6 +76,17 @@ export default function ToneBoard({
     lineHeight: 1,
     flex: `0 0 ${circleSize}`,
   });
+
+  const handlePlayAllClick = () => {
+    if (isDisplay && typeof window !== "undefined" && "BroadcastChannel" in window) {
+      const ch = new BroadcastChannel(channelName);
+      ch.postMessage({ type: "TRIGGER_PLAY_ALL" });
+      ch.close();
+    }
+    if (onPlayAllTones) {
+      onPlayAllTones();
+    }
+  };
 
   return (
     <div
@@ -369,7 +381,7 @@ export default function ToneBoard({
           <button
             type="button"
             className={`auto-play-tones-btn ${isPlayingAll ? "playing" : ""}`}
-            onClick={onPlayAllTones}
+            onClick={handlePlayAllClick}
             disabled={isPracticing || isQuizMode || !linesData.some((item) => item.show && (item.word || (item.isMulti && item.multi.length > 0)))}
             style={isPracticing || isQuizMode ? { opacity: 0.45, cursor: "not-allowed" } : {}}
             title={

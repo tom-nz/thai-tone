@@ -368,6 +368,33 @@ import ControlPanel from "./components/ControlPanel";
  * =============================================================================
  */
 
+const apiKey = "";
+const CHANNEL_NAME = "thai_tone_sync_channel";
+const STORAGE_KEY = "thai_tone_live_sync_data";
+const TTS_API_ENDPOINT = "/api/tts";
+const WORDS_API_ENDPOINT = "/api/words";
+const TTS_VOICE = "th-TH-PremwadeeNeural";
+
+function getSpeechText(item) {
+  if (!item?.show) return "";
+  if (item.isMulti) return item.multi[0]?.ttsText || item.multi[0]?.text || "";
+  return item.ttsText || item.word || "";
+}
+
+function normalizeThaiSpeechText(text = "") {
+  return String(text).normalize("NFC").replace(/\s+/g, " ").trim();
+}
+
+function getSpeechFallbackVoice(voices = [], selectedVoiceURI = "") {
+  return (
+    voices.find(
+      (item) =>
+        item.voiceURI === selectedVoiceURI &&
+        item.lang?.toLowerCase().startsWith("th"),
+    ) || voices.find((item) => item.lang?.toLowerCase().startsWith("th"))
+  );
+}
+
 export default function App() {
   const [isDisplayWindow, setIsDisplayWindow] = useState(false);
   const [lang, setLang] = useState(() => {
@@ -1332,6 +1359,7 @@ export default function App() {
     return (
       <main className="display-page" style={containerBackground} onDoubleClick={toggleFullscreen}>
         <ToneBoard
+          channelName={CHANNEL_NAME}
           linesData={linesData}
           analysisInfo={analysisInfo}
           inputText={inputText}
@@ -1397,6 +1425,7 @@ export default function App() {
             }}
           >
             <ToneBoard
+              channelName={CHANNEL_NAME}
               linesData={linesData}
               analysisInfo={analysisInfo}
               inputText={inputText}
