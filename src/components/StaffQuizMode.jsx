@@ -22,7 +22,6 @@ const QUIZ_WORD_BANK = [
   { word: "ม้า", targetLine: 4, originalColor: "#007bff", group: "low" },
 ];
 
-// ฟังก์ชันสุ่มจัดคิวแบบสลับกลุ่มอักษร ป้องกันการซ้ำกลุ่มเดิมบ่อยๆ
 function generateBalancedQuizQueue(linesData) {
   const currentWords = [];
   linesData.filter((row) => row.show).forEach((row) => {
@@ -112,7 +111,7 @@ export default function StaffQuizMode({
       }
     }
 
-    // ดีดกลับจุดเริ่มต้นล่างจอทุกครั้งทันทีที่ปล่อยเมาส์
+    // ดีดกลับจุดเริ่มต้นล่างจอเสมอเมื่อปล่อยมือ
     setDragOffset({ x: 0, y: 0 });
 
     if (droppedLineId !== null) {
@@ -193,7 +192,6 @@ export default function StaffQuizMode({
             )}
           </div>
 
-          {/* วงกลมคำถามขนาดมาตรฐาน 48px สีส้มปริศนา */}
           {!isResolved && (
             <div
               className={`tone-circle quiz-draggable-node ${shakeAnim ? "shake-error" : ""}`}
