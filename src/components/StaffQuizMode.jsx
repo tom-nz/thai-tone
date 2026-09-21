@@ -1,4 +1,58 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef } from "react";
+
+// คลังคำสำหรับสุ่มในแบบฝึกหัด แยกกลุ่มอักษร 3 หมู่ชัดเจน
+const QUIZ_WORD_BANK = [
+  // อักษรกลาง
+  { word: "กา", targetLine: 1, originalColor: "#22c55e", group: "middle" },
+  { word: "ด่า", targetLine: 2, originalColor: "#22c55e", group: "middle" },
+  { word: "ป้า", targetLine: 3, originalColor: "#22c55e", group: "middle" },
+  { word: "โต๊", targetLine: 4, originalColor: "#22c55e", group: "middle" },
+  { word: "ตั๋ว", targetLine: 5, originalColor: "#22c55e", group: "middle" },
+  // อักษรสูง
+  { word: "ขา", targetLine: 5, originalColor: "#ef4444", group: "high" },
+  { word: "ข่า", targetLine: 2, originalColor: "#ef4444", group: "high" },
+  { word: "ข้า", targetLine: 3, originalColor: "#ef4444", group: "high" },
+  { word: "เสื่อ", targetLine: 2, originalColor: "#ef4444", group: "high" },
+  { word: "เสื้อ", targetLine: 3, originalColor: "#ef4444", group: "high" },
+  // อักษรต่ำ
+  { word: "คา", targetLine: 1, originalColor: "#007bff", group: "low" },
+  { word: "ค่อ", targetLine: 3, originalColor: "#007bff", group: "low" },
+  { word: "ค้อ", targetLine: 4, originalColor: "#007bff", group: "low" },
+  { word: "แม่", targetLine: 3, originalColor: "#007bff", group: "low" },
+  { word: "ม้า", targetLine: 4, originalColor: "#007bff", group: "low" },
+];
+
+// ฟังก์ชันสุ่มจัดคิวแบบสลับกลุ่มอักษร ป้องกันการซ้ำกลุ่มเดิมบ่อยๆ
+function generateBalancedQuizQueue(linesData) {
+  const currentWords = [];
+  linesData.filter((row) => row.show).forEach((row) => {
+    if (row.isMulti) {
+      row.multi.forEach((m) => {
+        if (m.text) currentWords.push({ word: m.text, targetLine: row.id, originalColor: m.color, leftPos: row.leftPos });
+      });
+    } else if (row.word) {
+      currentWords.push({ word: row.word, targetLine: row.id, originalColor: row.color, leftPos: row.leftPos });
+    }
+  });
+
+  // หากหน้าจอมีคำอยู่ให้ใช้คำบนหน้าจอเป็นหลัก หากไม่มีคำให้ใช้ Word Bank สลับกลุ่ม
+  const basePool = currentWords.length >= 3 ? currentWords : QUIZ_WORD_BANK;
+  
+  // แบ่งคำตามกลุ่ม
+  const midList = basePool.filter(w => w.originalColor === "#22c55e" || w.group === "middle").sort(() => Math.random() - 0.5);
+  const highList = basePool.filter(w => w.originalColor === "#ef4444" || w.group === "high").sort(() => Math.random() - 0.5);
+  const lowList = basePool.filter(w => w.originalColor === "#007bff" || w.group === "low").sort(() => Math.random() - 0.5);
+
+  const result = [];
+  const maxLen = Math.max(midList.length, highList.length, lowList.length);
+  for (let i = 0; i < maxLen; i++) {
+    if (midList[i]) result.push(midList[i]);
+    if (highList[i]) result.push(highList[i]);
+    if (lowList[i]) result.push(lowList[i]);
+  }
+
+  return result.length > 0 ? result : basePool;
+}
 
 export default function StaffQuizMode({
   linesData,
@@ -8,37 +62,21 @@ export default function StaffQuizMode({
   isDisplay = false,
   onExit,
   speak,
-  onResolveQuestion, // ส่งข้อมูลระดับเส้นที่ถูกต้องขึ้นไปแสดงบนบรรทัด
+  onResolveQuestion,
 }) {
   const t = (th, en) => (lang === "en" ? en : th);
 
-  // คำนวณขนาดให้ตรงกับตัวโน้ตบนเส้นบรรทัดหลักทุกประการ
   const ratio = Math.max(0.8, fontSize / 20);
   const circleSize = isDisplay ? `clamp(42px, ${4.2 * ratio}vw, 70px)` : "48px";
   const circleFontSize = isDisplay ? `clamp(16px, ${1.8 * ratio}vw, 27px)` : "18px";
 
-  // ดึงคำศัพท์ทั้งหมดที่กำลังแสดงอยู่บนกระดาน 5 เส้นเข้าสู่โจทย์
-  const [quizQueue] = useState(() => {
-    const words = [];
-    linesData.filter((row) => row.show).forEach((row) => {
-      if (row.isMulti) {
-        row.multi.forEach((m) => {
-          if (m.text) words.push({ word: m.text, targetLine: row.id, originalColor: m.color, leftPos: row.leftPos });
-        });
-      } else if (row.word) {
-        words.push({ word: row.word, targetLine: row.id, originalColor: row.color, leftPos: row.leftPos });
-      }
-    });
-    return words.length > 0 ? words.sort(() => Math.random() - 0.5) : [];
-  });
-
+  const [quizQueue] = useState(() => generateBalancedQuizQueue(linesData));
   const [currentIdx, setCurrentIdx] = useState(0);
   const [attempts, setAttempts] = useState(0);
   const [score, setScore] = useState(0);
   const [isResolved, setIsResolved] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
 
-  // การลากวางด้วย Pointer Events
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [shakeAnim, setShakeAnim] = useState(false);
@@ -76,6 +114,7 @@ export default function StaffQuizMode({
       }
     }
 
+    // ดีดกลับจุดเริ่มต้นล่างจอทุกครั้งทันทีที่ปล่อยเมาส์
     setDragOffset({ x: 0, y: 0 });
 
     if (droppedLineId !== null) {
@@ -88,7 +127,6 @@ export default function StaffQuizMode({
 
   const checkAnswer = (droppedLineId) => {
     if (droppedLineId === currentQ.targetLine) {
-      // วางถูกต้อง
       let earned = 0;
       if (attempts === 0) earned = 2;
       else if (attempts === 1) earned = 1;
@@ -99,23 +137,21 @@ export default function StaffQuizMode({
         onResolveQuestion({
           ...currentQ,
           placedLine: droppedLineId,
-          isRevealed: false
+          isRevealed: false,
         });
       }
       if (speak) speak(currentQ.word, true);
     } else {
-      // วางผิด
       const nextAttempts = attempts + 1;
       setAttempts(nextAttempts);
 
       if (nextAttempts >= 3) {
-        // ผิดครบ 3 ครั้ง -> เฉลย
         setIsResolved(true);
         if (onResolveQuestion) {
           onResolveQuestion({
             ...currentQ,
             placedLine: currentQ.targetLine,
-            isRevealed: true
+            isRevealed: true,
           });
         }
         if (speak) speak(currentQ.word, true);
@@ -132,7 +168,8 @@ export default function StaffQuizMode({
       setCurrentIdx(next);
       setAttempts(0);
       setIsResolved(false);
-      if (onResolveQuestion) onResolveQuestion(null); // ล้างตัวโน้ตบนเส้นเพื่อรอข้อถัดไป
+      setDragOffset({ x: 0, y: 0 });
+      if (onResolveQuestion) onResolveQuestion(null);
     } else {
       setIsCompleted(true);
       if (onResolveQuestion) onResolveQuestion(null);
@@ -158,7 +195,6 @@ export default function StaffQuizMode({
             )}
           </div>
 
-          {/* วงกลมคำถาม: ขนาดเท่าตัวโน้ตปกติ (circleSize) และสีส้มปริศนาเสมอ */}
           {!isResolved && (
             <div
               className={`tone-circle quiz-draggable-node ${shakeAnim ? "shake-error" : ""}`}
@@ -172,7 +208,7 @@ export default function StaffQuizMode({
                 height: circleSize,
                 fontSize: circleFontSize,
                 lineHeight: 1,
-                backgroundColor: "#f97316", // สีส้มปริศนาตอนเริ่ม
+                backgroundColor: "#f97316",
                 color: circleTextColor,
                 "--note-color": "#f97316",
                 transform: `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0) scale(${isDragging ? 1.25 : 1.05})`,
@@ -194,7 +230,6 @@ export default function StaffQuizMode({
         </div>
       )}
 
-      {/* แถบแสดงคะแนนและปุ่มข้อต่อไป (ตัดปุ่มยกเลิกที่ซ้ำซ้อนออก) */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "10px" }}>
         <div style={{ fontSize: "14px", fontWeight: 700, color: "#475569" }}>
           🏆 {t("คะแนน", "Score")}: <strong style={{ color: "#16a34a" }}>{score}</strong> / {totalPossibleScore}

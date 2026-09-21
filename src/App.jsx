@@ -132,8 +132,9 @@ import StaffQuizMode from "./components/StaffQuizMode";
  *
  *  [ โหมดการเรียนปกติ (Normal Mode) ]
  *          │
+ *          ├──► เริ่มต้นโปรแกรม: บรรทัด 5 เส้นว่างเปล่า, กล่องวิเคราะห์ยังไม่แสดง
  *          ├──► พิมพ์คำศัพท์ / กดปุ่มพยัญชนะ-สระด่วน ──► Rule Engine วิเคราะห์และเรนเดอร์บน 5 เส้น
- *          ├──► คลิกที่แถวคำ ──► ขยายขนาด + เล่นเสียงอ่านคำนั้น (IndexedDB -> R2 -> Azure)
+ *          ├──► คลิกที่แถวคำ / ชื่อระดับเสียง ──► ขยายขนาด + เล่นเสียงอ่านคำนั้น (IndexedDB -> R2 -> Azure)
  *          ├──► คลิกปุ่ม "ผันเสียง 1-5" ──► เล่นเสียงไล่ระดับอัตโนมัติ (1 -> 5 หรือตามโหมด)
  *          │
  *          ▼ ผู้ใช้คลิกปุ่ม "🎙️ ฝึกออกเสียง" (ปุ่มแบบฝึกหัดวางคำจะถูก Disabled และเป็นสีจาง)
@@ -184,17 +185,19 @@ import StaffQuizMode from "./components/StaffQuizMode";
  *          ▼ ผู้ใช้คลิกปุ่ม "🎯 วางคำบนเส้นบรรทัด" (ปุ่มฝึกออกเสียงจะถูก Disabled และเป็นสีจาง)
  *  ┌────────────────────────────────────────────────────────────────────────┐
  *  │ [ เริ่มต้นโหมดแบบฝึกหัดวางคำบนเส้น (Staff Quiz Init) ]                  │
- *  │ 1. ดึงคำศัพท์จาก linesData เข้าสู่ Quiz Queue                           │
+ *  │ 1. ดึงคำศัพท์จาก linesData หรือ Word Bank สุ่มกระจายหมู่อักษร 3 หมู่     │
  *  │ 2. เส้นบรรทัด 5 เส้นจะ "ว่างเปล่าทันที" (ซ่อนตัวโน้ตเดิมทั้งหมด)          │
- *  │ 3. ซ่อนกล่องวิเคราะห์หลักภาษาเดิมชั่วคราว เพื่อให้ผู้เรียนวิเคราะห์เอง    │
- *  │ 4. ตัวโน้ตคำถามด้านล่างมีขนาดใหญ่เท่าตัวโน้ตปกติ (48px)                 │
+ *  │ 3. ตัวเลขและเส้นบรรทัดแสดงเป็นสีเทากลาง (#94a3b8) เพื่อไม่ให้เดาหมู่อักษร │
+ *  │ 4. ซ่อนกล่องวิเคราะห์หลักภาษาเดิมชั่วคราว เพื่อให้ผู้เรียนวิเคราะห์เอง    │
+ *  │ 5. ตัวโน้ตคำถามด้านล่างมีขนาดใหญ่เท่าตัวโน้ตปกติ (48px)                 │
  *  │    และเริ่มต้นด้วย "สีส้มปริศนา (#f97316)" เพื่อไม่ให้ทราบหมู่อักษร     │
  *  └───────────────────────────────────┬────────────────────────────────────┘
  *                                      │
  *                                      ▼
  *  ┌────────────────────────────────────────────────────────────────────────┐
  *  │ [ ผู้เรียนลากคำ (Pointer Down & Drag) ไปวางบนเส้นบรรทัด 1 - 5 ]         │
- *  │ ตรวจจับ Hitbox ด้วย data-tone-line-id (1=สามัญ, 2=เอก, 3=โท, 4=ตรี, 5=จัตวา) │
+ *  │ - หากปล่อยเมาส์/นิ้ว ตัวโน้ตจะดีดกลับไปจุดเริ่มต้นด้านล่างเสมอ             │
+ *  │ - ตรวจจับ Hitbox ด้วย data-tone-line-id (1=สามัญ, 2=เอก, 3=โท, 4=ตรี, 5=จัตวา) │
  *  └───────────────────────────────────┬────────────────────────────────────┘
  *                                      │
  *                    ┌─────────────────┴─────────────────┐
@@ -1124,8 +1127,8 @@ function Board({
         <div style={{ color: "#4A148C" }}>{t("และการผันวรรณยุกต์", "Tone Rules & Musical Staves")}</div>
       </div>
 
-      {/* กล่องวิเคราะห์หลักภาษา: ในโหมด Quiz จะซ่อนไว้ก่อน และจะแสดงเมื่อตอบถูกหรือเฉลยแล้วเท่านั้น */}
-      {(!isQuizMode || (isQuizMode && resolvedQuizItem)) && (() => {
+      {/* กล่องวิเคราะห์หลักภาษา: ไม่แสดงเมื่อไม่มีคำ และในโหมด Quiz จะแสดงเฉพาะเมื่อตอบถูก/เฉลยแล้ว */}
+      {(!isQuizMode || (isQuizMode && resolvedQuizItem)) && Boolean(inputText.trim() || resolvedQuizItem) && (() => {
         const visibleItems = linesData.filter((item) => item.show);
         const topItem = visibleItems[0];
         const bottomItem = visibleItems[visibleItems.length - 1];
@@ -1301,21 +1304,14 @@ function Board({
         );
       })()}
 
-      <div className="tone-header">
-        <span>{t("รูปวรรณยุกต์", "Tone Mark")}</span>
-      </div>
-
-      <div className="tone-rows">
+      {/* เส้นบรรทัด 5 เส้น (ตัด tone-header คำว่า รูปวรรณยุกต์ ออกตามคำสั่ง) */}
+      <div className="tone-rows" style={{ paddingTop: "10px" }}>
         {linesData.map((item) => {
           const isActive = !isPracticing && !isQuizMode && activeRowId === item.id;
           const fixedRight = fixedRightLabels[item.id];
-          const rowColor = item.show
-            ? item.isMulti
-              ? item.multi[0]?.color
-              : item.color
-            : "#94a3b8";
-
-          // เช็กว่าข้อนี้ในโหมด Quiz วางถูกต้องหรือเฉลยลงที่เส้นนี้หรือไม่
+          
+          // ในโหมดแบบฝึกหัด ให้สีเส้นและตัวเลขเป็นสีเทากลาง (#94a3b8) เพื่อไม่ให้คาดเดาหมู่อักษร
+          const lineThemeColor = isQuizMode ? "#94a3b8" : (item.show ? (item.isMulti ? item.multi[0]?.color : item.color) : "#94a3b8");
           const isQuizResolvedHere = isQuizMode && resolvedQuizItem && resolvedQuizItem.placedLine === item.id;
 
           return (
@@ -1330,20 +1326,23 @@ function Board({
               style={isPracticing || isQuizMode ? { cursor: 'default' } : {}}
               title={item.show && !isPracticing && !isQuizMode ? `${t("คลิกเพื่อขยายและอ่านคำ", "Click to zoom and speak")} ${getSpeechText(item)}` : ""}
             >
+              {/* ข้อความชื่อเสียง: สีดำเข้มสม่ำเสมอ (#1e293b) ทุกอุปกรณ์ และขยายเมื่อคลิก */}
               <div
-                className="tone-name"
+                className="tone-name clickable-tone-text"
                 style={{
-                  color: rowColor,
+                  color: "#1e293b",
                   fontSize: textSize,
+                  transform: isActive ? "scale(1.08)" : "none",
+                  transition: "transform .18s ease, color .18s ease",
                 }}
               >
-                {t(item.tone, toneNames[item.id]?.en || item.tone)} <span>[ {item.mark} ]</span>
+                {t(item.tone, toneNames[item.id]?.en || item.tone)} <span style={{ color: "#475569" }}>[ {item.mark} ]</span>
               </div>
 
               <div className="tone-line-wrap">
-                <div className="tone-line" />
+                <div className="tone-line" style={{ backgroundColor: isQuizMode ? "#cbd5e1" : (isActive ? "#475569" : "#94a3b8") }} />
 
-                {/* 1. โหมดปกติ: แสดงคำบนเส้นตามปกติ */}
+                {/* โหมดปกติ: แสดงคำบนเส้นตามปกติ (ถ้ามีคำ) */}
                 {!isQuizMode && item.show && !item.isMulti && item.word && (
                   <div
                     className={`tone-circle ${practiceTargetWord === item.word ? "target-test-active" : ""} ${mismatchWord === item.word ? "target-test-mismatch" : ""}`}
@@ -1377,7 +1376,7 @@ function Board({
                   </div>
                 )}
 
-                {/* 2. โหมด Quiz: เส้นบรรทัด 5 เส้นจะว่างเปล่า และปรากฏเฉพาะตัวโน้ตที่ตอบถูกหรือเฉลยแล้วเท่านั้น */}
+                {/* โหมดแบบฝึกหัด: บรรทัดว่างเปล่า และปรากฏเฉพาะตัวโน้ตที่ตอบถูกหรือเฉลยแล้วเท่านั้น */}
                 {isQuizMode && isQuizResolvedHere && (
                   <div
                     className={`tone-circle ${resolvedQuizItem.isRevealed ? "quiz-revealing-node" : "quiz-snap-node"}`}
@@ -1391,9 +1390,10 @@ function Board({
                 )}
               </div>
 
+              {/* ตัวเลขระดับเสียง */}
               <div
                 className="tone-line-number"
-                style={{ color: item.show || isQuizMode ? (item.isMulti ? item.multi[0]?.color : item.color) : "#94a3b8" }}
+                style={{ color: lineThemeColor }}
               >
                 {item.id}
               </div>
@@ -1409,7 +1409,7 @@ function Board({
         })}
       </div>
 
-      {/* แบบฝึกหัดวางคำบนเส้นบรรทัด 5 เส้น */}
+      {/* ส่วนคอมโพเนนต์แบบฝึกหัดลากวางคำ */}
       {isQuizMode && (
         <StaffQuizMode
           linesData={linesData}
@@ -1423,7 +1423,7 @@ function Board({
         />
       )}
 
-      {/* แถบปุ่มด้านล่างกระดาน */}
+      {/* แถบปุ่มควบคุมด้านล่างกระดาน */}
       <div className="board-footer-actions">
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
           {/* ปุ่มผันเสียง 1-5 (จะปิดการทำงานและจางเมื่ออยู่ในโหมดฝึกใดๆ) */}
@@ -1558,8 +1558,9 @@ export default function App() {
   const [viewLayout, setViewLayout] = useState("split");
   const [previousLayout, setPreviousLayout] = useState("split");
 
-  const [inputText, setInputText] = useState("กอ");
-  const [lastValidInput, setLastValidInput] = useState("กอ");
+  // เริ่มต้นโปรแกรมด้วยค่าว่าง เพื่อให้บรรทัด 5 เส้นว่างเปล่าและไม่มีคำ
+  const [inputText, setInputText] = useState("");
+  const [lastValidInput, setLastValidInput] = useState("");
   const [inputError, setInputError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -1633,13 +1634,13 @@ export default function App() {
   const speechRef = useRef(null);
 
   const [analysisInfo, setAnalysisInfo] = useState(() =>
-    analyzeSyllable("กอ", "full5"),
+    analyzeSyllable("", "full5"),
   );
   const [linesData, setLinesData] = useState(() =>
-    calculateTones("กอ", "full5", "#22c55e", "#ef4444", "#007bff"),
+    calculateTones("", "full5", "#22c55e", "#ef4444", "#007bff"),
   );
   const [toneValidation, setToneValidation] = useState(() =>
-    validateEnteredToneMark("กอ"),
+    validateEnteredToneMark(""),
   );
 
   const containerBackground = useMemo(() => {
@@ -1802,7 +1803,7 @@ export default function App() {
     });
 
     if (wordsOnScreen.length === 0) {
-      alert(t("ไม่พบคำสำหรับฝึก กรุณาเลือกคำก่อนค่ะ", "No words to practice. Please select a word."));
+      alert(t("ไม่พบคำสำหรับฝึก กรุณาพิมพ์คำหรือเลือกโหมดก่อนค่ะ", "No words to practice. Please select a word."));
       return;
     }
 
@@ -2050,7 +2051,7 @@ export default function App() {
     const value = word.trim();
     if (!value) {
       setToneValidation(validateEnteredToneMark(""));
-      setInputError("กรุณากรอกคำศัพท์");
+      setInputError("");
       return false;
     }
     if (/\s/.test(value)) {
@@ -3453,10 +3454,17 @@ const styles = `
     color: #075985;
   }
 
-  .tone-header, .tone-row {
+  .tone-row {
     display: grid;
     grid-template-columns: 215px minmax(180px, 1fr) 32px 100px;
     align-items: center;
+    width: 100%;
+    padding: 7px 0;
+    background: transparent;
+    text-align: inherit;
+    border-radius: 12px;
+    overflow: visible;
+    transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
   }
 
   .tone-line-number {
@@ -3470,32 +3478,13 @@ const styles = `
 
   .tone-row.active .tone-line-number { transform: scale(1.18); }
 
-  .tone-header {
-    color: #0284c7;
-    font-size: 14px;
-    font-weight: 700;
-    margin-bottom: 8px;
-  }
-
-  .tone-header span { text-align: right; padding-right: 20px; }
-
   .tone-rows {
     display: flex;
     flex-direction: column;
     gap: 24px;
-    padding-top: 28px;
+    padding-top: 14px;
     overflow: visible;
     min-height: min-content;
-  }
-
-  .tone-row {
-    width: 100%;
-    padding: 7px 0;
-    background: transparent;
-    text-align: inherit;
-    border-radius: 12px;
-    overflow: visible;
-    transition: transform .18s ease, background .18s ease, box-shadow .18s ease;
   }
 
   .tone-row:not(.disabled-tone-row):not(.practice-locked):hover { background: rgba(224,242,254,.45); }
@@ -3516,7 +3505,15 @@ const styles = `
     transition: transform .18s ease;
   }
 
-  .tone-row.active .tone-name { transform: scale(1.06); }
+  .clickable-tone-text {
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .clickable-tone-text:hover {
+    transform: scale(1.05);
+  }
+
   .tone-name span { font-size: .92em; margin-left: 4px; }
 
   .tone-line-wrap {
@@ -3962,10 +3959,9 @@ const styles = `
     .app-page { padding: 10px; }
     .top-bar { padding: 12px; }
     .board-panel, .presentation-panel { padding: 22px 10px; }
-    .tone-header, .tone-row { grid-template-columns: 112px minmax(115px, 1fr) 22px 52px; }
+    .tone-row { grid-template-columns: 112px minmax(115px, 1fr) 22px 52px; }
     .tone-line-number { font-size: 13px; }
-    .tone-header span, .tone-name { padding-right: 8px; }
-    .tone-name { font-size: 13px !important; white-space: normal; }
+    .tone-name { font-size: 13px !important; white-space: normal; padding-right: 8px; }
     .fixed-tone-label { font-size: 12px; }
     .tone-rows { gap: 20px; }
     .tone-circle {
@@ -4000,7 +3996,7 @@ const styles = `
       padding: 14px 8px;
     }
     .display-board .analysis-box { font-size: 11px; margin-bottom: 12px; }
-    .display-board .tone-header, .display-board .tone-row { grid-template-columns: 104px minmax(100px, 1fr) 22px 48px; }
+    .display-board .tone-row { grid-template-columns: 104px minmax(100px, 1fr) 22px 48px; }
     .display-tip { font-size: 10px; max-width: 92vw; white-space: normal; text-align: center; }
   }
 
