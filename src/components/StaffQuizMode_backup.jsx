@@ -194,11 +194,10 @@ export default function StaffQuizMode({
 
           {!isResolved && (
             <div
-              className={`tone-circle quiz-draggable-node notranslate ${shakeAnim ? "shake-error" : ""}`} translate="no"
+              className={`tone-circle quiz-draggable-node ${shakeAnim ? "shake-error" : ""}`}
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
-              onPointerCancel={handlePointerUp}
               style={{
                 width: circleSize,
                 minWidth: circleSize,
@@ -207,9 +206,6 @@ export default function StaffQuizMode({
                 fontSize: circleFontSize,
                 lineHeight: 1,
                 backgroundColor: "#f97316",
-                touchAction: "none",
-                userSelect: "none",
-                WebkitUserSelect: "none",
                 color: circleTextColor,
                 "--note-color": "#f97316",
                 transform: `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0) scale(${isDragging ? 1.25 : 1.05})`,
