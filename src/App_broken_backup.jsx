@@ -1,29 +1,74 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+// 1. นำเข้าไฟล์ AuthModal ด้านบนสุด
 import "@fontsource/sarabun/400.css";
 import "@fontsource/sarabun/500.css";
 import "@fontsource/sarabun/600.css";
 import "@fontsource/sarabun/700.css";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
-
-import { autoCorrelate, classifyToneContour, TONE_TARGET_FREQS } from "./utils/pitchDetector";
-import {
-  STRICT_THAI_SYLLABLE_PATTERN,
-  toneRows,
-  analyzeSyllable,
-  calculateTones,
-  validateEnteredToneMark,
-} from "./utils/toneRules";
-import {
-  getLocalAudioBlob,
-  setLocalAudioBlob,
-  deleteLocalAudioBlob,
-  clearAllLocalAudioBlobs,
-} from "./utils/audioCache";
-
-import ToneBoard from "./components/ToneBoard";
-import ControlPanel from "./components/ControlPanel";
 import AuthModal from "./components/AuthModal";
 
+export default function App() {
+  // ... state เดิมของคุณ เช่น lang, mode, viewLayout ...[cite: 2]
+
+  // 2. เพิ่ม State สำหรับเก็บสถานะ Login และเปิดปิด Modal
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  return (
+    <div>
+      {/* 3. ปุ่ม Login ที่แถบด้านบน (Navbar) */}
+      <header style={{ display: "flex", justifyContent: "flex-end", padding: "10px 20px" }}>
+        {currentUser ? (
+          <div>
+            <span>สวัสดี, {currentUser.name} </span>
+            <button onClick={() => setCurrentUser(null)}>ออกจากระบบ</button>
+          </div>
+        ) : (
+          <button 
+            onClick={() => setIsAuthOpen(true)}
+            style={{
+              padding: "8px 16px",
+              borderRadius: "6px",
+              background: "#2563eb",
+              color: "#fff",
+              border: "none",
+              cursor: "pointer"
+            }}
+          >
+            เข้าสู่ระบบ / สมัครสมาชิก
+          </button>
+        )}
+      </header>
+
+      {/* ส่วนเนื้อหาหลักเดิมของ App */}
+
+      {/* 4. ใส่ AuthModal วางไว้ด้านล่างสุด */}
+      <AuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        onAuthSuccess={(user) => setCurrentUser(user)}
+      />
+    </div>
+  );
+}
+
+import {
+  clearAllLocalAudioBlobs,
+  deleteLocalAudioBlob,
+  getLocalAudioBlob,
+  setLocalAudioBlob,
+} from "./utils/audioCache";
+import { autoCorrelate, classifyToneContour } from "./utils/pitchDetector";
+import {
+  analyzeSyllable,
+  calculateTones,
+  STRICT_THAI_SYLLABLE_PATTERN,
+  toneRows,
+  validateEnteredToneMark,
+} from "./utils/toneRules";
+
+import ControlPanel from "./components/ControlPanel";
+import ToneBoard from "./components/ToneBoard";
 
 /**
  * =============================================================================
@@ -154,16 +199,6 @@ function getSpeechFallbackVoice(voices = [], selectedVoiceURI = "") {
 }
 
 export default function App() {
-  // Auth & User Profile State
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [currentUser, setCurrentUser] = useState(() => {
-    try {
-      const saved = localStorage.getItem("thai_tone_user");
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
   const [isDisplayWindow, setIsDisplayWindow] = useState(false);
   const [lang, setLang] = useState(() => {
     if (typeof window !== "undefined") {
@@ -1131,75 +1166,6 @@ export default function App() {
           <span style={{ color: "#94a3b8" }}>/</span>
           <span style={{ color: lang === "en" ? "#16a34a" : "#94a3b8", fontWeight: lang === "en" ? "800" : "500" }}>English</span>
         </button>
-
-        {/* ปุ่มระบบสมาชิก เข้าสู่ระบบ / ข้อมูลส่วนตัว */}
-        {currentUser ? (
-          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-            <button
-              type="button"
-              onClick={() => setIsAuthOpen(true)}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "6px 12px",
-                borderRadius: "8px",
-                border: "1.5px solid #0284c7",
-                background: "#f0f9ff",
-                color: "#0369a1",
-                fontWeight: "700",
-                fontSize: "13px",
-                cursor: "pointer",
-              }}
-              title={t("แก้ไขข้อมูลส่วนตัว", "Edit Profile")}
-            >
-              <span style={{ fontSize: "15px" }}>{currentUser.avatar || "👤"}</span>
-              <span>{currentUser.name || "User"}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setCurrentUser(null);
-                try { localStorage.removeItem("thai_tone_user"); } catch (e) {}
-              }}
-              style={{
-                padding: "7px 10px",
-                borderRadius: "8px",
-                border: "none",
-                background: "#fee2e2",
-                color: "#dc2626",
-                fontWeight: "600",
-                fontSize: "12px",
-                cursor: "pointer",
-              }}
-              title={t("ออกจากระบบ", "Sign Out")}
-            >
-              {t("ออก", "Sign Out")}
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setIsAuthOpen(true)}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "8px 14px",
-              borderRadius: "8px",
-              border: "none",
-              background: "#0284c7",
-              color: "#ffffff",
-              fontWeight: "700",
-              fontSize: "13px",
-              cursor: "pointer",
-              boxShadow: "0 2px 6px rgba(2,132,199,.25)",
-            }}
-          >
-            <span>👤</span>
-            <span>{t("เข้าสู่ระบบ", "Sign In")}</span>
-          </button>
-        )}
       </div>
     </section>
   );
@@ -1387,30 +1353,6 @@ export default function App() {
           )}
         </div>
       </div>
-      {/* หน้าต่างเข้าสู่ระบบ / สมัครสมาชิก / ข้อมูลส่วนบุคคล */}
-      <AuthModal
-        isOpen={isAuthOpen}
-        onClose={() => setIsAuthOpen(false)}
-        currentUser={currentUser}
-        onLogin={(user) => {
-          setCurrentUser(user);
-          try { localStorage.setItem("thai_tone_user", JSON.stringify(user)); } catch (e) {}
-        }}
-        onRegister={(user) => {
-          setCurrentUser(user);
-          try { localStorage.setItem("thai_tone_user", JSON.stringify(user)); } catch (e) {}
-        }}
-        onUpdateProfile={(user) => {
-          setCurrentUser(user);
-          try { localStorage.setItem("thai_tone_user", JSON.stringify(user)); } catch (e) {}
-        }}
-        onDeleteAccount={() => {
-          setCurrentUser(null);
-          try { localStorage.removeItem("thai_tone_user"); } catch (e) {}
-        }}
-        lang={lang}
-        setLang={setLang}
-      />
     </main>
   );
 }
