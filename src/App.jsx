@@ -1,27 +1,74 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+// 1. นำเข้าไฟล์ AuthModal ด้านบนสุด
 import "@fontsource/sarabun/400.css";
 import "@fontsource/sarabun/500.css";
 import "@fontsource/sarabun/600.css";
 import "@fontsource/sarabun/700.css";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
+import AuthModal from "./components/AuthModal";
 
-import { autoCorrelate, classifyToneContour, TONE_TARGET_FREQS } from "./utils/pitchDetector";
+export default function App() {
+  // ... state เดิมของคุณ เช่น lang, mode, viewLayout ...[cite: 2]
+
+  // 2. เพิ่ม State สำหรับเก็บสถานะ Login และเปิดปิด Modal
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  return (
+    <div>
+      {/* 3. ปุ่ม Login ที่แถบด้านบน (Navbar) */}
+      <header style={{ display: "flex", justifyContent: "flex-end", padding: "10px 20px" }}>
+        {currentUser ? (
+          <div>
+            <span>สวัสดี, {currentUser.name} </span>
+            <button onClick={() => setCurrentUser(null)}>ออกจากระบบ</button>
+          </div>
+        ) : (
+          <button 
+            onClick={() => setIsAuthOpen(true)}
+            style={{
+              padding: "8px 16px",
+              borderRadius: "6px",
+              background: "#2563eb",
+              color: "#fff",
+              border: "none",
+              cursor: "pointer"
+            }}
+          >
+            เข้าสู่ระบบ / สมัครสมาชิก
+          </button>
+        )}
+      </header>
+
+      {/* ส่วนเนื้อหาหลักเดิมของ App */}
+
+      {/* 4. ใส่ AuthModal วางไว้ด้านล่างสุด */}
+      <AuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        onAuthSuccess={(user) => setCurrentUser(user)}
+      />
+    </div>
+  );
+}
+
 import {
-  STRICT_THAI_SYLLABLE_PATTERN,
-  toneRows,
-  analyzeSyllable,
-  calculateTones,
-  validateEnteredToneMark,
-} from "./utils/toneRules";
-import {
+  clearAllLocalAudioBlobs,
+  deleteLocalAudioBlob,
   getLocalAudioBlob,
   setLocalAudioBlob,
-  deleteLocalAudioBlob,
-  clearAllLocalAudioBlobs,
 } from "./utils/audioCache";
+import { autoCorrelate, classifyToneContour } from "./utils/pitchDetector";
+import {
+  analyzeSyllable,
+  calculateTones,
+  STRICT_THAI_SYLLABLE_PATTERN,
+  toneRows,
+  validateEnteredToneMark,
+} from "./utils/toneRules";
 
-import ToneBoard from "./components/ToneBoard";
 import ControlPanel from "./components/ControlPanel";
+import ToneBoard from "./components/ToneBoard";
 
 /**
  * =============================================================================
