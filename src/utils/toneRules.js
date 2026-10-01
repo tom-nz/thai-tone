@@ -300,33 +300,61 @@ export function analyzeSyllable(word, currentMode) {
           ? ` (กลุ่มอักษรควบไม่แท้ "${initial}")`
           : "";
 
+  const typeEn = isDead ? "Dead Syllable" : "Live Syllable";
+  const vowelLenEn = isShort ? "Short Vowel" : "Long Vowel";
+  const clusterLabelEn = isCluster ? ` (True Cluster "${initial}")` : "";
+  const leadingLabelEn =
+    initialKind === "leadingHo"
+      ? ` (Leading ห- "${initial}")`
+      : initialKind === "leadingO"
+        ? ` (Leading อ- "${initial}")`
+        : initialKind === "falseCluster"
+          ? ` (False Cluster "${initial}")`
+          : "";
+
   let desc;
+  let descEn;
   if (consonantClass === "middle") {
     desc = isDead
       ? `อักษรกลาง${clusterLabel}${leadingLabel} คำตาย (ผันได้ 4 เสียง: เอก, โท, ตรี, จัตวา; พื้นเสียงเอก)`
       : `อักษรกลาง${clusterLabel}${leadingLabel} คำเป็น (ผันได้ครบ 5 เสียง; พื้นเสียงสามัญ)`;
+    descEn = isDead
+      ? `Mid Class${clusterLabelEn}${leadingLabelEn} Dead Syllable (Inflects 4 tones: Low, Falling, High, Rising; Base tone: Low)`
+      : `Mid Class${clusterLabelEn}${leadingLabelEn} Live Syllable (Inflects all 5 tones; Base tone: Mid)`;
   } else if (consonantClass === "high") {
     desc = isDead
       ? `อักษรสูง${clusterLabel}${leadingLabel} คำตาย (ผันได้ 2 เสียง: เอก, โท; พื้นเสียงเอก)`
       : `อักษรสูง${clusterLabel}${leadingLabel} คำเป็น (ผันได้ 3 เสียง: เอก, โท, จัตวา; พื้นเสียงจัตวา)`;
+    descEn = isDead
+      ? `High Class${clusterLabelEn}${leadingLabelEn} Dead Syllable (Inflects 2 tones: Low, Falling; Base tone: Low)`
+      : `High Class${clusterLabelEn}${leadingLabelEn} Live Syllable (Inflects 3 tones: Low, Falling, Rising; Base tone: Rising)`;
   } else if (consonantClass === "low") {
-    const lowSubtype = lowSingleConsonants.includes(primaryConsonant)
-      ? "อักษรต่ำเดี่ยว"
-      : "อักษรต่ำคู่";
+    const isSingleLow = lowSingleConsonants.includes(primaryConsonant);
+    const lowSubtype = isSingleLow ? "อักษรต่ำเดี่ยว" : "อักษรต่ำคู่";
+    const lowSubtypeEn = isSingleLow ? "Single Low Class" : "Paired Low Class";
 
     desc = isDead
       ? isShort
         ? `${lowSubtype}${clusterLabel}${leadingLabel} คำตายสระเสียงสั้น (ผันได้ 2 เสียง: โท, ตรี; พื้นเสียงตรี)`
         : `${lowSubtype}${clusterLabel}${leadingLabel} คำตายสระเสียงยาว (ผันได้ 2 เสียง: โท, ตรี; พื้นเสียงโท)`
       : `${lowSubtype}${clusterLabel}${leadingLabel} คำเป็น (ผันได้ 3 เสียง: สามัญ, โท, ตรี; พื้นเสียงสามัญ)`;
+    descEn = isDead
+      ? isShort
+        ? `${lowSubtypeEn}${clusterLabelEn}${leadingLabelEn} Dead Syllable with Short Vowel (Inflects 2 tones: Falling, High; Base tone: High)`
+        : `${lowSubtypeEn}${clusterLabelEn}${leadingLabelEn} Dead Syllable with Long Vowel (Inflects 2 tones: Falling, High; Base tone: Falling)`
+      : `${lowSubtypeEn}${clusterLabelEn}${leadingLabelEn} Live Syllable (Inflects 3 tones: Mid, Falling, High; Base tone: Mid)`;
   } else {
     desc = "ยังจำแนกหมู่อักษรไม่ได้";
+    descEn = "Unclassified consonant class";
   }
 
   return {
     type,
+    typeEn,
     vowelLen,
+    vowelLenEn,
     desc,
+    descEn,
     isDead,
     isShort,
     initial,

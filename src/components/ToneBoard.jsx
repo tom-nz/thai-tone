@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import StaffQuizMode from "./StaffQuizMode";
+import { analyzeSyllable } from "../utils/toneRules";
 
 export default function ToneBoard({
   channelName,
@@ -158,7 +159,7 @@ export default function ToneBoard({
             analyses.push({
               label: "อักษรกลาง",
               word,
-              info: analysisInfo,
+              info: analyzeSyllable(word, mode),
             });
           }
         } else if (mode === "full5") {
@@ -169,7 +170,7 @@ export default function ToneBoard({
             analyses.push({
               label: "เสียงสูง",
               word: topWord,
-              info: analysisInfo,
+              info: analyzeSyllable(topWord, mode),
             });
           }
 
@@ -177,7 +178,7 @@ export default function ToneBoard({
             analyses.push({
               label: "เสียงต่ำ",
               word: bottomWord,
-              info: analysisInfo,
+              info: analyzeSyllable(bottomWord, mode),
             });
           }
         } else if (mode === "highOnly") {
@@ -186,7 +187,7 @@ export default function ToneBoard({
             analyses.push({
               label: "เสียงสูง",
               word: word,
-              info: analysisInfo,
+              info: analyzeSyllable(word, mode),
             });
           }
         } else if (mode === "lowOnly") {
@@ -195,24 +196,45 @@ export default function ToneBoard({
             analyses.push({
               label: "เสียงต่ำ",
               word: word,
-              info: analysisInfo,
+              info: analyzeSyllable(word, mode),
             });
           }
         }
 
         if (!analyses.length) return null;
 
+        const isThLang = lang === "th";
+
         return (
           <div className="analysis-box" style={{ flexShrink: 0, marginBottom: "16px" }}>
-            {analyses.map(({ label, word, info }, index) => (
-              <div className="analysis-item" key={`${label}-${word}-${index}`}>
-                📌 {t("ผลวิเคราะห์หลักภาษา", "Linguistic Analysis")} ({t(label, label)}): <strong>"{word}"</strong> {t("เป็น", "is")}{" "}
-                <span className="analysis-tag">
-                  {t(info?.type || "", info?.type || "")} ({t(info?.vowelLen || "", info?.vowelLen || "")})
-                </span>{" "}
-                — {info?.desc || ""}
-              </div>
-            ))}
+            {analyses.map(({ label, word, info }, index) => {
+              const labelText = isThLang
+                ? label
+                : label === "เสียงสูง"
+                  ? "High Tone Class"
+                  : label === "เสียงต่ำ"
+                    ? "Low Tone Class"
+                    : "Mid Tone Class";
+              const typeText = isThLang
+                ? (info?.type || "")
+                : (info?.typeEn || (info?.type === "คำเป็น" ? "Live Syllable" : "Dead Syllable"));
+              const vowelLenText = isThLang
+                ? (info?.vowelLen || "")
+                : (info?.vowelLenEn || (info?.vowelLen === "สระเสียงสั้น" ? "Short Vowel" : "Long Vowel"));
+              const descText = isThLang
+                ? (info?.desc || "")
+                : (info?.descEn || info?.desc || "");
+
+              return (
+                <div className="analysis-item" key={`${label}-${word}-${index}`}>
+                  📌 {t("ผลวิเคราะห์หลักภาษา", "Linguistic Analysis")} ({labelText}): <strong>"{word}"</strong> {t("เป็น", "is")}{" "}
+                  <span className="analysis-tag">
+                    {typeText} ({vowelLenText})
+                  </span>{" "}
+                  — {descText}
+                </div>
+              );
+            })}
           </div>
         );
       })()}

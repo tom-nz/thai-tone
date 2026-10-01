@@ -22,9 +22,6 @@ import {
 
 import ToneBoard from "./components/ToneBoard";
 import ControlPanel from "./components/ControlPanel";
-import AuthModal from "./components/AuthModal";
-import AdminDashboard from "./components/AdminDashboard";
-
 
 /**
  * =============================================================================
@@ -155,17 +152,6 @@ function getSpeechFallbackVoice(voices = [], selectedVoiceURI = "") {
 }
 
 export default function App() {
-  // Auth & User Profile State
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const [isAdminOpen, setIsAdminOpen] = useState(false);
-  const [currentUser, setCurrentUser] = useState(() => {
-    try {
-      const saved = localStorage.getItem("thai_tone_user");
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
   const [isDisplayWindow, setIsDisplayWindow] = useState(false);
   const [lang, setLang] = useState(() => {
     if (typeof window !== "undefined") {
@@ -1133,100 +1119,6 @@ export default function App() {
           <span style={{ color: "#94a3b8" }}>/</span>
           <span style={{ color: lang === "en" ? "#16a34a" : "#94a3b8", fontWeight: lang === "en" ? "800" : "500" }}>English</span>
         </button>
-
-        {/* ปุ่มแผงควบคุมผู้ดูแลระบบ (Admin) */}
-        <button
-          type="button"
-          onClick={() => setIsAdminOpen(true)}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "6px",
-            padding: "8px 12px",
-            borderRadius: "8px",
-            border: "1.5px solid #f59e0b",
-            background: "#fef3c7",
-            color: "#92400e",
-            fontWeight: "700",
-            fontSize: "13px",
-            cursor: "pointer",
-            transition: "all .18s ease",
-            boxShadow: "0 2px 6px rgba(245, 158, 11, .2)",
-          }}
-          title={t("เปิดแผงควบคุมผู้ดูแลระบบ (Admin)", "Admin Control Panel")}
-        >
-          <span>🛡️</span>
-          <span>{t("แอดมิน", "Admin")}</span>
-        </button>
-
-        {/* ปุ่มระบบสมาชิก เข้าสู่ระบบ / ข้อมูลส่วนตัว */}
-        {currentUser ? (
-          <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-            <button
-              type="button"
-              onClick={() => setIsAuthOpen(true)}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "6px 12px",
-                borderRadius: "8px",
-                border: "1.5px solid #0284c7",
-                background: "#f0f9ff",
-                color: "#0369a1",
-                fontWeight: "700",
-                fontSize: "13px",
-                cursor: "pointer",
-              }}
-              title={t("แก้ไขข้อมูลส่วนตัว", "Edit Profile")}
-            >
-              <span style={{ fontSize: "15px" }}>{currentUser.avatar || "👤"}</span>
-              <span>{currentUser.name || "User"}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setCurrentUser(null);
-                try { localStorage.removeItem("thai_tone_user"); } catch (e) {}
-              }}
-              style={{
-                padding: "7px 10px",
-                borderRadius: "8px",
-                border: "none",
-                background: "#fee2e2",
-                color: "#dc2626",
-                fontWeight: "600",
-                fontSize: "12px",
-                cursor: "pointer",
-              }}
-              title={t("ออกจากระบบ", "Sign Out")}
-            >
-              {t("ออก", "Sign Out")}
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setIsAuthOpen(true)}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "8px 14px",
-              borderRadius: "8px",
-              border: "none",
-              background: "#0284c7",
-              color: "#ffffff",
-              fontWeight: "700",
-              fontSize: "13px",
-              cursor: "pointer",
-              boxShadow: "0 2px 6px rgba(2,132,199,.25)",
-            }}
-          >
-            <span>👤</span>
-            <span>{t("เข้าสู่ระบบ", "Sign In")}</span>
-          </button>
-        )}
       </div>
     </section>
   );
@@ -1414,38 +1306,6 @@ export default function App() {
           )}
         </div>
       </div>
-      {/* หน้าต่างเข้าสู่ระบบ / สมัครสมาชิก / ข้อมูลส่วนบุคคล */}
-      <AuthModal
-        isOpen={isAuthOpen}
-        onClose={() => setIsAuthOpen(false)}
-        currentUser={currentUser}
-        onLogin={(user) => {
-          setCurrentUser(user);
-          try { localStorage.setItem("thai_tone_user", JSON.stringify(user)); } catch (e) {}
-        }}
-        onRegister={(user) => {
-          setCurrentUser(user);
-          try { localStorage.setItem("thai_tone_user", JSON.stringify(user)); } catch (e) {}
-        }}
-        onUpdateProfile={(user) => {
-          setCurrentUser(user);
-          try { localStorage.setItem("thai_tone_user", JSON.stringify(user)); } catch (e) {}
-        }}
-        onDeleteAccount={() => {
-          setCurrentUser(null);
-          try { localStorage.removeItem("thai_tone_user"); } catch (e) {}
-        }}
-        lang={lang}
-        setLang={setLang}
-      />
-
-      {/* แผงควบคุมผู้ดูแลระบบ (Admin Control Panel) */}
-      <AdminDashboard
-        isOpen={isAdminOpen}
-        onClose={() => setIsAdminOpen(false)}
-        currentUser={currentUser}
-        lang={lang}
-      />
     </main>
   );
 }
