@@ -1,20 +1,13 @@
 import React, { useState } from "react";
 import AuthModal from "./AuthModal";
+import AdminDashboard from "./AdminDashboard";
 
-/**
- * Header.jsx (Bilingual TH/EN + Auth & Profile Support)
- * ปรับปรุงให้รองรับ:
- * 1. เมนู Login/Logout และแสดงรูปโปรไฟล์ผู้ใช้
- * 2. ตัวสลับภาษา ไทย / English
- * 3. ทำงานร่วมกับ AuthModal ได้ทั้งแบบรับ props หรือทำงานอัตโนมัติในตัว
- */
 function Header({
   viewLayout,
   setViewLayout,
   setShowApiInput,
   apiKey,
   openDisplayWindow,
-  // Props ระบบสมาชิกและภาษา (มี fallback ให้ทำงานได้ทันที)
   user = null,
   onOpenAuthModal,
   onLogout,
@@ -23,7 +16,6 @@ function Header({
   onUpdateProfile,
   onDeleteAccount,
 }) {
-  // Local state fallbacks (เพื่อให้ทำงานได้ทันทีแม้ยังไม่ได้แก้ App.jsx)
   const [internalLang, setInternalLang] = useState("th");
   const [internalUser, setInternalUser] = useState(() => {
     try {
@@ -34,12 +26,19 @@ function Header({
     }
   });
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   const lang = propLang || internalLang;
   const setLang = propSetLang || setInternalLang;
   const currentUser = user !== undefined && user !== null ? user : internalUser;
   const isTh = lang === "th";
+
+  // Check if current user is an admin
+  const isAdmin =
+    Boolean(currentUser?.role === "admin") ||
+    Boolean(currentUser?.email && currentUser.email.toLowerCase().includes("kamphonloy")) ||
+    Boolean(currentUser?.email && currentUser.email.toLowerCase().includes("admin"));
 
   const handleOpenAuth = () => {
     if (onOpenAuthModal) {
@@ -75,7 +74,8 @@ function Header({
   return (
     <>
       <header
-        className="app-header"
+        className="app-header notranslate"
+        translate="no"
         style={{
           display: "flex",
           justifyContent: "space-between",
@@ -89,7 +89,7 @@ function Header({
           fontFamily: "'Sarabun', -apple-system, BlinkMacSystemFont, sans-serif",
         }}
       >
-        {/* ชื่อระบบ */}
+        {/* Title */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <span style={{ fontSize: "1.5rem" }}>🎼</span>
           <h1 style={{ margin: 0, fontSize: "1.25rem", fontWeight: 700, letterSpacing: "0.2px" }}>
@@ -97,24 +97,18 @@ function Header({
           </h1>
         </div>
 
-        {/* แถบควบคุมด้านขวา */}
+        {/* Right Controls */}
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-          {/* เลือกโหมดแสดงผล (Layout) */}
+          {/* View Modes */}
           {setViewLayout && (
             <div style={{ display: "flex", backgroundColor: "#334155", borderRadius: "6px", padding: "2px" }}>
               <button
                 type="button"
                 onClick={() => setViewLayout("standard")}
                 style={{
-                  padding: "5px 10px",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
+                  padding: "5px 10px", border: "none", borderRadius: "4px", cursor: "pointer",
                   backgroundColor: viewLayout === "standard" ? "#2563eb" : "transparent",
-                  color: "#fff",
-                  fontSize: "0.82rem",
-                  fontWeight: 500,
-                  transition: "background .15s",
+                  color: "#fff", fontSize: "0.82rem", fontWeight: 500,
                 }}
               >
                 {isTh ? "ปกติ" : "Standard"}
@@ -123,15 +117,9 @@ function Header({
                 type="button"
                 onClick={() => setViewLayout("split")}
                 style={{
-                  padding: "5px 10px",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
+                  padding: "5px 10px", border: "none", borderRadius: "4px", cursor: "pointer",
                   backgroundColor: viewLayout === "split" ? "#2563eb" : "transparent",
-                  color: "#fff",
-                  fontSize: "0.82rem",
-                  fontWeight: 500,
-                  transition: "background .15s",
+                  color: "#fff", fontSize: "0.82rem", fontWeight: 500,
                 }}
               >
                 {isTh ? "สองจอ (Split)" : "Split"}
@@ -140,15 +128,9 @@ function Header({
                 type="button"
                 onClick={() => setViewLayout("present")}
                 style={{
-                  padding: "5px 10px",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
+                  padding: "5px 10px", border: "none", borderRadius: "4px", cursor: "pointer",
                   backgroundColor: viewLayout === "present" ? "#2563eb" : "transparent",
-                  color: "#fff",
-                  fontSize: "0.82rem",
-                  fontWeight: 500,
-                  transition: "background .15s",
+                  color: "#fff", fontSize: "0.82rem", fontWeight: 500,
                 }}
               >
                 {isTh ? "เฉพาะบอร์ด" : "Board"}
@@ -156,66 +138,45 @@ function Header({
             </div>
           )}
 
-          {/* ปุ่มเปิดหน้าจอแยก */}
+          {/* Dual Monitor Button */}
           {openDisplayWindow && (
             <button
               type="button"
               onClick={openDisplayWindow}
               style={{
-                padding: "6px 11px",
-                backgroundColor: "#0d9488",
-                color: "#fff",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontSize: "0.82rem",
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                fontWeight: 600,
+                padding: "6px 11px", backgroundColor: "#0d9488", color: "#fff",
+                border: "none", borderRadius: "6px", cursor: "pointer",
+                fontSize: "0.82rem", display: "flex", alignItems: "center", gap: "5px", fontWeight: 600,
               }}
             >
               🖥️ {isTh ? "หน้าจอแยก" : "Dual Screen"}
             </button>
           )}
 
-          {/* ปุ่ม API Key */}
+          {/* API Key Button */}
           {setShowApiInput && (
             <button
               type="button"
               onClick={() => setShowApiInput(true)}
               style={{
-                padding: "6px 11px",
-                backgroundColor: apiKey ? "#16a34a" : "#475569",
-                color: "#fff",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontSize: "0.82rem",
-                fontWeight: 600,
+                padding: "6px 11px", backgroundColor: apiKey ? "#16a34a" : "#475569",
+                color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer",
+                fontSize: "0.82rem", fontWeight: 600,
               }}
             >
               {apiKey ? (isTh ? "🔑 Key แล้ว" : "🔑 Key Active") : (isTh ? "⚙️ ตั้งค่า Key" : "⚙️ API Key")}
             </button>
           )}
 
-          {/* 🌐 ปุ่มสลับภาษา (TH / EN) */}
+          {/* 🌐 Language Switcher */}
           <button
             type="button"
             onClick={() => setLang(isTh ? "en" : "th")}
             style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "5px",
-              padding: "5px 10px",
-              borderRadius: "6px",
-              border: "1.5px solid #0284c7",
-              background: isTh ? "#0f172a" : "#1e293b",
-              color: "#fff",
-              fontWeight: 700,
-              fontSize: "0.82rem",
-              cursor: "pointer",
-              transition: "all .15s ease",
+              display: "inline-flex", alignItems: "center", gap: "5px",
+              padding: "5px 10px", borderRadius: "6px", border: "1.5px solid #0284c7",
+              background: isTh ? "#0f172a" : "#1e293b", color: "#fff",
+              fontWeight: 700, fontSize: "0.82rem", cursor: "pointer",
             }}
             title={isTh ? "Switch to English" : "เปลี่ยนเป็นภาษาไทย"}
           >
@@ -225,46 +186,29 @@ function Header({
             <span style={{ color: !isTh ? "#4ade80" : "#94a3b8" }}>EN</span>
           </button>
 
-          {/* 👤 ระบบสมาชิก Login / Logout / Profile */}
+          {/* 👤 Auth & User Dropdown */}
           <div style={{ position: "relative" }}>
             {currentUser ? (
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                {/* Avatar Button */}
                 <button
                   type="button"
                   onClick={() => setShowProfileMenu((prev) => !prev)}
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "7px",
-                    background: "#334155",
-                    border: "1.5px solid #0284c7",
-                    borderRadius: "20px",
-                    padding: "3px 10px 3px 4px",
-                    cursor: "pointer",
-                    color: "#fff",
+                    display: "flex", alignItems: "center", gap: "7px",
+                    background: "#334155", border: "1.5px solid #0284c7",
+                    borderRadius: "20px", padding: "3px 10px 3px 4px",
+                    cursor: "pointer", color: "#fff",
                   }}
                   title={isTh ? "จัดการบัญชี" : "Account Menu"}
                 >
-                  <div
-                    style={{
-                      width: "28px",
-                      height: "28px",
-                      borderRadius: "50%",
-                      backgroundColor: "#0284c7",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: "1rem",
-                      overflow: "hidden",
-                    }}
-                  >
+                  <div style={{
+                    width: "28px", height: "28px", borderRadius: "50%",
+                    backgroundColor: "#0284c7", display: "flex",
+                    alignItems: "center", justifyContent: "center",
+                    fontSize: "1rem", overflow: "hidden",
+                  }}>
                     {currentUser.avatarUrl ? (
-                      <img
-                        src={currentUser.avatarUrl}
-                        alt="Avatar"
-                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                      />
+                      <img src={currentUser.avatarUrl} alt="Avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     ) : (
                       currentUser.avatar || "👤"
                     )}
@@ -272,26 +216,22 @@ function Header({
                   <span style={{ fontSize: "0.85rem", fontWeight: 600, maxWidth: "100px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {currentUser.name || currentUser.email?.split("@")[0] || "User"}
                   </span>
+                  {isAdmin && (
+                    <span style={{ backgroundColor: "#f59e0b", color: "#000", fontSize: "0.65rem", padding: "1px 5px", borderRadius: "4px", fontWeight: 800 }}>
+                      ADMIN
+                    </span>
+                  )}
                   <span style={{ fontSize: "0.65rem", color: "#94a3b8" }}>▼</span>
                 </button>
 
                 {/* Dropdown Menu */}
                 {showProfileMenu && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "40px",
-                      right: 0,
-                      backgroundColor: "#ffffff",
-                      color: "#1e293b",
-                      borderRadius: "8px",
-                      boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)",
-                      border: "1px solid #e2e8f0",
-                      width: "190px",
-                      zIndex: 1000,
-                      overflow: "hidden",
-                    }}
-                  >
+                  <div style={{
+                    position: "absolute", top: "40px", right: 0,
+                    backgroundColor: "#ffffff", color: "#1e293b",
+                    borderRadius: "8px", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05)",
+                    border: "1px solid #e2e8f0", width: "210px", zIndex: 1000, overflow: "hidden",
+                  }}>
                     <div style={{ padding: "10px 14px", borderBottom: "1px solid #f1f5f9", backgroundColor: "#f8fafc" }}>
                       <div style={{ fontWeight: 700, fontSize: "0.85rem", color: "#0f172a" }}>
                         {currentUser.name || "User"}
@@ -301,6 +241,25 @@ function Header({
                       </div>
                     </div>
 
+                    {/* Admin Dashboard Entry (Visible only to Admin) */}
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowProfileMenu(false);
+                          setIsAdminDashboardOpen(true);
+                        }}
+                        style={{
+                          width: "100%", padding: "9px 14px", textAlign: "left",
+                          background: "#fef3c7", border: "none", borderBottom: "1px solid #fde68a",
+                          fontSize: "0.82rem", color: "#92400e", cursor: "pointer",
+                          display: "flex", alignItems: "center", gap: "8px", fontWeight: 700,
+                        }}
+                      >
+                        <span>🛡️</span> {isTh ? "แผงควบคุม Admin" : "Admin Dashboard"}
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={() => {
@@ -308,17 +267,10 @@ function Header({
                         setIsAuthModalOpen(true);
                       }}
                       style={{
-                        width: "100%",
-                        padding: "9px 14px",
-                        textAlign: "left",
-                        background: "none",
-                        border: "none",
-                        fontSize: "0.82rem",
-                        color: "#334155",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
+                        width: "100%", padding: "9px 14px", textAlign: "left",
+                        background: "none", border: "none", fontSize: "0.82rem",
+                        color: "#334155", cursor: "pointer", display: "flex",
+                        alignItems: "center", gap: "8px",
                       }}
                       onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f1f5f9")}
                       onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
@@ -330,19 +282,10 @@ function Header({
                       type="button"
                       onClick={handleLogout}
                       style={{
-                        width: "100%",
-                        padding: "9px 14px",
-                        textAlign: "left",
-                        background: "none",
-                        border: "none",
-                        borderTop: "1px solid #f1f5f9",
-                        fontSize: "0.82rem",
-                        color: "#dc2626",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        fontWeight: 600,
+                        width: "100%", padding: "9px 14px", textAlign: "left",
+                        background: "none", border: "none", borderTop: "1px solid #f1f5f9",
+                        fontSize: "0.82rem", color: "#dc2626", cursor: "pointer",
+                        display: "flex", alignItems: "center", gap: "8px", fontWeight: 600,
                       }}
                       onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#fef2f2")}
                       onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
@@ -353,24 +296,14 @@ function Header({
                 )}
               </div>
             ) : (
-              /* ปุ่มเมื่อยังไม่ได้เข้าสู่ระบบ */
               <button
                 type="button"
                 onClick={handleOpenAuth}
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "6px 14px",
-                  backgroundColor: "#0284c7",
-                  color: "#ffffff",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontSize: "0.83rem",
-                  fontWeight: 700,
-                  boxShadow: "0 2px 4px rgba(2,132,199,0.3)",
-                  transition: "all .15s ease",
+                  display: "flex", alignItems: "center", gap: "6px",
+                  padding: "6px 14px", backgroundColor: "#0284c7", color: "#ffffff",
+                  border: "none", borderRadius: "6px", cursor: "pointer",
+                  fontSize: "0.83rem", fontWeight: 700, boxShadow: "0 2px 4px rgba(2,132,199,0.3)",
                 }}
               >
                 <span>👤</span>
@@ -398,6 +331,14 @@ function Header({
         }}
         lang={lang}
         setLang={setLang}
+      />
+
+      {/* Admin Dashboard Modal (Admin Only) */}
+      <AdminDashboard
+        isOpen={isAdminDashboardOpen}
+        onClose={() => setIsAdminDashboardOpen(false)}
+        currentUser={currentUser}
+        lang={lang}
       />
     </>
   );
