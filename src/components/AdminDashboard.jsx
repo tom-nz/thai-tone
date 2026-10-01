@@ -183,8 +183,6 @@ export default function AdminDashboard({
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
   // Toggle Auth Providers
   const toggleProvider = (key) => {
     const updated = { ...providers, [key]: !providers[key] };
@@ -368,6 +366,8 @@ export default function AdminDashboard({
     navigator.clipboard.writeText(emails);
     alert(isTh ? `คัดลอกอีเมลที่เลือกจำนวน ${selectedUsers.length} รายการลง Clipboard เรียบร้อยแล้ว` : `Copied ${selectedUsers.length} selected emails to clipboard`);
   };
+
+  if (!isOpen) return null;
 
   return (
     <div style={{
