@@ -239,6 +239,21 @@ export default function AdminDashboard({
           }
         }
 
+        // Auto-revert expired memberships (monthly/yearly) to Free tier by default
+        const todayStr = new Date().toISOString().slice(0, 10);
+        stored = stored.map((u) => {
+          const isExpiringPlan = u.plan && u.plan !== "free" && u.plan !== "lifetime";
+          if (isExpiringPlan && u.planExpiry && u.planExpiry < todayStr) {
+            return {
+              ...u,
+              previousPlan: u.previousPlan || u.plan,
+              plan: "free",
+              planStatus: "expired",
+            };
+          }
+          return u;
+        });
+
         // Save back synced list
         localStorage.setItem("thai_tone_members", JSON.stringify(stored));
         setUserList(stored);
@@ -299,6 +314,7 @@ export default function AdminDashboard({
           plan: newPlan,
           planStatus: "active",
           planExpiry: newExpiry,
+          previousPlan: newPlan === "free" ? (u.previousPlan || null) : null,
         };
       }
       return u;
@@ -482,8 +498,17 @@ export default function AdminDashboard({
   // Smart Filtering for Targeted Broadcast
   const filteredUsers = useMemo(() => {
     return userList.filter((u) => {
-      // 1. Tier filter
-      if (filterTier !== "all" && u.plan !== filterTier) return false;
+      // 1. Tier filter (with expired defaulted to free handling)
+      const todayStr = new Date().toISOString().slice(0, 10);
+      if (filterTier === "expired") {
+        if (u.planStatus !== "expired" && !(u.planExpiry && u.planExpiry < todayStr)) return false;
+      } else if (filterTier === "monthly") {
+        if (u.plan !== "monthly" || u.planStatus === "expired") return false;
+      } else if (filterTier === "yearly") {
+        if (u.plan !== "yearly" || u.planStatus === "expired") return false;
+      } else if (filterTier !== "all") {
+        if (u.plan !== filterTier) return false;
+      }
 
       // 2. Date Range filter
       if (filterDateFrom) {
@@ -1136,15 +1161,29 @@ export default function AdminDashboard({
                                   </span>
                                 </td>
                                 <td style={{ padding: "10px 14px" }}>
-                                  <span style={{
-                                    padding: "3px 8px", borderRadius: "6px", fontSize: "0.75rem", fontWeight: 700,
-                                    backgroundColor: tierMeta.bg, color: tierMeta.color, border: `1px solid ${tierMeta.color}33`
-                                  }}>
-                                    {isTh ? tierMeta.labelTh : tierMeta.labelEn}
-                                  </span>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                                    <span style={{
+                                      padding: "3px 8px", borderRadius: "6px", fontSize: "0.75rem", fontWeight: 700,
+                                      backgroundColor: tierMeta.bg, color: tierMeta.color, border: `1px solid ${tierMeta.color}33`
+                                    }}>
+                                      {isTh ? tierMeta.labelTh : tierMeta.labelEn}
+                                    </span>
+                                    {u.planStatus === "expired" && (
+                                      <span style={{
+                                        padding: "2px 6px", borderRadius: "4px", fontSize: "0.68rem", fontWeight: 700,
+                                        backgroundColor: "#fee2e2", color: "#dc2626", border: "1px solid #fecaca"
+                                      }}>
+                                        {isTh ? `หมดอายุ (${u.previousPlan ? (u.previousPlan === "monthly" ? "รายเดือน" : "รายปี") : "แพ็กเกจ"}) -> ดีฟอลต์ฟรี` : `Expired (${u.previousPlan || "sub"}) -> Defaulted to Free`}
+                                      </span>
+                                    )}
+                                  </div>
                                 </td>
-                                <td style={{ padding: "10px 14px", color: "#64748b", fontSize: "0.8rem" }}>
-                                  {u.planExpiry ? u.planExpiry : (isTh ? "ตลอดชีพ / ไม่มี" : "Lifetime")}
+                                <td style={{ padding: "10px 14px", color: u.planStatus === "expired" ? "#dc2626" : "#64748b", fontSize: "0.8rem" }}>
+                                  {u.planExpiry
+                                    ? (u.planStatus === "expired"
+                                        ? `${u.planExpiry} (${isTh ? "หมดอายุแล้ว - ปรับเป็นฟรี" : "Expired - Free tier"})`
+                                        : u.planExpiry)
+                                    : (isTh ? "ตลอดชีพ / ไม่มี" : "Lifetime")}
                                 </td>
                                 <td style={{ padding: "10px 14px" }}>
                                   <select
@@ -1363,6 +1402,7 @@ export default function AdminDashboard({
                         <option value="monthly">{isTh ? "เฉพาะรายเดือน (Monthly)" : "Monthly Only"}</option>
                         <option value="yearly">{isTh ? "เฉพาะรายปี (Yearly)" : "Yearly Only"}</option>
                         <option value="lifetime">{isTh ? "เฉพาะตลอดชีพ (Lifetime)" : "Lifetime Only"}</option>
+                        <option value="expired">{isTh ? "เฉพาะสมาชิกที่หมดอายุ (ปรับเป็นฟรี)" : "Expired (Reverted to Free)"}</option>
                       </select>
                     </div>
 
