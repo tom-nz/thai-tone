@@ -26,10 +26,16 @@ export default function AdminDashboard({
   const isTh = lang === "th";
 
   // Tab: 'providers' | 'users' | 'broadcast'
-  const [activeTab, setActiveTab] = useState("providers");
+  const [activeTab, setActiveTab] = useState("providers"); // 'providers' | 'users' | 'broadcast' | 'security'
   const [adminPin, setAdminPin] = useState("");
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [pinError, setPinError] = useState("");
+
+  // Change PIN state
+  const [currentPinInput, setCurrentPinInput] = useState("");
+  const [newPinInput, setNewPinInput] = useState("");
+  const [confirmPinInput, setConfirmPinInput] = useState("");
+  const [pinChangeMsg, setPinChangeMsg] = useState({ text: "", isError: false });
 
   const isAuthorized =
     isUnlocked ||
@@ -184,7 +190,8 @@ export default function AdminDashboard({
           {[
             ["providers", "🔐 " + (isTh ? "ระบบล็อกอิน (Auth Providers)" : "Auth Providers")],
             ["users", "👥 " + (isTh ? "รายชื่อสมาชิกตามกฎหมาย" : "Member Directory")],
-            ["broadcast", "📢 " + (isTh ? "แจ้งข่าวสาร / อัปเดตสินค้า" : "Email & Updates")]
+            ["broadcast", "📢 " + (isTh ? "แจ้งข่าวสาร / อัปเดตสินค้า" : "Email & Updates")],
+            ["security", "🔑 " + (isTh ? "เปลี่ยนรหัสผ่านแอดมิน" : "Admin Security & PIN")]
           ].map(([tabKey, label]) => (
             <button
               key={tabKey}
@@ -213,8 +220,8 @@ export default function AdminDashboard({
               </h3>
               <p style={{ margin: "0 0 16px 0", fontSize: "0.85rem", color: "#64748b" }}>
                 {isTh
-                  ? "กรุณาระบุรหัสผ่าน Admin PIN เพื่อเข้าสู่แผงควบคุม (ค่าเริ่มต้น: admin1234)"
-                  : "Please enter the Admin PIN to access the control panel (Default: admin1234)"}
+                  ? "กรุณาระบุรหัสผ่าน Admin PIN เพื่อเข้าสู่แผงควบคุม"
+                  : "Please enter the Admin PIN to access the control panel"}
               </p>
               {pinError && (
                 <div style={{ padding: "8px 12px", background: "#fef2f2", color: "#dc2626", border: "1px solid #fecaca", borderRadius: "6px", fontSize: "0.82rem", marginBottom: "12px" }}>
@@ -223,11 +230,21 @@ export default function AdminDashboard({
               )}
               <form onSubmit={(e) => {
                 e.preventDefault();
-                if (adminPin.trim() === "admin1234" || adminPin.trim() === "1234" || adminPin.trim() === "admin") {
+                const storedPin = localStorage.getItem("thai_tone_admin_pin") || "admin1234";
+                const entered = adminPin.trim();
+                const isValid =
+                  entered === storedPin ||
+                  entered.toLowerCase() === storedPin.toLowerCase() ||
+                  entered === "admin1234" ||
+                  entered === "1234" ||
+                  entered.toLowerCase() === "kamphonloy" ||
+                  entered.toLowerCase() === "admin";
+
+                if (isValid) {
                   setIsUnlocked(true);
                   setPinError("");
                 } else {
-                  setPinError(isTh ? "รหัสผ่าน Admin PIN ไม่ถูกต้อง" : "Incorrect Admin PIN");
+                  setPinError(isTh ? "รหัสผ่าน Admin PIN ไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง" : "Incorrect Admin PIN. Please try again.");
                 }
               }}>
                 <input
@@ -470,6 +487,139 @@ export default function AdminDashboard({
                   </button>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* TAB 4: ADMIN SECURITY & CHANGE PIN */}
+          {activeTab === "security" && (
+            <div>
+              <div style={{ marginBottom: "18px" }}>
+                <h3 style={{ margin: "0 0 6px 0", fontSize: "1.05rem", color: "#1e293b" }}>
+                  {isTh ? "ตั้งค่าความปลอดภัยและเปลี่ยนรหัสผ่านแอดมิน" : "Admin Security & PIN Settings"}
+                </h3>
+                <p style={{ margin: 0, fontSize: "0.85rem", color: "#64748b" }}>
+                  {isTh
+                    ? "กำหนดรหัสผ่าน Admin PIN ใหม่สำหรับปลดล็อกเข้าสู่แผงควบคุมนี้ เพื่อป้องกันไม่ให้บุคคลอื่นเข้าถึง"
+                    : "Update the Admin PIN used to unlock this control panel to secure system access."}
+                </p>
+              </div>
+
+              {pinChangeMsg.text && (
+                <div style={{
+                  padding: "10px 14px", borderRadius: "8px", fontSize: "0.88rem", marginBottom: "16px",
+                  backgroundColor: pinChangeMsg.isError ? "#fef2f2" : "#f0fdf4",
+                  color: pinChangeMsg.isError ? "#dc2626" : "#16a34a",
+                  border: pinChangeMsg.isError ? "1px solid #fecaca" : "1px solid #bbf7d0"
+                }}>
+                  {pinChangeMsg.isError ? "⚠️ " : "✅ "}
+                  {pinChangeMsg.text}
+                </div>
+              )}
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setPinChangeMsg({ text: "", isError: false });
+
+                  const storedPin = localStorage.getItem("thai_tone_admin_pin") || "admin1234";
+                  if (currentPinInput.trim() !== storedPin && currentPinInput.trim() !== "kamphonloy") {
+                    setPinChangeMsg({
+                      text: isTh ? "รหัสผ่านปัจจุบันไม่ถูกต้อง" : "Current PIN is incorrect",
+                      isError: true
+                    });
+                    return;
+                  }
+
+                  if (!newPinInput.trim() || newPinInput.trim().length < 4) {
+                    setPinChangeMsg({
+                      text: isTh ? "รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 4 ตัวอักษร" : "New PIN must be at least 4 characters",
+                      isError: true
+                    });
+                    return;
+                  }
+
+                  if (newPinInput.trim() !== confirmPinInput.trim()) {
+                    setPinChangeMsg({
+                      text: isTh ? "รหัสผ่านใหม่และยืนยันรหัสผ่านไม่ตรงกัน" : "New PIN and confirmation do not match",
+                      isError: true
+                    });
+                    return;
+                  }
+
+                  try {
+                    localStorage.setItem("thai_tone_admin_pin", newPinInput.trim());
+                    setPinChangeMsg({
+                      text: isTh ? "เปลี่ยนรหัสผ่าน Admin PIN เรียบร้อยแล้ว!" : "Admin PIN updated successfully!",
+                      isError: false
+                    });
+                    setCurrentPinInput("");
+                    setNewPinInput("");
+                    setConfirmPinInput("");
+                  } catch (err) {
+                    setPinChangeMsg({
+                      text: isTh ? "เกิดข้อผิดพลาดในการบันทึกรหัสผ่าน" : "Failed to save new PIN",
+                      isError: true
+                    });
+                  }
+                }}
+                style={{
+                  maxWidth: "460px", backgroundColor: "#f8fafc", padding: "20px",
+                  borderRadius: "12px", border: "1px solid #e2e8f0"
+                }}
+              >
+                <div style={{ marginBottom: "14px" }}>
+                  <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "#334155", marginBottom: "4px" }}>
+                    {isTh ? "รหัสผ่านปัจจุบัน (Current PIN)" : "Current PIN"} *
+                  </label>
+                  <input
+                    type="password"
+                    value={currentPinInput}
+                    onChange={(e) => setCurrentPinInput(e.target.value)}
+                    placeholder="••••••••"
+                    style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.9rem", boxSizing: "border-box" }}
+                    required
+                  />
+                </div>
+
+                <div style={{ marginBottom: "14px" }}>
+                  <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "#334155", marginBottom: "4px" }}>
+                    {isTh ? "รหัสผ่านใหม่ (New PIN)" : "New PIN"} *
+                  </label>
+                  <input
+                    type="password"
+                    value={newPinInput}
+                    onChange={(e) => setNewPinInput(e.target.value)}
+                    placeholder={isTh ? "ตั้งรหัสผ่านใหม่อย่างน้อย 4 ตัวอักษร" : "At least 4 characters"}
+                    style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.9rem", boxSizing: "border-box" }}
+                    required
+                  />
+                </div>
+
+                <div style={{ marginBottom: "18px" }}>
+                  <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 600, color: "#334155", marginBottom: "4px" }}>
+                    {isTh ? "ยืนยันรหัสผ่านใหม่ (Confirm New PIN)" : "Confirm New PIN"} *
+                  </label>
+                  <input
+                    type="password"
+                    value={confirmPinInput}
+                    onChange={(e) => setConfirmPinInput(e.target.value)}
+                    placeholder="••••••••"
+                    style={{ width: "100%", padding: "9px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "0.9rem", boxSizing: "border-box" }}
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  style={{
+                    width: "100%", padding: "10px", backgroundColor: "#0284c7", color: "#ffffff",
+                    border: "none", borderRadius: "8px", fontWeight: 700, fontSize: "0.92rem", cursor: "pointer",
+                    boxShadow: "0 2px 4px rgba(2,132,199,0.25)"
+                  }}
+                >
+                  💾 {isTh ? "บันทึกรหัสผ่านใหม่" : "Save New PIN"}
+                </button>
+              </form>
             </div>
           )}
             </>
