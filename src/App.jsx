@@ -295,8 +295,6 @@ export default function App() {
         console.warn("Staff-Tone 21 Engine error, falling back:", err);
       }
     }
-    if (typeof window === "undefined" || (!speechEnabled && !force) || !text) return;
-    const normalizedText = normalizeThaiSpeechText(text);
     const cacheKey = normalizedText;
 
     const playAudioBlob = async (blob) => {
