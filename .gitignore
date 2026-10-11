@@ -25,3 +25,10 @@ dist-ssr
 *.gdoc
 *.gsheet
 *.gslides
+00_archive_and_backup/
+05_docs_and_specs/
+*_backup/
+*_backup.*
+*lastest*
+App-19-09*
+App_broken*
