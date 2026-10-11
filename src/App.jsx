@@ -1,3 +1,4 @@
+import audioService, { playThaiAudio } from "./utils/audioService";
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import "@fontsource/sarabun/400.css";
 import "@fontsource/sarabun/500.css";
@@ -209,7 +210,7 @@ export default function App() {
   const [speechEnabled, setSpeechEnabled] = useState(false);
   const [speechRate, setSpeechRate] = useState(0.85);
   const [voices, setVoices] = useState([]);
-  const [selectedVoiceURI, setSelectedVoiceURI] = useState("");
+  const [selectedVoiceURI, setSelectedVoiceURI] = useState("staff21_ultimate");
 
   // สถานะโหมดฝึกออกเสียง
   const [isPracticing, setIsPracticing] = useState(false);
@@ -276,7 +277,24 @@ export default function App() {
     return { backgroundColor: bgColor };
   }, [bgType, bgColor, bgImage]);
 
-  const speak = async (text, force = false) => {
+  const speak = async (text, force = false, forcedToneId = null) => {
+    if (typeof window === "undefined" || (!speechEnabled && !force) || !text) return;
+    const normalizedText = normalizeThaiSpeechText(text);
+
+    // 1. เชื่อมต่อระบบเสียง Staff-Tone 21 (ONNX & Chao Pitch Formant DSP) ออฟไลน์ 100%
+    if (!selectedVoiceURI || selectedVoiceURI.startsWith("staff21_")) {
+      try {
+        await playThaiAudio(normalizedText, {
+          voice: selectedVoiceURI || "staff21_ultimate",
+          rate: Number(speechRate),
+          toneId: forcedToneId,
+          selectedVoiceURI,
+        });
+        return;
+      } catch (err) {
+        console.warn("Staff-Tone 21 Engine error, falling back:", err);
+      }
+    }
     if (typeof window === "undefined" || (!speechEnabled && !force) || !text) return;
     const normalizedText = normalizeThaiSpeechText(text);
     const cacheKey = normalizedText;

@@ -250,12 +250,21 @@ export default function ControlPanel({
         <label className="select-label">
           {t("เสียงอ่าน", "Voice")}
           <select value={selectedVoiceURI} onChange={(e) => setSelectedVoiceURI(e.target.value)}>
-            <option value="">{t("เลือกอัตโนมัติ", "Auto Select")}</option>
-            {voices.filter((v) => v.lang?.toLowerCase().startsWith("th")).map((voice) => (
-              <option key={voice.voiceURI} value={voice.voiceURI}>
-                {voice.name} ({voice.lang})
-              </option>
-            ))}
+            <optgroup label={t("🎵 ระบบเสียง Staff-Tone 21 (แนะนำ - ออฟไลน์)", "🎵 Staff-Tone 21 (Recommended - Offline)")}>
+              <option value="staff21_ultimate">{t("⭐ Staff-Tone 21 Ultimate (ONNX Neural)", "⭐ Staff-Tone 21 Ultimate (ONNX)")}</option>
+              <option value="staff21_female">{t("👩 Staff-Tone 21 ครูผู้หญิง (ONNX Female)", "👩 Staff-Tone 21 Female Studio (ONNX)")}</option>
+              <option value="staff21_male">{t("👨 Staff-Tone 21 ครูผู้ชาย (ONNX Male)", "👨 Staff-Tone 21 Male Studio (ONNX)")}</option>
+              <option value="staff21_child">{t("🧒 Staff-Tone 21 เสียงเด็ก (ONNX Child)", "🧒 Staff-Tone 21 Child Persona (ONNX)")}</option>
+              <option value="staff21_chao_dsp">{t("🎼 Staff-Tone 21 Chao Pitch (โน้ต 5 เส้น ออฟไลน์ 100%)", "🎼 Staff-Tone 21 Chao Pitch (5-Line Staff 100% Offline)")}</option>
+            </optgroup>
+            <optgroup label={t("🌐 เสียงระบบของเครื่อง (System Voices)", "🌐 System Voices")}>
+              <option value="">{t("เลือกอัตโนมัติ (System Auto)", "Auto Select")}</option>
+              {voices.filter((v) => v.lang?.toLowerCase().startsWith("th")).map((voice) => (
+                <option key={voice.voiceURI} value={voice.voiceURI}>
+                  {voice.name} ({voice.lang})
+                </option>
+              ))}
+            </optgroup>
           </select>
         </label>
         <label className="select-label">
